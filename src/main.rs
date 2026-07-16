@@ -1,0 +1,32 @@
+// mod sqp;
+// pub mod vcf;
+
+use std::{fs::File, io::BufWriter, path::Path};
+use std::io::Write;
+
+use anyhow::Result;
+
+fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+
+    // let file = Path::new("../relatedness/sims/human/first_cousin_n50.vcf.gz");
+    let vcf_file = Path::new(&args[1]);
+    let (gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
+
+    let kinship = kestrel::jacquard::calculate_relatedness_coefficients(&gt, &af);
+
+    let out_file = File::create(&args[2])?;
+
+    let mut writer = BufWriter::new(out_file);
+    writeln!(writer, "ID1 ID2 kinship")?;
+    let s = kinship.shape()[0] / 2;
+    for i in 0..s {
+        let a = 2*i;
+        let b = a+1;
+        writeln!(writer, "{} {} {}", a, b, kinship[(a, b)])?;
+    }
+
+    writer.flush()?;
+
+    Ok(())
+}

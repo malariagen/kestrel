@@ -1,0 +1,36 @@
+[package]
+name = "kestrel"
+version = "0.1.0"
+edition = "2024"
+#description = "A simple and secure command line password manager"
+#repository = "https://codeberg.org/jwgarber/napa"
+license = "MPL-2.0"
+#keywords = ["cli", "cryptography", "password-manager"]
+#categories = ["command-line-utilities", "cryptography"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+#[lib]
+#name = "kestrel"
+#crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0.103"
+itertools = "0.15.0"
+lockfree_progress_bar = "0.1.0"
+nalgebra = "0.35.0"
+ndarray = "0.17.2"
+noodles = { version = "0.111.0", features = ["vcf"] }
+pyo3 = "0.29.0"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+overflow-checks = true
+lto = true
+
+[dev-dependencies]
+divan = "0.1.21"
+
+[[bench]]
+name = "bench"
+harness = false
