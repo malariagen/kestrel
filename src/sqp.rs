@@ -22,7 +22,7 @@ impl QpTune {
 // Can do loop-unrolling for small matrices to calculate Cholesky of submatrices.
 
 // Minimize 1/2 y^T Q y + c^T y, subject to y >= 0 and sum(y) = 1
-pub fn solve_qp_active_set(q_mat: &Matrix9<f64>, c: &Vector9<f64>, y0: &Vector9<f64>, sum_to_one: bool, tune: &QpTune) -> (Vector9<f64>, u64) {
+pub fn solve_qp_active_set(q_mat: &Matrix9<f64>, c: &Vector9<f64>, y0: &Vector9<f64>, sum_to_one: bool, modify: bool, tune: &QpTune) -> (Vector9<f64>, u64) {
 
     let mut working_set = [false; 9];
 
@@ -103,7 +103,11 @@ pub fn solve_qp_active_set(q_mat: &Matrix9<f64>, c: &Vector9<f64>, y0: &Vector9<
 
         // In theory this factorization can be updated using Givens rotations
         // instead of calculating it from scratch
-        cholesky::modify_gmw(q_mat_free, &mut sub_l, &mut sub_d);
+        if modify {
+            cholesky::modify_gmw(q_mat_free, &mut sub_l, &mut sub_d);
+        } else {
+            cholesky::unmodified(q_mat_free, &mut sub_l, &mut sub_d);
+        }
 
         // We now want to solve L D L^T q = g
         // Forward substitution

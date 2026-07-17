@@ -40,7 +40,7 @@ pub fn calculate_quadratic_q_mat(stacked_m: &MatrixNx9<f64>, num_v: usize) -> Ma
 }
 
 pub fn calculate_quadratic_c(all_joint_genotypes: &[((i8, i8), (i8, i8), i8)], stacked_m: &MatrixNx9<f64>, genotypes_x: ArrayView2<i8>,
-genotypes_y: ArrayView2<i8>) -> Vector9<f64> {
+genotypes_y: ArrayView2<i8>, allele_frequencies: &ArrayRef2<f64>) -> Vector9<f64> {
 
     let num_g = all_joint_genotypes.len();
     let num_v = genotypes_x.shape()[0];
@@ -54,6 +54,17 @@ genotypes_y: ArrayView2<i8>) -> Vector9<f64> {
 
         let gx = (geno_x[0], geno_x[1]);
         let gy = (geno_y[0], geno_y[1]);
+
+        // let iis_mode = iis::calc_iis_mode(gx.0, gx.1, gy.0, gy.1);
+
+        // let pi = allele_frequencies[[locus, gx.0 as usize]];
+        // let pj = allele_frequencies[[locus, gx.1 as usize]];
+        // let pk = allele_frequencies[[locus, gy.0 as usize]];
+        // let pl = allele_frequencies[[locus, gy.1 as usize]];
+
+        // for ibd in 0..9 {
+        //     c[ibd] -= iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd as i8 + 1)
+        // }
 
         for (g, (ogx, ogy, _)) in all_joint_genotypes.iter().enumerate() {
             // TODO if some of the genotype data is missing this won't match

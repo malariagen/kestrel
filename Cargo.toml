@@ -20,6 +20,7 @@ lockfree_progress_bar = "0.1.0"
 nalgebra = "0.35.0"
 ndarray = "0.17.2"
 noodles = { version = "0.111.0", features = ["vcf"] }
+paralight = "0.0.12"
 pyo3 = "0.29.0"
 
 [profile.release]
@@ -27,6 +28,10 @@ panic = "abort"
 codegen-units = 1
 overflow-checks = true
 lto = true
+debug = "line-tables-only"
+
+# echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+
 
 [dev-dependencies]
 divan = "0.1.21"
