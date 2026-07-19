@@ -7,7 +7,7 @@ use paralight::{iter::{ExactParallelSourceExt, IntoExactParallelRefMutSource, In
 
 use lockfree_progress_bar::ProgressBar;
 
-use crate::{cls, sqp::{self, QpTune}, util::Vector9};
+use crate::{cls, sqp::{self, Tuneables}, util::Vector9};
 
 pub fn calculate_relatedness_coefficients(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
 
@@ -26,8 +26,10 @@ fn reorder_genotypes(mut genotypes: ArrayView3<i8>) -> Array3<i8> {
     genotypes.swap_axes(0, 1);
     let mut genotypes = genotypes.as_standard_layout().into_owned();
 
-    for pair in genotypes.as_slice_mut().unwrap().chunks_exact_mut(2) {
-        pair.sort();
+    let (pairs, _) = genotypes.as_slice_mut().unwrap().as_chunks_mut::<2>();
+
+    for pair in pairs {
+        pair.sort_unstable();
     }
 
     genotypes
@@ -39,8 +41,10 @@ fn calculate_coefficients_inner(
     let num_v = allele_frequencies.shape()[0];
     let num_a = allele_frequencies.shape()[1];
 
-    let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a as i8);
+    let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a);
     let stacked_m = cls::calculate_stacked_m(&all_joint_genotypes, allele_frequencies);
+    let lookup_table = cls::calculate_joint_genotype_lookup_table(&all_joint_genotypes, num_a);
+    let stacked_m_t = stacked_m.transpose().to_owned();
     let mut quadratic_q = cls::calculate_quadratic_q_mat(&stacked_m, num_v);
 
     // let eigen = quadratic_q.symmetric_eigenvalues();
@@ -51,13 +55,14 @@ fn calculate_coefficients_inner(
     //     quadratic_q[(i, i)] += tau;
     // }
 
+
     let kinship_vec: Vector9<f64> = vector![1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
     let num_s = genotypes.shape()[0];
 
     let mut thread_pool = ThreadPoolBuilder {
-        num_threads: ThreadCount::Count(NonZeroUsize::new(20).unwrap()),
-        range_strategy: RangeStrategy::Fixed,
+        num_threads: ThreadCount::Count(NonZeroUsize::new(1).unwrap()),
+        range_strategy: RangeStrategy::WorkStealing,
         cpu_pinning: CpuPinningPolicy::No,
     }.build();
 
@@ -77,13 +82,14 @@ fn calculate_coefficients_inner(
     (kinship.par_iter_mut(), pairs.par_iter()).zip_eq().with_thread_pool(&mut thread_pool).for_each (|(out, [(x, genotypes_x), (y, genotypes_y)])|
     {
 
-        let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
+        let c = cls::calculate_quadratic_c_t(&all_joint_genotypes, &stacked_m_t, *genotypes_x, *genotypes_y, &lookup_table);
+        // let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
 
         let delta0 = if x == y { vector![0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0] } else {
             Vector9::<f64>::from_element(1.0 / 9.0)
         };
 
-        let (delta, _) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta0, true, true, &QpTune::new());
+        let (delta, _) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta0, true, true, &Tuneables::new());
         // println!("{} {} {}", x, y, delta.transpose());
         let kinship = delta.dot(&kinship_vec);
         *out = (*x, *y, kinship);
