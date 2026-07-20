@@ -1,5 +1,4 @@
-
-type IisTable = [[[[[[i8; 2]; 2]; 2]; 2]; 2]; 2];
+type IisTable = [[[[[[usize; 2]; 2]; 2]; 2]; 2]; 2];
 
 const IIS_TABLE: IisTable = generate_iis_lookup_table();
 
@@ -71,7 +70,7 @@ const fn generate_iis_lookup_table() -> IisTable {
     table
 }
 
-pub fn calc_iis_mode(i: i8, j: i8, k: i8, l: i8) -> i8 {
+pub fn calc_iis_mode(i: usize, j: usize, k: usize, l: usize) -> usize {
     let c1 = usize::from(i == j);
     let c2 = usize::from(i == k);
     let c3 = usize::from(i == l);
@@ -86,7 +85,7 @@ pub fn calc_iis_mode(i: i8, j: i8, k: i8, l: i8) -> i8 {
     iis_mode
 }
 
-pub fn conditional_probability(pi: f64, pj: f64, pk: f64, pl: f64, iis: i8, ibd: i8) -> f64 {
+pub fn conditional_probability(pi: f64, pj: f64, pk: f64, pl: f64, iis: usize, ibd: usize) -> f64 {
     debug_assert!(iis >= 1 && iis <= 15, "iis must be between 1 and 15");
     debug_assert!(ibd >= 1 && ibd <= 9, "ibd must be between 1 and 9");
 

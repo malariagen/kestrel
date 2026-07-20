@@ -2,7 +2,6 @@ use std::path::Path;
 
 use ndarray::Axis;
 
-
 fn main() {
     divan::main();
 }
@@ -18,5 +17,4 @@ fn bench(bencher: divan::Bencher) {
     bencher.bench(|| {
         kestrel::jacquard::calculate_relatedness_coefficients(&gt, &af);
     })
-
 }

@@ -1,16 +1,26 @@
-use std::num::NonZeroUsize;
+use std::{alloc::handle_alloc_error, cmp::max_by, num::NonZeroUsize};
 
 use itertools::Itertools;
-use nalgebra::vector;
-use ndarray::{Array2, Array3, ArrayView2, ArrayView3};
-use paralight::{iter::{ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt, ZipableSource}, threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder}};
+use nalgebra::{DVector, vector};
+use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3};
+use paralight::{
+    iter::{
+        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource,
+        ParallelIteratorExt, ZipableSource,
+    },
+    threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder},
+};
 
 use lockfree_progress_bar::ProgressBar;
 
-use crate::{cls, sqp::{self, Tuneables}, util::Vector9};
+use crate::{
+    cls, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9, Vector9},
+};
 
-pub fn calculate_relatedness_coefficients(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
-
+pub fn calculate_relatedness_coefficients(
+    genotypes: &Array3<i8>,
+    allele_frequencies: &Array2<f64>,
+) -> Array2<f64> {
     let num_v = genotypes.shape()[0];
     let num_s = genotypes.shape()[1];
     let num_h = genotypes.shape()[2];
@@ -35,10 +45,37 @@ fn reorder_genotypes(mut genotypes: ArrayView3<i8>) -> Array3<i8> {
     genotypes
 }
 
+fn calculate_max_alleles(genotypes: ArrayView3<i8>) -> Vec<usize> {
+
+    genotypes.outer_iter().map(|variant| {
+        let max_allele = *variant.iter().max().unwrap();
+        usize::try_from(max_allele).unwrap() + 1
+    }).collect()
+
+}
+
+// fn calculate_all_joint_genotypes(per_locus_alleles: &[i8]) -> Vec<> {
+
+// }
+
+struct ThreadBuffers {
+    p_mat: MatrixNx9<f64>,
+    d: DVector<f64>,
+    a_mat: MatrixNx9<f64>
+}
+ impl ThreadBuffers {
+    fn new(num_loci: usize) -> Self {
+        ThreadBuffers { p_mat : MatrixNx9::zeros(num_loci), d : DVector::zeros(num_loci), a_mat : MatrixNx9::zeros(num_loci) }
+    }
+ }
+
 fn calculate_coefficients_inner(
-    genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>
+    genotypes: &Array3<i8>,
+    allele_frequencies: &Array2<f64>,
 ) -> Array2<f64> {
     let num_v = allele_frequencies.shape()[0];
+
+    // TODO calculate this across each locus to figure out how many alleles there are
     let num_a = allele_frequencies.shape()[1];
 
     let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a);
@@ -55,46 +92,65 @@ fn calculate_coefficients_inner(
     //     quadratic_q[(i, i)] += tau;
     // }
 
-
     let kinship_vec: Vector9<f64> = vector![1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
     let num_s = genotypes.shape()[0];
 
     let mut thread_pool = ThreadPoolBuilder {
-        num_threads: ThreadCount::Count(NonZeroUsize::new(1).unwrap()),
-        range_strategy: RangeStrategy::WorkStealing,
-        cpu_pinning: CpuPinningPolicy::No,
-    }.build();
+        num_threads: ThreadCount::Count(NonZeroUsize::new(20).unwrap()),
+        range_strategy: RangeStrategy::Fixed,
+        cpu_pinning: CpuPinningPolicy::Always,
+    }
+    .build();
 
-    let pairs: Vec<[(usize, ArrayView2<i8>); 2]> = genotypes.outer_iter().enumerate().array_combinations_with_replacement().collect();
+    let pairs: Vec<[(usize, ArrayView2<i8>); 2]> = genotypes
+        .outer_iter()
+        .enumerate()
+        .array_combinations_with_replacement()
+        .collect();
     let mut kinship = vec![(0, 0, 0.0f64); pairs.len()];
 
     let bar = ProgressBar::new(pairs.len().try_into().unwrap())
-    .with_eta()
-    // .disable_color()
-    // .with_cpu_usage()
-    .with_bar_width(50)
-    .with_update_interval(100)
-    .start();
+        .with_eta()
+        // .disable_color()
+        // .with_cpu_usage()
+        .with_bar_width(50)
+        .with_update_interval(100)
+        .start();
 
     let handle = bar.clone_handle();
 
-    (kinship.par_iter_mut(), pairs.par_iter()).zip_eq().with_thread_pool(&mut thread_pool).for_each (|(out, [(x, genotypes_x), (y, genotypes_y)])|
-    {
+    (kinship.par_iter_mut(), pairs.par_iter())
+        .zip_eq()
+        .with_thread_pool(&mut thread_pool)
+        .for_each_init(|| ThreadBuffers::new(num_v), |buffers, (out, [(x, genotypes_x), (y, genotypes_y)])| {
+            let c = cls::calculate_quadratic_c_t(
+                &all_joint_genotypes,
+                &stacked_m_t,
+                *genotypes_x,
+                *genotypes_y,
+                &lookup_table,
+            );
+            // let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
 
-        let c = cls::calculate_quadratic_c_t(&all_joint_genotypes, &stacked_m_t, *genotypes_x, *genotypes_y, &lookup_table);
-        // let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
+            let delta0 = if x == y {
+                vector![0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+            } else {
+                Vector9::<f64>::from_element(1.0 / 9.0)
+            };
 
-        let delta0 = if x == y { vector![0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0] } else {
-            Vector9::<f64>::from_element(1.0 / 9.0)
-        };
+            let (delta, _) =
+                sqp::solve_qp_active_set(&quadratic_q, &c, &delta0, true, true, &Tuneables::new());
 
-        let (delta, _) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta0, true, true, &Tuneables::new());
-        // println!("{} {} {}", x, y, delta.transpose());
-        let kinship = delta.dot(&kinship_vec);
-        *out = (*x, *y, kinship);
-        handle.inc();
-    });
+            calculate_mixture_component_matrix(&all_joint_genotypes, &stacked_m_t, *genotypes_x, *genotypes_y, &lookup_table, &mut buffers.p_mat);
+
+            let (delta, _) = sqp::solve_sqp(&buffers.p_mat, &delta, &mut buffers.d, &mut buffers.a_mat, &Tuneables::new());
+
+            // println!("{} {} {}", x, y, delta.transpose());
+            let kinship = delta.dot(&kinship_vec);
+            *out = (*x, *y, kinship);
+            handle.inc();
+        });
 
     bar.done();
 
@@ -107,24 +163,61 @@ fn calculate_coefficients_inner(
     kinship_mat
 }
 
+fn calculate_mixture_component_matrix(
+    all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
+    stacked_m_t: &Matrix9xN<f64>,
+    genotypes_x: ArrayView2<i8>,
+    genotypes_y: ArrayView2<i8>,
+    lookup_table: &Array4<usize>,
+    p_mat: &mut MatrixNx9<f64>,
+) {
+
+    let num_g = all_joint_genotypes.len();
+
+    let iter_x = genotypes_x.as_slice().unwrap().chunks_exact(2);
+    let iter_y = genotypes_y.as_slice().unwrap().chunks_exact(2);
+
+    // for (locus, (geno_x, geno_y)) in chunks_x.iter().copied().zip(chunks_y.iter().copied()).enumerate() {
+    for (locus, (geno_x, geno_y)) in iter_x.zip(iter_y).enumerate() {
+        // let [i, j] = geno_x;
+        // let [k, l] = geno_y;
+        let (i, j) = (geno_x[0], geno_x[1]);
+        let (k, l) = (geno_y[0], geno_y[1]);
+
+        // TODO do a check here for missing data
+        // if i < 0 || j < 0 || k < 0 || l < 0 {
+        //     continue;
+        // }
+
+        // let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
+        let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
+
+        // TODO should we make this more cache friendly?
+        p_mat.set_row(locus, &stacked_m_t.column(locus * num_g + g).transpose());
+    }
+
+}
+
 #[cfg(test)]
 mod test {
+    use crate::jacquard::{calculate_max_alleles, reorder_genotypes};
     use ndarray::array;
-    use crate::jacquard::reorder_genotypes;
 
     #[test]
     fn test_reorder_genotypes() {
-        let genotypes = array![
-            [[1, 2], [-1, 0], [4, 3]],
-            [[3, 0], [1, -1], [1, 1]]
-        ];
+        let genotypes = array![[[1, 2], [-1, 0], [4, 3]], [[3, 0], [1, -1], [1, 1]]];
 
-        let expected_genotypes = array![
-            [[1, 2], [0, 3]],
-            [[-1, 0], [-1, 1]],
-            [[3, 4], [1, 1]],
-        ];
+        let expected_genotypes = array![[[1, 2], [0, 3]], [[-1, 0], [-1, 1]], [[3, 4], [1, 1]],];
 
         assert_eq!(reorder_genotypes(genotypes.view()), expected_genotypes);
+    }
+
+    #[test]
+    fn test_total_alleles() {
+        let genotypes = array![[[1, 2], [-1, 0], [4, 3]], [[3, 0], [1, -1], [1, 1]]];
+
+        let max_alleles = vec![5, 4];
+
+        assert_eq!(calculate_max_alleles(genotypes.view()), max_alleles);
     }
 }

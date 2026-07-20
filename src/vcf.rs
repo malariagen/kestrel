@@ -1,12 +1,12 @@
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
+use itertools::Itertools;
+use ndarray::{Array2, Array3};
 use noodles::vcf::variant::record::info::field::Value as InfoValue;
 use noodles::vcf::variant::record::info::field::value::Array as InfoArray;
 use noodles::vcf::variant::record::samples::Series;
 use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
-use itertools::Itertools;
-use ndarray::{Array2, Array3};
 
 pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
@@ -18,7 +18,7 @@ pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
 
     let maf = 0.01;
 
-    let mut genotypes = Vec::<Vec<(i8, i8)>>::new();    // V x S x 2
+    let mut genotypes = Vec::<Vec<(i8, i8)>>::new(); // V x S x 2
     let mut allele_frequencies = Vec::<(f64, f64)>::new(); // V x 2 (bi-allelic)
     // let mut genotypes: Vec<(i8, i8)> = Vec::new();
 
@@ -26,7 +26,10 @@ pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
         let record = result?;
 
         let info = record.info();
-        let af_info = info.get(&header, "AF").context("No AF data found")??.context("No AF data found")?;
+        let af_info = info
+            .get(&header, "AF")
+            .context("No AF data found")??
+            .context("No AF data found")?;
 
         if let InfoValue::Array(af_array) = af_info {
             if let InfoArray::Float(af_float) = af_array {
@@ -56,8 +59,14 @@ pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
             let value = result?.context("No genotype for sample found")?;
             if let SeriesValue::Genotype(gt) = value {
                 if let Some((a0, a1)) = gt.iter().collect_tuple() {
-                    let a0 = a0?.0.map_or(Ok(-1), |i| i8::try_from(i)).context("Allele variant is greater than 127")?;
-                    let a1 = a1?.0.map_or(Ok(-1), |i| i8::try_from(i)).context("Allele variant is greater than 127")?;
+                    let a0 = a0?
+                        .0
+                        .map_or(Ok(-1), |i| i8::try_from(i))
+                        .context("Allele variant is greater than 127")?;
+                    let a1 = a1?
+                        .0
+                        .map_or(Ok(-1), |i| i8::try_from(i))
+                        .context("Allele variant is greater than 127")?;
                     variants.push((a0, a1))
                     // genotypes.push((a0, a1))
                 } else {

@@ -1,8 +1,8 @@
 // mod sqp;
 // pub mod vcf;
 
-use std::{fs::File, io::BufWriter, path::Path};
 use std::io::Write;
+use std::{fs::File, io::BufWriter, path::Path};
 
 use anyhow::Result;
 use ndarray::{Axis, concatenate};
@@ -25,8 +25,8 @@ fn main() -> Result<()> {
     writeln!(writer, "ID1 ID2 kinship")?;
     let s = kinship.shape()[0] / 2;
     for i in 0..s {
-        let a = 2*i;
-        let b = a+1;
+        let a = 2 * i;
+        let b = a + 1;
         writeln!(writer, "{} {} {}", a, b, kinship[(a, b)])?;
     }
 

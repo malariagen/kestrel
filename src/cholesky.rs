@@ -1,6 +1,10 @@
 use crate::util::{DMatrixView9, DMatrixViewMut9, DVectorViewMut9};
 
-pub fn modify_gmw(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DVectorViewMut9<f64>) {
+pub fn modify_gmw(
+    a: DMatrixView9<f64>,
+    l: &mut DMatrixViewMut9<f64>,
+    d: &mut DVectorViewMut9<f64>,
+) {
     let n = a.nrows();
 
     // TODO make this column-major friendly? There are dot products here
@@ -13,7 +17,7 @@ pub fn modify_gmw(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DV
 
     let mut xi = 0.0f64;
     for i in 0..n {
-        for j in (i+1)..n {
+        for j in (i + 1)..n {
             xi = xi.max(a[(i, j)]);
         }
     }
@@ -23,7 +27,7 @@ pub fn modify_gmw(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DV
     let t = ((n as f64) * (n as f64) - 1.0).sqrt();
 
     // If n == 1 then xi == 0
-    let ratio = if n == 1 { 0.0 } else { xi / t};
+    let ratio = if n == 1 { 0.0 } else { xi / t };
 
     let beta2 = gamma.max(ratio).max(f64::EPSILON);
 
@@ -39,7 +43,7 @@ pub fn modify_gmw(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DV
 
         let mut theta_j = 0.0;
 
-        for i in (j+1)..n {
+        for i in (j + 1)..n {
             let mut s_ij = 0.0;
             for s in 0..j {
                 s_ij += d[s] * l[(i, s)] * l[(j, s)];
@@ -55,7 +59,7 @@ pub fn modify_gmw(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DV
 
         let d_j = c_jj.abs().max(theta_j * theta_j / beta2).max(delta);
 
-        for i in (j+1)..n {
+        for i in (j + 1)..n {
             l[(i, j)] /= d_j;
         }
 
@@ -63,9 +67,11 @@ pub fn modify_gmw(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DV
     }
 }
 
-
-pub fn unmodified(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DVectorViewMut9<f64>) {
-
+pub fn unmodified(
+    a: DMatrixView9<f64>,
+    l: &mut DMatrixViewMut9<f64>,
+    d: &mut DVectorViewMut9<f64>,
+) {
     let n = a.nrows();
 
     for j in 0..n {
@@ -79,7 +85,7 @@ pub fn unmodified(a: DMatrixView9<f64>, l: &mut DMatrixViewMut9<f64>, d: &mut DV
         let c_jj = a[(j, j)] - s_jj;
         let d_j = c_jj;
 
-        for i in (j+1)..n {
+        for i in (j + 1)..n {
             let mut s_ij = 0.0;
             for s in 0..j {
                 s_ij += d[s] * l[(i, s)] * l[(j, s)];

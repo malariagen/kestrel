@@ -1,11 +1,14 @@
-
 use nalgebra::DVector;
 
-use crate::{cholesky, util::{Matrix9, MatrixNx9, Vector9}};
+use crate::{
+    cholesky,
+    util::{Matrix9, MatrixNx9, Vector9},
+};
 
 pub struct Tuneables {
     sqp_max_iter: u64,
     sqp_conv_tol: f64,
+    sqp_zero_threshold: f64,
 
     qp_max_iter: u64,
     qp_conv_tol: f64,
@@ -15,13 +18,23 @@ pub struct Tuneables {
     bls_sufficient_decrease: f64,
     bls_step_size_reduce: f64,
 
-    zero_threshold: f64,
     epsilon: f64,
 }
 
 impl Tuneables {
     pub fn new() -> Tuneables {
-        Tuneables { sqp_max_iter: 50, sqp_conv_tol: 1e-8, qp_max_iter: 10, qp_conv_tol: 1e-10, qp_zero_search_tol: 1e-14, bls_max_iter: 10, bls_sufficient_decrease: 1e-4, bls_step_size_reduce: 0.9, epsilon: 1e-8, zero_threshold: 1e-8 }
+        Tuneables {
+            sqp_max_iter: 50,
+            sqp_conv_tol: 1e-8,
+            qp_max_iter: 10,
+            qp_conv_tol: 1e-10,
+            qp_zero_search_tol: 1e-14,
+            bls_max_iter: 10,
+            bls_sufficient_decrease: 1e-4,
+            bls_step_size_reduce: 0.9,
+            epsilon: 1e-8,
+            sqp_zero_threshold: 1e-8,
+        }
     }
 }
 
@@ -38,7 +51,12 @@ fn compute_obj(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, e
     f
 }
 
-fn compute_obj_grad_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, eps: f64) -> (f64, Vector9<f64>) {
+fn compute_obj_grad_d(
+    p_mat: &MatrixNx9<f64>,
+    x: &Vector9<f64>,
+    d: &mut DVector<f64>,
+    eps: f64,
+) -> (f64, Vector9<f64>) {
     let num_v = p_mat.nrows();
 
     p_mat.mul_to(x, d);
@@ -57,7 +75,11 @@ fn compute_obj_grad_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<
     (f, g)
 }
 
-pub fn compute_hessian(p_mat: &MatrixNx9<f64>, d: &DVector<f64>, a_mat: &mut MatrixNx9<f64>) -> Matrix9<f64> {
+pub fn compute_hessian(
+    p_mat: &MatrixNx9<f64>,
+    d: &DVector<f64>,
+    a_mat: &mut MatrixNx9<f64>,
+) -> Matrix9<f64> {
     a_mat.copy_from(p_mat);
 
     for mut col in a_mat.column_iter_mut() {
@@ -75,17 +97,20 @@ pub fn compute_hessian(p_mat: &MatrixNx9<f64>, d: &DVector<f64>, a_mat: &mut Mat
     h
 }
 
-
-pub fn solve_sqp(p_mat: &MatrixNx9<f64>, x0: &Vector9<f64>, d: &mut DVector<f64>, a_mat: &mut MatrixNx9<f64>, tune: &Tuneables) -> (Vector9<f64>, u64) {
-
+pub fn solve_sqp(
+    p_mat: &MatrixNx9<f64>,
+    x0: &Vector9<f64>,
+    d: &mut DVector<f64>,
+    a_mat: &mut MatrixNx9<f64>,
+    tune: &Tuneables,
+) -> (Vector9<f64>, u64) {
     let mut x = x0.clone();
 
     for iter in 0..tune.sqp_max_iter {
-
         // We manually truncate some values to zero, which will put them in the active set
         // If we guessed wrong this will be corrected later
         x.apply(|val| {
-            if *val <= tune.zero_threshold {
+            if *val <= tune.sqp_zero_threshold {
                 *val = 0.0;
             }
         });
@@ -103,12 +128,16 @@ pub fn solve_sqp(p_mat: &MatrixNx9<f64>, x0: &Vector9<f64>, d: &mut DVector<f64>
         //  However, because of the special structure of the objective function
         //  we only need to check if it's >= -conv tol in this case (I think)
 
-        let gmin = g.iter().enumerate().filter(|(row, _)| x[*row] > 0.0).map(|(_, gx)| *gx).min_by(|i, j| {
-            i.partial_cmp(j).expect("Found a NaN")
-        }).expect("Working set is full!");
+        let gmin = g
+            .iter()
+            .enumerate()
+            .filter(|(row, _)| x[*row] > 0.0)
+            .map(|(_, gx)| *gx)
+            .min_by(|i, j| i.partial_cmp(j).expect("Found a NaN"))
+            .expect("Working set is full!");
 
         if gmin >= -tune.sqp_conv_tol {
-            return (x, iter)
+            return (x, iter);
         }
 
         let h = compute_hessian(p_mat, d, a_mat);
@@ -134,15 +163,20 @@ pub fn solve_sqp(p_mat: &MatrixNx9<f64>, x0: &Vector9<f64>, d: &mut DVector<f64>
 // Can do loop-unrolling for small matrices to calculate Cholesky of submatrices.
 
 // Minimize 1/2 y^T Q y + c^T y, subject to y >= 0 and sum(y) = 1
-pub fn solve_qp_active_set(q_mat: &Matrix9<f64>, c: &Vector9<f64>, y0: &Vector9<f64>, sum_to_one: bool, modify: bool, tune: &Tuneables) -> (Vector9<f64>, u64) {
-
+pub fn solve_qp_active_set(
+    q_mat: &Matrix9<f64>,
+    c: &Vector9<f64>,
+    y0: &Vector9<f64>,
+    sum_to_one: bool,
+    modify: bool,
+    tune: &Tuneables,
+) -> (Vector9<f64>, u64) {
     let mut working_set = [false; 9];
 
     let mut y = y0.clone();
 
     for row in 0..9 {
-        if y[row] <= tune.zero_threshold {
-            y[row] = 0.0;
+        if y[row] == 0.0 {
             working_set[row] = true;
         }
     }
@@ -150,7 +184,6 @@ pub fn solve_qp_active_set(q_mat: &Matrix9<f64>, c: &Vector9<f64>, y0: &Vector9<
     let mut iter = 0;
 
     while iter < tune.qp_max_iter {
-
         if sum_to_one {
             let sum = y.sum();
             y /= sum;
@@ -249,7 +282,7 @@ pub fn solve_qp_active_set(q_mat: &Matrix9<f64>, c: &Vector9<f64>, y0: &Vector9<
 
             // The free set is full, aka the working set is empty
             if g_free.nrows() == 9 {
-                return (y, iter)
+                return (y, iter);
             }
 
             // This is the gradient of the QP
@@ -257,18 +290,18 @@ pub fn solve_qp_active_set(q_mat: &Matrix9<f64>, c: &Vector9<f64>, y0: &Vector9<
             // g = c + Qy
             g.gemv(1.0, &q_mat, &y, 1.0);
 
-            let smallest_multiplier_index = (0..9).filter(|row| working_set[*row]).min_by(|i, j| {
-                g[*i].partial_cmp(&g[*j]).expect("Found a NaN")
-            }).expect("Working set is full!");
+            let smallest_multiplier_index = (0..9)
+                .filter(|row| working_set[*row])
+                .min_by(|i, j| g[*i].partial_cmp(&g[*j]).expect("Found a NaN"))
+                .expect("Working set is full!");
 
             let smallest_muliplier = g[smallest_multiplier_index] - lambda;
 
             if smallest_muliplier >= -tune.qp_conv_tol {
-                return (y, iter)
+                return (y, iter);
             }
 
             working_set[smallest_multiplier_index] = false;
-
         } else {
             let mut p = Vector9::<f64>::zeros();
             let mut free_count = 0;
@@ -324,7 +357,15 @@ fn feasible_step_size(y: &Vector9<f64>, q: &Vector9<f64>) -> (f64, Option<usize>
     (alpha, blocking_index)
 }
 
-fn backtracking_line_search(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, y: &Vector9<f64>, f: f64, g: &Vector9<f64>, d: &mut DVector<f64>, tune: &Tuneables) -> (Vector9<f64>, u64) {
+fn backtracking_line_search(
+    p_mat: &MatrixNx9<f64>,
+    x: &Vector9<f64>,
+    y: &Vector9<f64>,
+    f: f64,
+    g: &Vector9<f64>,
+    d: &mut DVector<f64>,
+    tune: &Tuneables,
+) -> (Vector9<f64>, u64) {
     let p = y - x;
     let t = tune.bls_sufficient_decrease * g.dot(&p);
 
@@ -336,7 +377,7 @@ fn backtracking_line_search(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, y: &Vector
         // TODO this can be made more efficient a la N&W
         let fnew = compute_obj(p_mat, &xnew, d, tune.epsilon);
         if fnew <= f + alpha * t {
-            return (xnew, iter)
+            return (xnew, iter);
         }
 
         alpha *= tune.bls_step_size_reduce;
@@ -346,5 +387,5 @@ fn backtracking_line_search(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, y: &Vector
     // return the last one. This could happen because of floating
     // point problems, and it's better to be robust instead of
     // throwing errors (let the main loop handle it).
-    return (x + alpha * p, tune.bls_max_iter)
+    return (x + alpha * p, tune.bls_max_iter);
 }

@@ -12,10 +12,11 @@
 //     }
 // }
 
-pub mod iis;
-pub mod cls;
-pub mod vcf;
-pub mod jacquard;
-pub mod util;
-pub mod sqp;
 pub mod cholesky;
+pub mod cls;
+pub mod iis;
+pub mod jacquard;
+pub mod genotypes;
+pub mod sqp;
+pub mod util;
+pub mod vcf;
