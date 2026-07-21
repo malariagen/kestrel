@@ -37,10 +37,16 @@ impl Tuneables {
     }
 }
 
-fn compute_obj(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, eps: f64) -> f64 {
+pub fn compute_obj(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, eps: f64) -> f64 {
     let num_v = p_mat.nrows();
 
-    p_mat.mul_to(x, d);
+    let mut x0 = [0.0; 9];
+    for i in 0..9 {
+        x0[i] = x[i];
+    }
+
+    unsafe { mat_vec_mul_col_major_avx512(p_mat.as_slice(), &x0, num_v, d.as_mut_slice());}
+    // p_mat.mul_to(x, d);
     d.apply(|x| *x += eps);
 
     let scale = 1.0 / (num_v as f64);
@@ -52,13 +58,22 @@ fn compute_obj(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, e
 
 fn compute_obj_grad_d(
     p_mat: &MatrixNx9<f64>,
+    p_mat_t: &Matrix9xN<f64>,
     x: &Vector9<f64>,
     d: &mut DVector<f64>,
     eps: f64,
 ) -> (f64, Vector9<f64>) {
     let num_v = p_mat.nrows();
 
-    p_mat.mul_to(x, d);
+    let mut x0 = [0.0; 9];
+    for i in 0..9 {
+        x0[i] = x[i];
+    }
+
+    // unsafe { matrix_vector_mul_nx9_avx512(p_mat_t.as_slice(), &x0, num_v, d.as_mut_slice());}
+    unsafe { mat_vec_mul_col_major_avx512(p_mat.as_slice(), &x0, num_v, d.as_mut_slice());}
+    // p_mat.mul_to(x, d);
+
     d.apply(|x| *x += eps);
 
     let scale = 1.0 / (num_v as f64);
@@ -68,8 +83,14 @@ fn compute_obj_grad_d(
     d.apply(|x| *x = 1.0 / *x);
 
     // g = 1.0 - (P^T d) / L
-    let mut g = Vector9::<f64>::from_element(1.0);
-    g.gemv_tr(-scale, p_mat, &d, 1.0);
+    // let mut g = Vector9::<f64>::from_element(1.0);
+    // g.gemv_tr(-scale, p_mat, &d, 1.0);
+    // let b = unsafe { p_d_simd(num_v, p_mat.as_slice(), d.as_slice()) };
+    let b = unsafe { p_d_simd3(num_v, p_mat.as_slice(), d.as_slice()) };
+    let mut g = Vector9::<f64>::zeros();
+    for i in 0..9 {
+        g[i] = 1.0 - b[i] * scale;
+    }
 
     (f, g)
 }
@@ -95,6 +116,18 @@ fn compute_hessian(
     ata(a_mat)
 }
 
+fn compute_hessian2(
+    p_mat: &MatrixNx9<f64>,
+    d: &DVector<f64>,
+) -> Matrix9<f64> {
+    let num_v = p_mat.nrows();
+
+    let h = unsafe { at_d2_a_col_major_avx512(p_mat.as_slice(), d.into(), num_v) };
+
+    let scale = 1.0 / (num_v as f64);
+    Matrix9::from_fn(|i, j| h[i][j] * scale)
+}
+
 fn compute_hessian_t(
     p_mat_t: &Matrix9xN<f64>,
     d: &DVector<f64>,
@@ -109,7 +142,7 @@ fn compute_hessian_t(
         )
     };
 
-    let h = unsafe { explicit_simd(num_v, d.into(), slice) };
+    let h = unsafe { pt_d2_p_simd(num_v, d.into(), slice) };
 
     let scale = 1.0 / (num_v as f64);
     Matrix9::from_fn(|i, j| h[i][j] * scale)
@@ -151,7 +184,7 @@ fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
 use std::arch::x86_64::*;
 
 #[target_feature(enable = "avx512f,fma")]
-pub unsafe fn explicit_simd(
+pub unsafe fn pt_d2_p_simd(
     n: usize,
     d: &[f64],
     p: &[[f64; 9]],
@@ -202,6 +235,385 @@ pub unsafe fn explicit_simd(
 
     c
 }
+/// AVX-512 implementation of C = A^T * D^2 * A
+///
+/// # Safety
+/// Target CPU must support the `avx512f` instruction set.
+#[target_feature(enable = "avx512f")]
+pub unsafe fn at_d2_a_col_major_avx512(
+    a: &[f64],
+    d: &[f64],
+    n: usize,
+) -> [[f64; 9]; 9] {
+    let mut c_out = [[0.0; 9]; 9];
+
+    let a_ptr = a.as_ptr();
+    let d_ptr = d.as_ptr();
+
+    // 2048 doubles = 16 KB (fits cleanly in L1 cache frame)
+    const TILE_SIZE: usize = 2048;
+    let mut scaled_col_i = [0.0f64; TILE_SIZE];
+
+    let mut t = 0;
+    while t < n {
+        let t_end = (t + TILE_SIZE).min(n);
+        let tile_len = t_end - t;
+        let chunks_8 = tile_len / 8;
+        let rem_8 = tile_len % 8;
+
+        for i in 0..9 {
+            let col_i_ptr = a_ptr.add(i * n + t);
+
+            // -----------------------------------------------------------------
+            // STEP 1: Pre-scale column i for this tile: scaled_col_i = d^2 * col_i
+            // -----------------------------------------------------------------
+            for k in 0..chunks_8 {
+                let offset = k * 8;
+                let vd = _mm512_loadu_pd(d_ptr.add(t + offset));
+                let vd2 = _mm512_mul_pd(vd, vd); // d_k^2 (Square diagonal entry)
+                let va = _mm512_loadu_pd(col_i_ptr.add(offset));
+
+                let v_scaled = _mm512_mul_pd(va, vd2);
+                _mm512_storeu_pd(scaled_col_i.as_mut_ptr().add(offset), v_scaled);
+            }
+
+            // Scalar remainder for pre-scaling (< 8 elements)
+            let start_rem = chunks_8 * 8;
+            for r in start_rem..tile_len {
+                let dk = *d_ptr.add(t + r);
+                scaled_col_i[r] = (dk * dk) * (*col_i_ptr.add(r));
+            }
+
+            // -----------------------------------------------------------------
+            // STEP 2: Compute dot product of scaled_col_i with col_j (for j >= i)
+            // -----------------------------------------------------------------
+            for j in i..9 {
+                let col_j_ptr = a_ptr.add(j * n + t);
+                let mut acc = _mm512_setzero_pd();
+
+                for k in 0..chunks_8 {
+                    let offset = k * 8;
+                    // Fast L1 cache load of scaled column i
+                    let v_scaled = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset));
+                    let vb = _mm512_loadu_pd(col_j_ptr.add(offset));
+
+                    acc = _mm512_fmadd_pd(v_scaled, vb, acc);
+                }
+
+                // AVX-512 zero-masking for remainder elements
+                if rem_8 > 0 {
+                    let offset = chunks_8 * 8;
+                    let mask = ((1u16 << rem_8) - 1) as u8;
+                    let v_scaled = _mm512_maskz_loadu_pd(mask, scaled_col_i.as_ptr().add(offset));
+                    let vb = _mm512_maskz_loadu_pd(mask, col_j_ptr.add(offset));
+
+                    acc = _mm512_fmadd_pd(v_scaled, vb, acc);
+                }
+
+                let partial_sum = _mm512_reduce_add_pd(acc);
+                c_out[i][j] += partial_sum;
+            }
+        }
+
+        t = t_end;
+    }
+
+    // Mirror upper triangle to lower triangle (Symmetry: C[j][i] = C[i][j])
+    for i in 0..9 {
+        for j in (i + 1)..9 {
+            c_out[j][i] = c_out[i][j];
+        }
+    }
+
+    c_out
+}
+
+#[target_feature(enable = "avx512f")]
+pub unsafe fn p_d_simd(
+    n: usize,
+    a: &[f64],
+    d: &[f64],
+) -> [f64; 9] {
+
+    // 1. Initialize 9 AVX-512 registers (512-bit / 8 double-precision floats each)
+    let mut acc = [_mm512_setzero_pd(); 9];
+
+    let chunks = n / 8;
+    let remainder = n % 8;
+
+    let d_ptr = d.as_ptr();
+    let a_ptr = a.as_ptr();
+
+    // 2. Main Loop: Step through columns in blocks of 8
+    for c in 0..chunks {
+        let col = c * 8;
+
+        // Load 8 contiguous f64 elements from vector d into register once
+        let vd = _mm512_loadu_pd(d_ptr.add(col));
+
+        // Multiply-accumulate across all 9 rows
+        for r in 0..9 {
+            let va = _mm512_loadu_pd(a_ptr.add(r * n + col));
+            // acc[r] += va * vd
+            acc[r] = _mm512_fmadd_pd(va, vd, acc[r]);
+        }
+    }
+
+    // 3. Tail Loop: Handle remaining N % 8 elements using AVX-512 zero-masking
+    if remainder > 0 {
+        let col = chunks * 8;
+        // Generate bitmask for leftover elements (e.g., 3 remaining -> 0b00000111)
+        let mask = ((1u16 << remainder) - 1) as u8;
+
+        // Load remaining elements; unselected lanes are automatically set to 0.0
+        let vd = _mm512_maskz_loadu_pd(mask, d_ptr.add(col));
+
+        for r in 0..9 {
+            let va = _mm512_maskz_loadu_pd(mask, a_ptr.add(r * n + col));
+            acc[r] = _mm512_fmadd_pd(va, vd, acc[r]);
+        }
+    }
+
+    let mut out = [0.0; 9];
+
+    // 4. Horizontal Reduction: Sum 8 lanes in each register into scalar f64
+    for r in 0..9 {
+        out[r] = _mm512_reduce_add_pd(acc[r]);
+    }
+
+    out
+}
+
+#[target_feature(enable = "avx512f")]
+pub unsafe fn p_d_simd2(
+    n: usize,
+    a: &[f64],
+    d: &[f64],
+) -> [f64; 9] {
+    let chunks_32 = n / 32;
+    let rem_32 = n % 32;
+
+    let mut out = [0.0; 9];
+
+    for r in 0..9 {
+        let row_ptr = a.as_ptr().add(r * n);
+        let d_ptr = d.as_ptr();
+
+        // 4 independent accumulators to break the 4-cycle FMA dependency chain
+        let mut acc0 = _mm512_setzero_pd();
+        let mut acc1 = _mm512_setzero_pd();
+        let mut acc2 = _mm512_setzero_pd();
+        let mut acc3 = _mm512_setzero_pd();
+
+        // 1. Process blocks of 32 double-precision floats (4 x ZMM registers)
+        for i in 0..chunks_32 {
+            let offset = i * 32;
+
+            acc0 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset)),    _mm512_loadu_pd(d_ptr.add(offset)),    acc0);
+            acc1 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset+8)),  _mm512_loadu_pd(d_ptr.add(offset+8)),  acc1);
+            acc2 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset+16)), _mm512_loadu_pd(d_ptr.add(offset+16)), acc2);
+            acc3 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset+24)), _mm512_loadu_pd(d_ptr.add(offset+24)), acc3);
+        }
+
+        // Combine the 4 accumulators into one
+        let mut acc = _mm512_add_pd(_mm512_add_pd(acc0, acc1), _mm512_add_pd(acc2, acc3));
+
+        // 2. Handle remaining elements (< 32) in 8-element chunks
+        let mut rem_offset = chunks_32 * 32;
+        let rem_8_chunks = rem_32 / 8;
+        let final_rem = rem_32 % 8;
+
+        for _ in 0..rem_8_chunks {
+            let va = _mm512_loadu_pd(row_ptr.add(rem_offset));
+            let vd = _mm512_loadu_pd(d_ptr.add(rem_offset));
+            acc = _mm512_fmadd_pd(va, vd, acc);
+            rem_offset += 8;
+        }
+
+        // 3. Handle leftover tail (< 8) using zero-masking
+        if final_rem > 0 {
+            let mask = ((1u16 << final_rem) - 1) as u8;
+            let va = _mm512_maskz_loadu_pd(mask, row_ptr.add(rem_offset));
+            let vd = _mm512_maskz_loadu_pd(mask, d_ptr.add(rem_offset));
+            acc = _mm512_fmadd_pd(va, vd, acc);
+        }
+
+        // Horizontal sum for this row
+        out[r] = _mm512_reduce_add_pd(acc);
+    }
+
+    out
+}
+
+#[target_feature(enable = "avx512f")]
+pub unsafe fn p_d_simd3(
+    n: usize,
+    a: &[f64],
+    d: &[f64],
+) -> [f64; 9] {
+    // Zero initialize the output array
+    let mut out = [0.0; 9];
+
+    // 4096 double-precision floats = 32 KB (fits cleanly inside L1 data cache)
+    const TILE_SIZE: usize = 4096;
+
+    let mut t_start = 0;
+    while t_start < n {
+        let t_end = (t_start + TILE_SIZE).min(n);
+        let tile_len = t_end - t_start;
+
+        let chunks_32 = tile_len / 32;
+        let rem_32 = tile_len % 32;
+
+        // Process all 9 rows for the current L1 cache tile
+        for r in 0..9 {
+            let row_ptr = a.as_ptr().add(r * n + t_start);
+            let d_ptr = d.as_ptr().add(t_start);
+
+            // 4 independent accumulators to break FMA instruction dependency latency
+            let mut acc0 = _mm512_setzero_pd();
+            let mut acc1 = _mm512_setzero_pd();
+            let mut acc2 = _mm512_setzero_pd();
+            let mut acc3 = _mm512_setzero_pd();
+
+            // 1. Unrolled loop: 32 elements (4 x 512-bit ZMM registers) per iteration
+            for i in 0..chunks_32 {
+                let offset = i * 32;
+                acc0 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset)),    _mm512_loadu_pd(d_ptr.add(offset)),    acc0);
+                acc1 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset+8)),  _mm512_loadu_pd(d_ptr.add(offset+8)),  acc1);
+                acc2 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset+16)), _mm512_loadu_pd(d_ptr.add(offset+16)), acc2);
+                acc3 = _mm512_fmadd_pd(_mm512_loadu_pd(row_ptr.add(offset+24)), _mm512_loadu_pd(d_ptr.add(offset+24)), acc3);
+            }
+
+            let mut acc = _mm512_add_pd(_mm512_add_pd(acc0, acc1), _mm512_add_pd(acc2, acc3));
+
+            // 2. Handle 8-element chunks in tile remainder
+            let mut rem_offset = chunks_32 * 32;
+            let rem_8 = rem_32 / 8;
+            let final_rem = rem_32 % 8;
+
+            for _ in 0..rem_8 {
+                let va = _mm512_loadu_pd(row_ptr.add(rem_offset));
+                let vd = _mm512_loadu_pd(d_ptr.add(rem_offset));
+                acc = _mm512_fmadd_pd(va, vd, acc);
+                rem_offset += 8;
+            }
+
+            // 3. Handle tail elements (< 8) using zero-masking
+            if final_rem > 0 {
+                let mask = ((1u16 << final_rem) - 1) as u8;
+                let va = _mm512_maskz_loadu_pd(mask, row_ptr.add(rem_offset));
+                let vd = _mm512_maskz_loadu_pd(mask, d_ptr.add(rem_offset));
+                acc = _mm512_fmadd_pd(va, vd, acc);
+            }
+
+            // Accumulate partial tile result into output vector
+            out[r] += _mm512_reduce_add_pd(acc);
+        }
+
+        t_start = t_end;
+    }
+    out
+}
+
+#[target_feature(enable = "avx512f")]
+unsafe fn matrix_vector_mul_nx9_avx512(b: &[f64], x: &[f64; 9], n: usize, y: &mut [f64]) {
+    // 1. Pre-load x[0..8] into a 512-bit register ONCE for all N rows
+    let vx_0_7 = _mm512_loadu_pd(x.as_ptr());
+    let x8 = x[8]; // Keep 9th element in a scalar register
+
+    let chunks_4 = n / 4;
+    let remainder = n % 4;
+
+    let b_ptr = b.as_ptr();
+    let y_ptr = y.as_mut_ptr();
+
+    // 2. Main Loop: Process 4 rows at a time
+    for c in 0..chunks_4 {
+        let r = c * 4;
+
+        let row0 = b_ptr.add(r * 9);
+        let row1 = b_ptr.add((r + 1) * 9);
+        let row2 = b_ptr.add((r + 2) * 9);
+        let row3 = b_ptr.add((r + 3) * 9);
+
+        // Load first 8 elements (512-bit) for 4 consecutive rows
+        let vb0 = _mm512_loadu_pd(row0);
+        let vb1 = _mm512_loadu_pd(row1);
+        let vb2 = _mm512_loadu_pd(row2);
+        let vb3 = _mm512_loadu_pd(row3);
+
+        // Load 9th scalar element for each row
+        let b0_8 = *row0.add(8);
+        let b1_8 = *row1.add(8);
+        let b2_8 = *row2.add(8);
+        let b3_8 = *row3.add(8);
+
+        // Multiply B[i, 0..8] by x[0..8]
+        let p0 = _mm512_mul_pd(vb0, vx_0_7);
+        let p1 = _mm512_mul_pd(vb1, vx_0_7);
+        let p2 = _mm512_mul_pd(vb2, vx_0_7);
+        let p3 = _mm512_mul_pd(vb3, vx_0_7);
+
+        // Reduce 8 vector lanes into a scalar and add (B[i, 8] * x[8])
+        *y_ptr.add(r)     = _mm512_reduce_add_pd(p0) + (b0_8 * x8);
+        *y_ptr.add(r + 1) = _mm512_reduce_add_pd(p1) + (b1_8 * x8);
+        *y_ptr.add(r + 2) = _mm512_reduce_add_pd(p2) + (b2_8 * x8);
+        *y_ptr.add(r + 3) = _mm512_reduce_add_pd(p3) + (b3_8 * x8);
+    }
+
+    // 3. Tail Loop: Process remaining rows (N % 4)
+    let start_rem = chunks_4 * 4;
+    for r in start_rem..n {
+        let row = b_ptr.add(r * 9);
+        let vb = _mm512_loadu_pd(row);
+        let b8 = *row.add(8);
+        let p = _mm512_mul_pd(vb, vx_0_7);
+        *y_ptr.add(r) = _mm512_reduce_add_pd(p) + (b8 * x8);
+    }
+}
+
+#[target_feature(enable = "avx512f")]
+pub unsafe fn mat_vec_mul_col_major_avx512(b: &[f64], x: &[f64; 9], n: usize, y: &mut [f64]) {
+    let b_ptr = b.as_ptr();
+    let y_ptr = y.as_mut_ptr();
+
+    // 1. Initialize output array y with x[0] * col_0
+    let vx0 = _mm512_set1_pd(x[0]);
+    let col0_ptr = b_ptr; // Column 0 starts at index 0
+
+    let chunks_8 = n / 8;
+    for i in 0..chunks_8 {
+        let offset = i * 8;
+        let vb = _mm512_loadu_pd(col0_ptr.add(offset));
+        _mm512_storeu_pd(y_ptr.add(offset), _mm512_mul_pd(vb, vx0));
+    }
+
+    // 2. Accumulate x[j] * col_j for columns 1..8
+    for j in 1..9 {
+        let vxj = _mm512_set1_pd(x[j]);
+        let col_j_ptr = b_ptr.add(j * n); // Column j starts at j * N
+
+        for i in 0..chunks_8 {
+            let offset = i * 8;
+            let vy = _mm512_loadu_pd(y_ptr.add(offset));
+            let vb = _mm512_loadu_pd(col_j_ptr.add(offset));
+            // y[i] += b_j[i] * x[j]
+            let res = _mm512_fmadd_pd(vb, vxj, vy);
+            _mm512_storeu_pd(y_ptr.add(offset), res);
+        }
+    }
+
+    // Tail loop for remaining N % 8 elements
+    let start_rem = chunks_8 * 8;
+    for i in start_rem..n {
+        let mut sum = 0.0;
+        for j in 0..9 {
+            sum += b[j * n + i] * x[j];
+        }
+        y[i] = sum;
+    }
+}
 
 pub fn solve_sqp(
     p_mat: &MatrixNx9<f64>,
@@ -225,7 +637,7 @@ pub fn solve_sqp(
         let sum = x.sum();
         x /= sum;
 
-        let (f, g) = compute_obj_grad_d(p_mat, &x, d, tune.epsilon);
+        let (f, g) = compute_obj_grad_d(p_mat, p_mat_t, &x, d, tune.epsilon);
 
         // For a convex function, a point x is optimal iff nab
         // For optimization subject to x >= 0, we have (Bertsekas Nonlinear Programming p. 238):
@@ -248,7 +660,8 @@ pub fn solve_sqp(
         }
 
         // let h = compute_hessian(p_mat, d, a_mat);
-        let h = compute_hessian_t(p_mat_t, d);
+        // let h = compute_hessian_t(p_mat_t, d);
+        let h = compute_hessian2(p_mat, d);
 
         // c = g - H x
         let mut c = g.clone();

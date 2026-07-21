@@ -19,6 +19,8 @@ fn main() -> Result<()> {
 
     let kinship = kestrel::jacquard::calculate_relatedness_coefficients(&gt, &af);
 
+    println!("sum {}", kinship.sum());
+
     let out_file = File::create(&args[2])?;
 
     let mut writer = BufWriter::new(out_file);
