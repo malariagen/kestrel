@@ -60,12 +60,13 @@ fn calculate_max_alleles(genotypes: ArrayView3<i8>) -> Vec<usize> {
 
 struct ThreadBuffers {
     p_mat: MatrixNx9<f64>,
+    p_mat_t: Matrix9xN<f64>,
     d: DVector<f64>,
     a_mat: MatrixNx9<f64>
 }
  impl ThreadBuffers {
     fn new(num_loci: usize) -> Self {
-        ThreadBuffers { p_mat : MatrixNx9::zeros(num_loci), d : DVector::zeros(num_loci), a_mat : MatrixNx9::zeros(num_loci) }
+        ThreadBuffers { p_mat : MatrixNx9::zeros(num_loci), p_mat_t : Matrix9xN::zeros(num_loci), d : DVector::zeros(num_loci), a_mat : MatrixNx9::zeros(num_loci) }
     }
  }
 
@@ -144,7 +145,9 @@ fn calculate_coefficients_inner(
 
             calculate_mixture_component_matrix(&all_joint_genotypes, &stacked_m_t, *genotypes_x, *genotypes_y, &lookup_table, &mut buffers.p_mat);
 
-            let (delta, _) = sqp::solve_sqp(&buffers.p_mat, &delta, &mut buffers.d, &mut buffers.a_mat, &Tuneables::new());
+            buffers.p_mat_t = buffers.p_mat.transpose().to_owned();
+
+            let (delta, _) = sqp::solve_sqp(&buffers.p_mat, &buffers.p_mat_t, &delta, &mut buffers.d, &mut buffers.a_mat, &Tuneables::new());
 
             // println!("{} {} {}", x, y, delta.transpose());
             let kinship = delta.dot(&kinship_vec);

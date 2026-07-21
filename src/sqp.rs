@@ -1,8 +1,7 @@
 use nalgebra::DVector;
 
 use crate::{
-    cholesky,
-    util::{Matrix9, MatrixNx9, Vector9},
+    cholesky, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
@@ -75,7 +74,7 @@ fn compute_obj_grad_d(
     (f, g)
 }
 
-pub fn compute_hessian(
+fn compute_hessian(
     p_mat: &MatrixNx9<f64>,
     d: &DVector<f64>,
     a_mat: &mut MatrixNx9<f64>,
@@ -94,6 +93,26 @@ pub fn compute_hessian(
     // h
 
     ata(a_mat)
+}
+
+fn compute_hessian_t(
+    p_mat_t: &Matrix9xN<f64>,
+    d: &DVector<f64>,
+) -> Matrix9<f64> {
+
+    let num_v = p_mat_t.ncols();
+
+    let slice = unsafe {
+        std::slice::from_raw_parts(
+            p_mat_t.as_slice().as_ptr().cast::<[f64; 9]>(),
+            num_v
+        )
+    };
+
+    let h = unsafe { explicit_simd(num_v, d.into(), slice) };
+
+    let scale = 1.0 / (num_v as f64);
+    Matrix9::from_fn(|i, j| h[i][j] * scale)
 }
 
 fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
@@ -129,8 +148,64 @@ fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
     h
 }
 
+use std::arch::x86_64::*;
+
+#[target_feature(enable = "avx512f,fma")]
+pub unsafe fn explicit_simd(
+    n: usize,
+    d: &[f64],
+    p: &[[f64; 9]],
+) -> [[f64; 9]; 9] {
+    // 9 rows of 8-wide AVX-512 accumulators
+    let mut h8 = [_mm512_setzero_pd(); 9];
+    // 9 rows of 1-wide scalar accumulators
+    let mut h1 = [0.0; 9];
+
+    for k in 0..n {
+        // 1. Square the diagonal element for D^2
+        let d_val = *d.get_unchecked(k);
+        let d2 = d_val * d_val;
+        let d2_vec = _mm512_set1_pd(d2);
+
+        // 2. Load memory DIRECTLY into vector registers
+        let p_row = p.get_unchecked(k);
+        let p8 = _mm512_loadu_pd(p_row.as_ptr());
+        let p1 = *p_row.get_unchecked(8);
+
+        // 3. Scale the row by D^2
+        let s8 = _mm512_mul_pd(p8, d2_vec);
+        let s1 = p1 * d2;
+
+        // 4. FMA Outer Product
+        // LLVM natively unrolls small fixed-size loops (0..9) automatically in release mode;
+        // no #pragma needed.
+        for i in 0..9 {
+            let p_i = *p_row.get_unchecked(i);
+
+            // Generate the `vfmadd231pd zmm, zmm, [mem]{1to8}` instruction
+            h8[i] = _mm512_fmadd_pd(_mm512_set1_pd(p_i), s8, h8[i]);
+
+            h1[i] = p_i.mul_add(s1, h1[i]);
+
+            // 1-wide scalar FMA
+            // h1[i] += p_i * s1;
+        }
+    }
+
+    let mut c = [[0.0; 9]; 9];
+
+    // 5. Clean Extraction
+    for i in 0..9 {
+        _mm512_storeu_pd(c.get_unchecked_mut(i).as_mut_ptr(), h8[i]);
+        *c.get_unchecked_mut(i).get_unchecked_mut(8) = h1[i];
+    }
+
+    c
+}
+
 pub fn solve_sqp(
     p_mat: &MatrixNx9<f64>,
+    p_mat_t: &Matrix9xN<f64>,
     x0: &Vector9<f64>,
     d: &mut DVector<f64>,
     a_mat: &mut MatrixNx9<f64>,
@@ -172,7 +247,8 @@ pub fn solve_sqp(
             return (x, iter);
         }
 
-        let h = compute_hessian(p_mat, d, a_mat);
+        // let h = compute_hessian(p_mat, d, a_mat);
+        let h = compute_hessian_t(p_mat_t, d);
 
         // c = g - H x
         let mut c = g.clone();
