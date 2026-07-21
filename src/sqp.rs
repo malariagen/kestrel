@@ -86,13 +86,45 @@ pub fn compute_hessian(
         col.component_mul_assign(d);
     }
 
-    let num_v = p_mat.nrows();
-    let scale = 1.0 / (num_v as f64);
+    // let num_v = p_mat.nrows();
+    // let scale = 1.0 / (num_v as f64);
+    // let mut h = Matrix9::<f64>::zeros();
+    // a_mat.tr_mul(&_mat) * scale;
+    // h.gemm_tr(scale, &a_mat, &a_mat, 0.0);
+    // h
+
+    ata(a_mat)
+}
+
+fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
+    let rows = a_mat.nrows();
+    let scale = 1.0 / (rows as f64);
 
     let mut h = Matrix9::<f64>::zeros();
 
-    // a_mat.tr_mul(&_mat) * scale;
-    h.gemm_tr(scale, &a_mat, &a_mat, 0.0);
+    let n: i32 = 9;
+    let k = i32::try_from(rows).unwrap();
+
+    let lda = k;
+    let ldc = n;
+
+    unsafe {
+        cblas::dsyrk(
+            cblas::Layout::ColumnMajor,
+            cblas::Part::Lower,
+            cblas::Transpose::Ordinary,
+            n,
+            k,
+            scale,
+            a_mat.as_slice(),
+            lda,
+            0.0,
+            h.as_mut_slice(),
+            ldc
+        );
+    }
+
+    h.fill_upper_triangle_with_lower_triangle();
 
     h
 }

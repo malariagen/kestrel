@@ -97,9 +97,9 @@ fn calculate_coefficients_inner(
     let num_s = genotypes.shape()[0];
 
     let mut thread_pool = ThreadPoolBuilder {
-        num_threads: ThreadCount::Count(NonZeroUsize::new(20).unwrap()),
+        num_threads: ThreadCount::Count(NonZeroUsize::new(8).unwrap()),
         range_strategy: RangeStrategy::Fixed,
-        cpu_pinning: CpuPinningPolicy::Always,
+        cpu_pinning: CpuPinningPolicy::No,
     }
     .build();
 

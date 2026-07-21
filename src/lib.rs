@@ -12,6 +12,8 @@
 //     }
 // }
 
+extern crate openblas_src;
+
 pub mod cholesky;
 pub mod cls;
 pub mod iis;
