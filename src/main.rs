@@ -14,8 +14,8 @@ fn main() -> Result<()> {
     let vcf_file = Path::new(&args[1]);
     let (gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
 
-    // let gt = concatenate(Axis(0), &[gt.view(), gt.view(), gt.view(), gt.view(), gt.view()]).unwrap();
-    // let af = concatenate(Axis(0), &[af.view(), af.view(), af.view(), af.view(), af.view()]).unwrap();
+    let gt = concatenate(Axis(0), &[gt.view(), gt.view(), gt.view()]).unwrap();
+    let af = concatenate(Axis(0), &[af.view(), af.view(), af.view()]).unwrap();
 
     let kinship = kestrel::jacquard::calculate_relatedness_coefficients(&gt, &af);
 

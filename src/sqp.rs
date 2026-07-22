@@ -122,7 +122,7 @@ fn compute_hessian2(
 ) -> Matrix9<f64> {
     let num_v = p_mat.nrows();
 
-    let h = unsafe { at_d2_a_col_major_avx512(p_mat.as_slice(), d.into(), num_v) };
+    let h = unsafe { at_d2_a_col_major_fast_avx512(p_mat.as_slice(), d.into(), num_v) };
 
     let scale = 1.0 / (num_v as f64);
     Matrix9::from_fn(|i, j| h[i][j] * scale)
@@ -251,7 +251,7 @@ pub unsafe fn at_d2_a_col_major_avx512(
     let d_ptr = d.as_ptr();
 
     // 2048 doubles = 16 KB (fits cleanly in L1 cache frame)
-    const TILE_SIZE: usize = 2048;
+    const TILE_SIZE: usize = 512;
     let mut scaled_col_i = [0.0f64; TILE_SIZE];
 
     let mut t = 0;
@@ -312,6 +312,381 @@ pub unsafe fn at_d2_a_col_major_avx512(
 
                 let partial_sum = _mm512_reduce_add_pd(acc);
                 c_out[i][j] += partial_sum;
+            }
+        }
+
+        t = t_end;
+    }
+
+    // Mirror upper triangle to lower triangle (Symmetry: C[j][i] = C[i][j])
+    for i in 0..9 {
+        for j in (i + 1)..9 {
+            c_out[j][i] = c_out[i][j];
+        }
+    }
+
+    c_out
+}
+
+#[target_feature(enable = "avx512f")]
+pub unsafe fn at_d2_a_col_major_fast_avx512(
+    a: &[f64],
+    d: &[f64],
+    n: usize,
+) -> [[f64; 9]; 9] {
+    let mut c_out = [[0.0; 9]; 9];
+
+    let a_ptr = a.as_ptr();
+    let d_ptr = d.as_ptr();
+
+    // 512 elements * 8 bytes = 4 KB per buffer (100% L1D residency on Zen 5)
+    const TILE_SIZE: usize = 512;
+    let mut d2_tile = [0.0f64; TILE_SIZE];
+    let mut scaled_col_i = [0.0f64; TILE_SIZE];
+
+    let mut t = 0;
+    while t < n {
+        let t_end = (t + TILE_SIZE).min(n);
+        let tile_len = t_end - t;
+
+        let chunks_32 = tile_len / 32;
+        let chunks_8 = tile_len / 8;
+        let rem_8 = tile_len % 8;
+
+        // -----------------------------------------------------------------
+        // OPTIMIZATION 1: Pre-calculate D^2 ONCE per tile
+        // -----------------------------------------------------------------
+        for k in 0..chunks_8 {
+            let offset = k * 8;
+            let vd = _mm512_loadu_pd(d_ptr.add(t + offset));
+            let vd2 = _mm512_mul_pd(vd, vd);
+            _mm512_storeu_pd(d2_tile.as_mut_ptr().add(offset), vd2);
+        }
+        let start_rem = chunks_8 * 8;
+        for r in start_rem..tile_len {
+            let dk = *d_ptr.add(t + r);
+            d2_tile[r] = dk * dk;
+        }
+
+        // Process matrix B
+        for i in 0..9 {
+            let col_i_ptr = a_ptr.add(i * n + t);
+
+            // Pre-scale column i using d2_tile
+            for k in 0..chunks_8 {
+                let offset = k * 8;
+                let vd2 = _mm512_loadu_pd(d2_tile.as_ptr().add(offset));
+                let va = _mm512_loadu_pd(col_i_ptr.add(offset));
+                _mm512_storeu_pd(scaled_col_i.as_mut_ptr().add(offset), _mm512_mul_pd(va, vd2));
+            }
+            for r in start_rem..tile_len {
+                scaled_col_i[r] = d2_tile[r] * (*col_i_ptr.add(r));
+            }
+
+            // Compute dot product with col_j
+            for j in i..9 {
+                let col_j_ptr = a_ptr.add(j * n + t);
+
+                // ---------------------------------------------------------
+                // OPTIMIZATION 2: 4-Way Accumulator Unrolling (32 elements)
+                // ---------------------------------------------------------
+                let mut acc0 = _mm512_setzero_pd();
+                let mut acc1 = _mm512_setzero_pd();
+                let mut acc2 = _mm512_setzero_pd();
+                let mut acc3 = _mm512_setzero_pd();
+
+                for k in 0..chunks_32 {
+                    let offset = k * 32;
+
+                    let vs0 = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset));
+                    let vb0 = _mm512_loadu_pd(col_j_ptr.add(offset));
+                    acc0 = _mm512_fmadd_pd(vs0, vb0, acc0);
+
+                    let vs1 = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset + 8));
+                    let vb1 = _mm512_loadu_pd(col_j_ptr.add(offset + 8));
+                    acc1 = _mm512_fmadd_pd(vs1, vb1, acc1);
+
+                    let vs2 = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset + 16));
+                    let vb2 = _mm512_loadu_pd(col_j_ptr.add(offset + 16));
+                    acc2 = _mm512_fmadd_pd(vs2, vb2, acc2);
+
+                    let vs3 = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset + 24));
+                    let vb3 = _mm512_loadu_pd(col_j_ptr.add(offset + 24));
+                    acc3 = _mm512_fmadd_pd(vs3, vb3, acc3);
+                }
+
+                let mut total_acc = _mm512_add_pd(_mm512_add_pd(acc0, acc1), _mm512_add_pd(acc2, acc3));
+
+                // Cleanup remaining 8-element blocks
+                let rem_32_start = chunks_32 * 4;
+                for k in rem_32_start..chunks_8 {
+                    let offset = k * 8;
+                    let vs = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset));
+                    let vb = _mm512_loadu_pd(col_j_ptr.add(offset));
+                    total_acc = _mm512_fmadd_pd(vs, vb, total_acc);
+                }
+
+                // AVX-512 zero-masking for final scalar tail (< 8 elements)
+                if rem_8 > 0 {
+                    let offset = chunks_8 * 8;
+                    let mask = ((1u16 << rem_8) - 1) as u8;
+                    let vs = _mm512_maskz_loadu_pd(mask, scaled_col_i.as_ptr().add(offset));
+                    let vb = _mm512_maskz_loadu_pd(mask, col_j_ptr.add(offset));
+                    total_acc = _mm512_fmadd_pd(vs, vb, total_acc);
+                }
+
+                c_out[i][j] += _mm512_reduce_add_pd(total_acc);
+            }
+        }
+
+        t = t_end;
+    }
+
+    // Mirror upper triangle to lower triangle
+    for i in 0..9 {
+        for j in (i + 1)..9 {
+            c_out[j][i] = c_out[i][j];
+        }
+    }
+    c_out
+}
+
+#[target_feature(enable = "avx512f")]
+pub unsafe fn at_d2_a_col_major_untiled_avx512(
+    a: &[f64],
+    d: &[f64],
+    n: usize,
+) -> [[f64; 9]; 9] {
+    let mut c_out = [[0.0; 9]; 9];
+
+    let a_ptr = a.as_ptr();
+    let d_ptr = d.as_ptr();
+
+    let chunks_8 = n / 8;
+    let rem_8 = n % 8;
+
+    // Loop over the 45 upper-triangular pairs
+    for i in 0..9 {
+        let col_i_ptr = a_ptr.add(i * n);
+
+        for j in i..9 {
+            let col_j_ptr = a_ptr.add(j * n);
+            let mut acc = _mm512_setzero_pd();
+
+            // Single continuous sweep over all N elements in 8-element SIMD vectors
+            for k in 0..chunks_8 {
+                let offset = k * 8;
+
+                // 1. Load d_k and square it: d_k^2
+                let vd = _mm512_loadu_pd(d_ptr.add(offset));
+                let vd2 = _mm512_mul_pd(vd, vd);
+
+                // 2. Load A_k,i and A_k,j
+                let va = _mm512_loadu_pd(col_i_ptr.add(offset));
+                let vb = _mm512_loadu_pd(col_j_ptr.add(offset));
+
+                // 3. acc += (A_k,i * d_k^2) * A_k,j
+                let v_scaled_a = _mm512_mul_pd(va, vd2);
+                acc = _mm512_fmadd_pd(v_scaled_a, vb, acc);
+            }
+
+            // Remainder handling happens ONCE at the very end of N (if N % 8 != 0)
+            if rem_8 > 0 {
+                let offset = chunks_8 * 8;
+                let mask = ((1u16 << rem_8) - 1) as u8;
+
+                let vd = _mm512_maskz_loadu_pd(mask, d_ptr.add(offset));
+                let vd2 = _mm512_mul_pd(vd, vd);
+
+                let va = _mm512_maskz_loadu_pd(mask, col_i_ptr.add(offset));
+                let vb = _mm512_maskz_loadu_pd(mask, col_j_ptr.add(offset));
+
+                let v_scaled_a = _mm512_mul_pd(va, vd2);
+                acc = _mm512_fmadd_pd(v_scaled_a, vb, acc);
+            }
+
+            // Reduce 8-lane SIMD vector to a single scalar sum
+            c_out[i][j] = _mm512_reduce_add_pd(acc);
+        }
+    }
+
+    // Mirror upper triangle to lower triangle (Symmetry: C[j][i] = C[i][j])
+    for i in 0..9 {
+        for j in (i + 1)..9 {
+            c_out[j][i] = c_out[i][j];
+        }
+    }
+
+    c_out
+}
+
+#[target_feature(enable = "avx512f")]
+pub unsafe fn at_d2_a_col_major_blocked_avx512(a: &[f64], d: &[f64], n: usize) -> [[f64; 9]; 9] {
+    let mut c_out = [[0.0f64; 9]; 9];
+
+    let a_ptr = a.as_ptr();
+    let d_ptr = d.as_ptr();
+
+    // 512 elements * 8 bytes = 4 KB per buffer (100% L1D cache residency)
+    const TILE_SIZE: usize = 512;
+    let mut d2_tile = [0.0f64; TILE_SIZE];
+    let mut scaled_col_i = [0.0f64; TILE_SIZE];
+
+    let mut t = 0;
+    while t < n {
+        let t_end = (t + TILE_SIZE).min(n);
+        let tile_len = t_end - t;
+
+        let chunks_8 = tile_len / 8;
+        let rem_8 = tile_len % 8;
+
+        // -----------------------------------------------------------------
+        // STEP 1: Pre-calculate D^2 once per tile
+        // -----------------------------------------------------------------
+        for k in 0..chunks_8 {
+            let offset = k * 8;
+            let vd = _mm512_loadu_pd(d_ptr.add(t + offset));
+            let vd2 = _mm512_mul_pd(vd, vd);
+            _mm512_storeu_pd(d2_tile.as_mut_ptr().add(offset), vd2);
+        }
+        let start_rem = chunks_8 * 8;
+        for r in start_rem..tile_len {
+            let dk = *d_ptr.add(t + r);
+            d2_tile[r] = dk * dk;
+        }
+
+        // -----------------------------------------------------------------
+        // STEP 2: Outer loop over Column i
+        // -----------------------------------------------------------------
+        for i in 0..9 {
+            let col_i_ptr = a_ptr.add(i * n + t);
+
+            // Pre-scale column i: scaled_col_i = A_i * D^2
+            for k in 0..chunks_8 {
+                let offset = k * 8;
+                let vd2 = _mm512_loadu_pd(d2_tile.as_ptr().add(offset));
+                let va = _mm512_loadu_pd(col_i_ptr.add(offset));
+                _mm512_storeu_pd(scaled_col_i.as_mut_ptr().add(offset), _mm512_mul_pd(va, vd2));
+            }
+            for r in start_rem..tile_len {
+                scaled_col_i[r] = d2_tile[r] * (*col_i_ptr.add(r));
+            }
+
+            // -------------------------------------------------------------
+            // STEP 3: Multi-Column Blocking for Column j (j >= i)
+            // -------------------------------------------------------------
+            let mut j = i;
+            while j < 9 {
+                let rem_j = 9 - j;
+
+                if rem_j >= 4 {
+                    // 4-Column Microkernel (j, j+1, j+2, j+3)
+                    let col_j0_ptr = a_ptr.add((j + 0) * n + t);
+                    let col_j1_ptr = a_ptr.add((j + 1) * n + t);
+                    let col_j2_ptr = a_ptr.add((j + 2) * n + t);
+                    let col_j3_ptr = a_ptr.add((j + 3) * n + t);
+
+                    let mut acc0 = _mm512_setzero_pd();
+                    let mut acc1 = _mm512_setzero_pd();
+                    let mut acc2 = _mm512_setzero_pd();
+                    let mut acc3 = _mm512_setzero_pd();
+
+                    for k in 0..chunks_8 {
+                        let offset = k * 8;
+                        let vs = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset));
+
+                        let vb0 = _mm512_loadu_pd(col_j0_ptr.add(offset));
+                        let vb1 = _mm512_loadu_pd(col_j1_ptr.add(offset));
+                        let vb2 = _mm512_loadu_pd(col_j2_ptr.add(offset));
+                        let vb3 = _mm512_loadu_pd(col_j3_ptr.add(offset));
+
+                        acc0 = _mm512_fmadd_pd(vs, vb0, acc0);
+                        acc1 = _mm512_fmadd_pd(vs, vb1, acc1);
+                        acc2 = _mm512_fmadd_pd(vs, vb2, acc2);
+                        acc3 = _mm512_fmadd_pd(vs, vb3, acc3);
+                    }
+
+                    if rem_8 > 0 {
+                        let offset = chunks_8 * 8;
+                        let mask = ((1u16 << rem_8) - 1) as u8;
+                        let vs = _mm512_maskz_loadu_pd(mask, scaled_col_i.as_ptr().add(offset));
+
+                        let vb0 = _mm512_maskz_loadu_pd(mask, col_j0_ptr.add(offset));
+                        let vb1 = _mm512_maskz_loadu_pd(mask, col_j1_ptr.add(offset));
+                        let vb2 = _mm512_maskz_loadu_pd(mask, col_j2_ptr.add(offset));
+                        let vb3 = _mm512_maskz_loadu_pd(mask, col_j3_ptr.add(offset));
+
+                        acc0 = _mm512_fmadd_pd(vs, vb0, acc0);
+                        acc1 = _mm512_fmadd_pd(vs, vb1, acc1);
+                        acc2 = _mm512_fmadd_pd(vs, vb2, acc2);
+                        acc3 = _mm512_fmadd_pd(vs, vb3, acc3);
+                    }
+
+                    c_out[i][j + 0] += _mm512_reduce_add_pd(acc0);
+                    c_out[i][j + 1] += _mm512_reduce_add_pd(acc1);
+                    c_out[i][j + 2] += _mm512_reduce_add_pd(acc2);
+                    c_out[i][j + 3] += _mm512_reduce_add_pd(acc3);
+
+                    j += 4;
+                } else if rem_j >= 2 {
+                    // 2-Column Microkernel (j, j+1)
+                    let col_j0_ptr = a_ptr.add((j + 0) * n + t);
+                    let col_j1_ptr = a_ptr.add((j + 1) * n + t);
+
+                    let mut acc0 = _mm512_setzero_pd();
+                    let mut acc1 = _mm512_setzero_pd();
+
+                    for k in 0..chunks_8 {
+                        let offset = k * 8;
+                        let vs = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset));
+
+                        let vb0 = _mm512_loadu_pd(col_j0_ptr.add(offset));
+                        let vb1 = _mm512_loadu_pd(col_j1_ptr.add(offset));
+
+                        acc0 = _mm512_fmadd_pd(vs, vb0, acc0);
+                        acc1 = _mm512_fmadd_pd(vs, vb1, acc1);
+                    }
+
+                    if rem_8 > 0 {
+                        let offset = chunks_8 * 8;
+                        let mask = ((1u16 << rem_8) - 1) as u8;
+                        let vs = _mm512_maskz_loadu_pd(mask, scaled_col_i.as_ptr().add(offset));
+
+                        let vb0 = _mm512_maskz_loadu_pd(mask, col_j0_ptr.add(offset));
+                        let vb1 = _mm512_maskz_loadu_pd(mask, col_j1_ptr.add(offset));
+
+                        acc0 = _mm512_fmadd_pd(vs, vb0, acc0);
+                        acc1 = _mm512_fmadd_pd(vs, vb1, acc1);
+                    }
+
+                    c_out[i][j + 0] += _mm512_reduce_add_pd(acc0);
+                    c_out[i][j + 1] += _mm512_reduce_add_pd(acc1);
+
+                    j += 2;
+                } else {
+                    // 1-Column Tail Microkernel (j)
+                    let col_j0_ptr = a_ptr.add(j * n + t);
+                    let mut acc0 = _mm512_setzero_pd();
+
+                    for k in 0..chunks_8 {
+                        let offset = k * 8;
+                        let vs = _mm512_loadu_pd(scaled_col_i.as_ptr().add(offset));
+                        let vb0 = _mm512_loadu_pd(col_j0_ptr.add(offset));
+                        acc0 = _mm512_fmadd_pd(vs, vb0, acc0);
+                    }
+
+                    if rem_8 > 0 {
+                        let offset = chunks_8 * 8;
+                        let mask = ((1u16 << rem_8) - 1) as u8;
+                        let vs = _mm512_maskz_loadu_pd(mask, scaled_col_i.as_ptr().add(offset));
+                        let vb0 = _mm512_maskz_loadu_pd(mask, col_j0_ptr.add(offset));
+                        acc0 = _mm512_fmadd_pd(vs, vb0, acc0);
+                    }
+
+                    c_out[i][j] += _mm512_reduce_add_pd(acc0);
+
+                    j += 1;
+                }
             }
         }
 
