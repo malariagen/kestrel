@@ -1,4 +1,5 @@
 use nalgebra::DVector;
+use wide::bytemuck::Zeroable;
 
 use crate::{
     cholesky, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
@@ -104,7 +105,8 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
 
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") {
-        let ptd = unsafe { compute_pt_d_avx512(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
+        // let ptd = unsafe { compute_pt_d_avx512(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
+        let ptd = compute_pt_d_wide2(p_mat.nrows(), p_mat.as_slice(), &x0, eps);
 
         let mut tmp = Vector9::<f64>::zeros();
 
@@ -114,22 +116,17 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
 
         return tmp;
     } else {
-        Vector9::<f64>::zeros()
+        panic!("abc");
+        let ptd = compute_pt_d_scalar(p_mat.nrows(), p_mat.as_slice(), &x0, eps);
+
+        let mut tmp = Vector9::<f64>::zeros();
+
+        for i in 0..9 {
+            tmp[i] = ptd[i];
+        }
+
+        return tmp;
     }
-
-    // let ptd = unsafe { compute_pt_d_avx512(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
-
-    // let mut tmp = Vector9::<f64>::zeros();
-
-    // for i in 0..9 {
-    //     tmp[i] = ptd[i];
-    // }
-
-    // return tmp;
-
-    // return compute_pt_d(p_mat, x, eps)
-
-
 }
 
 pub fn compute_pt_d_scalar(
@@ -139,15 +136,19 @@ pub fn compute_pt_d_scalar(
     eps: f64,
 ) -> [f64; 9] {
 
+    assert!(p_mat.len() == rows * 9);
+
     let mut g = [0.0; 9];
 
     let p = p_mat.as_ptr();
 
-    for row in 0..rows {
+    let mut col_ptrs: [*const f64; 9] = std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
+
+    for _ in 0..rows {
         let mut d = 0.0;
         // d = P x
         for col in 0..9 {
-            let c = unsafe { *p.add(col * rows + row) };
+            let c = unsafe { *col_ptrs[col] };
             d = c.mul_add(x[col], d);
         }
 
@@ -155,8 +156,12 @@ pub fn compute_pt_d_scalar(
 
         // g = P^T d
         for col in 0..9 {
-            let c = unsafe { *p.add(col * rows + row) };
+            let c = unsafe { *col_ptrs[col] };
             g[col] = c.mul_add(d, g[col]);
+        }
+
+        for col in 0..9 {
+            col_ptrs[col] = unsafe { col_ptrs[col].add(1) };
         }
     }
 
@@ -250,6 +255,134 @@ pub unsafe fn compute_pt_d_avx512(
     let mut g = [0.0; 9];
     for col in 0..9 {
         g[col] = _mm512_reduce_add_pd(gradients[col]);
+    }
+
+    g
+}
+
+use wide::f64x8;
+
+#[inline(never)]
+pub fn compute_pt_d_wide2(
+    rows: usize,
+    p_mat: &[f64],
+    x: &[f64; 9],
+    eps: f64,
+) -> [f64; 9] {
+    // 1. Single invariant check at the top
+    assert_eq!(p_mat.len(), rows * 9, "p_mat must have length rows * 9");
+
+    let num_chunks = rows / 8;
+    let rem_len = rows % 8;
+
+    // 2. Column slices & chunk views
+    let cols: [&[f64]; 9] = std::array::from_fn(|c| &p_mat[c * rows..(c + 1) * rows]);
+    let chunks: [&[[f64; 8]]; 9] = std::array::from_fn(|c| cols[c].as_chunks::<8>().0);
+    let remainders: [&[f64]; 9] = std::array::from_fn(|c| cols[c].as_chunks::<8>().1);
+
+    // 3. Pre-splat SIMD constants
+    let mut gradients = [f64x8::splat(0.0); 9];
+    let x_simd: [f64x8; 9] = std::array::from_fn(|c| f64x8::splat(x[c]));
+    let ones = f64x8::splat(1.0);
+
+    // --- HOT SIMD LOOP (Guaranteed 0 bounds checks) ---
+    for i in 0..num_chunks {
+        // SAFETY: p_mat length is rows*9, so each column has `rows` elements.
+        // `chunks[c]` has length `rows / 8` = `num_chunks`. Therefore `i < chunks[c].len()`.
+        let mut denom = f64x8::splat(eps);
+
+        for c in 0..9 {
+            denom = x_simd[c].mul_add(f64x8::from(unsafe { *chunks[c].get_unchecked(i) }), denom);
+        }
+
+        let d = ones / denom;
+
+        for c in 0..9 {
+            gradients[c] = d.mul_add(f64x8::from(unsafe { *chunks[c].get_unchecked(i) }), gradients[c]);
+        }
+    }
+
+    let mut g = [0.0; 9];
+
+    // Accumulate vector reductions into output g
+    for c in 0..9 {
+        g[c] = gradients[c].reduce_add();
+    }
+
+    // --- SCALAR TAIL LOOP (Guaranteed 0 bounds checks) ---
+    for r in 0..rem_len {
+        // SAFETY: remainders[c] has length `rows % 8` = `rem_len`. Therefore `r < remainders[c].len()`.
+        let mut denom = eps;
+        for c in 0..9 {
+            denom += unsafe { x[c] * remainders[c].get_unchecked(r) };
+        }
+
+        let d = 1.0 / denom;
+
+        for c in 0..9 {
+            g[c] += unsafe { remainders[c].get_unchecked(r) } * d;
+        }
+    }
+
+    g
+}
+
+pub fn compute_pt_d_wide(
+    rows: usize,
+    p_mat: &[f64], // rows x 9, column major
+    x: &[f64; 9],
+    eps: f64,
+) -> [f64; 9] {
+
+    assert!(p_mat.len() == rows * 9);
+
+    let p = p_mat.as_ptr();
+
+    // In the matrix, P[r, c] = c * rows + r
+    // This could be calculated on the fly, but LLVM likes the pointers to each column better
+    // since it avoids arithmetic.
+    let mut col_ptrs: [*const f64; 9] = std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
+
+    let xs: [f64x8; 9] = std::array::from_fn(|col| f64x8::splat(x[col]));
+
+    let mut columns = [wide::f64x8::ZERO; 9];
+    let mut gradients = [wide::f64x8::ZERO; 9];
+
+    let one = wide::f64x8::splat(1.0);
+
+    let chunks = rows / 8;
+    let remainder = rows % 8;
+
+    for _ in 0..chunks {
+        // Load columns of P from memory
+        for col in 0..9 {
+            // TODO align the memory
+            columns[col] = f64x8::from(unsafe { col_ptrs[col].cast::<[f64; 8]>().read_unaligned() });
+        }
+
+        // Calculate d
+        // This computes a dot product between x and a row of p
+        let mut d = f64x8::splat(eps);
+        for col in 0..9 {
+            // mul_add(a, b) computes (self * a) + b using hardware FMA where available
+            d = xs[col].mul_add(columns[col], d);
+        }
+
+        d = one / d;
+
+        // 3. Accumulate P^T * d into gradients
+        for col in 0..9 {
+            gradients[col] = columns[col].mul_add(d, gradients[col]);
+        }
+
+        for col in 0..9 {
+            col_ptrs[col] = unsafe { col_ptrs[col].add(8) };
+        }
+    }
+
+    let mut g = [0.0; 9];
+    for col in 0..9 {
+        g[col] = gradients[col].reduce_add();
     }
 
     g
