@@ -147,7 +147,7 @@ fn calculate_coefficients_inner(
 
             buffers.p_mat_t = buffers.p_mat.transpose().to_owned();
 
-            let (delta, _) = sqp::solve_sqp(&buffers.p_mat, &buffers.p_mat_t, &delta, &mut buffers.d, &mut buffers.a_mat, &Tuneables::new());
+            let (delta, _) = sqp::solve_sqp(&buffers.p_mat, &buffers.p_mat_t, &delta, &mut buffers.d, &Tuneables::new());
 
             // println!("{} {} {}", x, y, delta.transpose());
             let kinship = delta.dot(&kinship_vec);

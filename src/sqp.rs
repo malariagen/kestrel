@@ -1,8 +1,7 @@
 use nalgebra::DVector;
-use wide::bytemuck::Zeroable;
 
 use crate::{
-    cholesky, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    cholesky, gradient, hessian, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
@@ -54,7 +53,7 @@ pub fn compute_obj_scalar_t(p_mat_t: &Matrix9xN<f64>, x: &Vector9<f64>, eps: f64
     x.sum() - a / (num_v as f64) - 1.0
 }
 
-pub fn compute_obj(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, eps: f64) -> f64 {
+pub fn compute_obj_old(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, eps: f64) -> f64 {
     let num_v = p_mat.nrows();
 
     let mut x0 = [0.0; 9];
@@ -73,7 +72,7 @@ pub fn compute_obj(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64
     f
 }
 
-pub fn compute_grad(
+pub fn compute_grad_old(
     p_mat: &MatrixNx9<f64>,
     x: &Vector9<f64>,
     eps: f64,
@@ -105,8 +104,8 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
 
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") {
-        // let ptd = unsafe { compute_pt_d_avx512(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
-        let ptd = compute_pt_d_wide2(p_mat.nrows(), p_mat.as_slice(), &x0, eps);
+        let ptd = unsafe { crate::simd::compute_pt_d_avx512(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
+        // let ptd = unsafe { compute_pt_d_wide(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
 
         let mut tmp = Vector9::<f64>::zeros();
 
@@ -116,8 +115,7 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
 
         return tmp;
     } else {
-        panic!("abc");
-        let ptd = compute_pt_d_scalar(p_mat.nrows(), p_mat.as_slice(), &x0, eps);
+        let ptd = unsafe { crate::simd::compute_pt_d_scalar_column(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
 
         let mut tmp = Vector9::<f64>::zeros();
 
@@ -129,9 +127,12 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
     }
 }
 
-pub fn compute_pt_d_scalar(
+// TODO test this in row major format
+
+#[target_feature(enable = "avx512f")]
+pub fn compute_pt_d_scalar_row(
     rows: usize,
-    p_mat: &[f64], // rows x 9, column major
+    p_mat: &[f64], // rows x 9, row major
     x: &[f64; 9],
     eps: f64,
 ) -> [f64; 9] {
@@ -140,15 +141,13 @@ pub fn compute_pt_d_scalar(
 
     let mut g = [0.0; 9];
 
-    let p = p_mat.as_ptr();
-
-    let mut col_ptrs: [*const f64; 9] = std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
+    let mut row_ptr = p_mat.as_ptr();
 
     for _ in 0..rows {
         let mut d = 0.0;
         // d = P x
         for col in 0..9 {
-            let c = unsafe { *col_ptrs[col] };
+            let c = unsafe { *row_ptr.add(col) };
             d = c.mul_add(x[col], d);
         }
 
@@ -156,105 +155,11 @@ pub fn compute_pt_d_scalar(
 
         // g = P^T d
         for col in 0..9 {
-            let c = unsafe { *col_ptrs[col] };
+            let c = unsafe { *row_ptr.add(col) };
             g[col] = c.mul_add(d, g[col]);
         }
 
-        for col in 0..9 {
-            col_ptrs[col] = unsafe { col_ptrs[col].add(1) };
-        }
-    }
-
-    g
-}
-
-#[target_feature(enable = "avx512f")]
-pub unsafe fn compute_pt_d_avx512(
-    rows: usize,
-    p_mat: &[f64], // rows x 9, column major
-    x: &[f64; 9],
-    eps: f64,
-) -> [f64; 9] {
-
-    assert!(p_mat.len() == rows * 9);
-
-    let p = p_mat.as_ptr();
-
-    // In the matrix, P[r, c] = c * rows + r
-    // This could be calculated on the fly, but LLVM likes the pointers to each column better
-    // since it avoids arithmetic.
-    let mut col_ptrs: [*const f64; 9] = std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
-
-    let xs = [
-        _mm512_set1_pd(x[0]),
-        _mm512_set1_pd(x[1]),
-        _mm512_set1_pd(x[2]),
-        _mm512_set1_pd(x[3]),
-        _mm512_set1_pd(x[4]),
-        _mm512_set1_pd(x[5]),
-        _mm512_set1_pd(x[6]),
-        _mm512_set1_pd(x[7]),
-        _mm512_set1_pd(x[8]),
-    ];
-
-    let mut columns = [_mm512_setzero_pd(); 9];
-    let mut gradients = [_mm512_setzero_pd(); 9];
-
-    let one = _mm512_set1_pd(1.0);
-
-    let chunks = rows / 8;
-    let remainder = rows % 8;
-
-    for _ in 0..chunks {
-        // Load columns of P from memory
-        for col in 0..9 {
-            // TODO align the memory
-            columns[col] = unsafe { _mm512_loadu_pd(col_ptrs[col]) };
-        }
-
-        // Calculate d
-        // This computes a dot product between x and a row of p
-        let mut d = _mm512_set1_pd(eps);
-        for col in 0..9 {
-            d = _mm512_fmadd_pd(xs[col], columns[col], d);
-        }
-
-        d = _mm512_div_pd(one, d);
-
-        for col in 0..9 {
-            gradients[col] = _mm512_fmadd_pd(columns[col], d, gradients[col]);
-        }
-
-        for col in 0..9 {
-            col_ptrs[col] = unsafe { col_ptrs[col].add(8) };
-        }
-    }
-
-    if remainder > 0 {
-        let mask = (1u8 << remainder) - 1;
-
-        for col in 0..9 {
-            // TODO align the memory
-            columns[col] = unsafe { _mm512_maskz_loadu_pd(mask, col_ptrs[col]) };
-        }
-
-        // Calculate d
-        // This computes a dot product between x and a row of p
-        let mut d = _mm512_set1_pd(eps);
-        for col in 0..9 {
-            d = _mm512_fmadd_pd(xs[col], columns[col], d);
-        }
-
-        d = _mm512_div_pd(one, d);
-
-        for col in 0..9 {
-            gradients[col] = _mm512_mask3_fmadd_pd(columns[col], d, gradients[col], mask);
-        }
-    }
-
-    let mut g = [0.0; 9];
-    for col in 0..9 {
-        g[col] = _mm512_reduce_add_pd(gradients[col]);
+        row_ptr = unsafe { row_ptr.add(9) };
     }
 
     g
@@ -262,7 +167,7 @@ pub unsafe fn compute_pt_d_avx512(
 
 use wide::f64x8;
 
-#[inline(never)]
+#[target_feature(enable = "avx512f")]
 pub fn compute_pt_d_wide2(
     rows: usize,
     p_mat: &[f64],
@@ -623,6 +528,7 @@ pub unsafe fn pt_d2_p_simd(
 
     c
 }
+
 /// AVX-512 implementation of C = A^T * D^2 * A
 ///
 /// # Safety
@@ -1383,13 +1289,9 @@ pub fn solve_sqp(
     p_mat_t: &Matrix9xN<f64>,
     x0: &Vector9<f64>,
     d: &mut DVector<f64>,
-    a_mat: &mut MatrixNx9<f64>,
     tune: &Tuneables,
 ) -> (Vector9<f64>, u64) {
     let mut x = x0.clone();
-    // let mut f = compute_obj_scalar(p_mat, &x, tune.epsilon);
-    // let mut f = compute_obj_scalar_t(p_mat_t, &x, tune.epsilon);
-    let mut f = compute_obj(p_mat, &x, d, tune.epsilon);
 
     for iter in 0..tune.sqp_max_iter {
         // We manually truncate some values to zero, which will put them in the active set
@@ -1404,7 +1306,8 @@ pub fn solve_sqp(
         x /= sum;
 
         // let (f, g) = compute_obj_grad_d(p_mat, p_mat_t, &x, d, tune.epsilon);
-        let g = compute_grad_d(p_mat, &x, d, tune.epsilon);
+        // let g = compute_grad_d(p_mat, &x, d, tune.epsilon);
+        let g = gradient::compute_grad(p_mat_t, &x, tune.epsilon);
 
         // For a convex function, a point x is optimal iff nab
         // For optimization subject to x >= 0, we have (Bertsekas Nonlinear Programming p. 238):
@@ -1428,7 +1331,8 @@ pub fn solve_sqp(
 
         // let h = compute_hessian(p_mat, d, a_mat);
         // let h = compute_hessian_t(p_mat_t, d);
-        let h = compute_hessian2(p_mat, d);
+        // let h = compute_hessian2(p_mat, d);
+        let h = hessian::compute_hess(p_mat_t, &x, tune.epsilon);
 
         // c = g - H x
         let mut c = g.clone();
@@ -1436,10 +1340,11 @@ pub fn solve_sqp(
 
         let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, false, true, tune);
 
-        let (xnew, fnew, bls_iter) = backtracking_line_search(p_mat, p_mat_t, &x, &y, f, &g, d, tune);
+        let f = objective::compute_obj(p_mat_t, &x, tune.epsilon);
+
+        let (xnew, bls_iter) = backtracking_line_search(p_mat, p_mat_t, &x, &y, f, &g, d, tune);
 
         x = xnew;
-        f = fnew;
     }
 
     (x, tune.sqp_max_iter)
@@ -1655,33 +1560,29 @@ fn backtracking_line_search(
     g: &Vector9<f64>,
     d: &mut DVector<f64>,
     tune: &Tuneables,
-) -> (Vector9<f64>, f64, u64) {
+) -> (Vector9<f64>, u64) {
     let p = y - x;
     let t = tune.bls_sufficient_decrease * g.dot(&p);
 
     // We know that y = x + p is already feasible, so this is a feasible starting point
     let mut alpha = 1.0;
-    let mut xnew_save = None;
-    let mut fnew_save = None;
     for iter in 0..tune.bls_max_iter {
         // Numerically this is always feasible (>= 0) for floats
         let xnew = x + alpha * p;
         // TODO this can be made more efficient a la N&W
-        let fnew = compute_obj(p_mat, &xnew, d, tune.epsilon);
+        // let fnew = compute_obj(p_mat, &xnew, d, tune.epsilon);
         // let fnew = compute_obj_scalar(p_mat, &xnew, tune.epsilon);
-        // let fnew = compute_obj_scalar_t(p_mat_t, &xnew, tune.epsilon);
+        let fnew = objective::compute_obj(p_mat_t, &xnew, tune.epsilon);
         if fnew <= f + alpha * t {
-            return (xnew, fnew, iter);
+            return (xnew, iter);
         }
 
         alpha *= tune.bls_step_size_reduce;
-        xnew_save = Some(xnew);
-        fnew_save = Some(fnew);
     }
 
     // If we exceed the maximum number of backtracks, then just
     // return the last one. This could happen because of floating
     // point problems, and it's better to be robust instead of
     // throwing errors (let the main loop handle it).
-    return (xnew_save.unwrap(), fnew_save.unwrap(), tune.bls_max_iter);
+    return (x + alpha * p, tune.bls_max_iter);
 }

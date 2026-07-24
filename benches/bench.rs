@@ -1,4 +1,4 @@
-use kestrel::util::{MatrixNx9, Vector9};
+use kestrel::util::{Matrix9xN, MatrixNx9, Vector9};
 use nalgebra::DVector;
 use ndarray::Axis;
 
@@ -19,7 +19,7 @@ fn main() {
 //     })
 // }
 
-const N: usize = 100000;
+const N: usize = 10000000;
 
 fn generate_mat() -> MatrixNx9<f64> {
 
@@ -28,47 +28,112 @@ fn generate_mat() -> MatrixNx9<f64> {
     mat
 }
 
+fn generate_mat_t() -> Matrix9xN<f64> {
+
+    let mat = Matrix9xN::<f64>::new_random(N);
+
+    mat
+}
 
 #[divan::bench]
-fn bench_grad_d(bencher: divan::Bencher) {
-    let mut d = DVector::<f64>::zeros(N);
+fn bench_h(bencher: divan::Bencher) {
 
     let eps = 1e-8;
 
-    let x = Vector9::from_element(1.0 / 9.0);
+    let x = [1.0/9.0; 9];
 
     bencher
-    .with_inputs(generate_mat)
+    .with_inputs(generate_mat_t)
     .bench_local_refs(move |mat| {
-        kestrel::sqp::compute_grad_d(&mat, &x, &mut d, eps);
+        let (p, _) = mat.as_slice().as_chunks::<9>();
+        kestrel::hessian::compute_pt_d2_p_scalar(&p, &x, eps);
     });
 }
 
 #[divan::bench]
-fn bench_grad(bencher: divan::Bencher) {
+fn bench_h2(bencher: divan::Bencher) {
 
     let eps = 1e-8;
 
-    let x = Vector9::from_element(1.0 / 9.0);
+    let x = [1.0/9.0; 9];
 
     bencher
-    .with_inputs(generate_mat)
+    .with_inputs(generate_mat_t)
     .bench_local_refs(move |mat| {
-        kestrel::sqp::compute_grad(&mat, &x, eps);
+        let (p, _) = mat.as_slice().as_chunks::<9>();
+        kestrel::hessian::compute_pt_d2_p_scalar2(&p, &x, eps);
     });
 }
 
-#[divan::bench]
-fn bench_grad_nalgebra(bencher: divan::Bencher) {
-    let mut d = DVector::<f64>::zeros(N);
 
-    let eps = 1e-8;
+// #[divan::bench]
+// fn bench_grad_d(bencher: divan::Bencher) {
+//     let mut d = DVector::<f64>::zeros(N);
 
-    let x = Vector9::from_element(1.0 / 9.0);
+//     let eps = 1e-8;
 
-    bencher
-    .with_inputs(generate_mat)
-    .bench_local_refs(move |mat| {
-        kestrel::sqp::compute_grad_d_nalgebra(&mat, &x, &mut d, eps);
-    });
-}
+//     let x = Vector9::from_element(1.0 / 9.0);
+
+//     bencher
+//     .with_inputs(generate_mat)
+//     .bench_local_refs(move |mat| {
+//         kestrel::sqp::compute_grad_d(&mat, &x, &mut d, eps);
+//     });
+// }
+
+// #[divan::bench]
+// fn bench_grad(bencher: divan::Bencher) {
+
+//     let eps = 1e-8;
+
+//     let x = Vector9::from_element(1.0 / 9.0);
+
+//     bencher
+//     .with_inputs(generate_mat)
+//     .bench_local_refs(move |mat| {
+//         kestrel::sqp::compute_grad(&mat, &x, eps);
+//     });
+// }
+
+// #[divan::bench]
+// fn bench_grad_nalgebra(bencher: divan::Bencher) {
+//     let mut d = DVector::<f64>::zeros(N);
+
+//     let eps = 1e-8;
+
+//     let x = Vector9::from_element(1.0 / 9.0);
+
+//     bencher
+//     .with_inputs(generate_mat)
+//     .bench_local_refs(move |mat| {
+//         kestrel::sqp::compute_grad_d_nalgebra(&mat, &x, &mut d, eps);
+//     });
+// }
+
+// #[divan::bench]
+// fn bench_column(bencher: divan::Bencher) {
+
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     bencher
+//     .with_inputs(generate_mat)
+//     .bench_local_refs(move |mat| {
+//         unsafe { kestrel::simd::compute_pt_d_scalar(mat.nrows(), &mat.as_slice(), &x, eps) };
+//     });
+// }
+
+// #[divan::bench]
+// fn bench_column_row(bencher: divan::Bencher) {
+
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     bencher
+//     .with_inputs(generate_mat_t)
+//     .bench_local_refs(move |mat| {
+//         unsafe { kestrel::sqp::compute_pt_d_scalar_row(mat.ncols(), &mat.as_slice(), &x, eps) };
+//     });
+// }

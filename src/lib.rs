@@ -14,6 +14,7 @@
 
 extern crate openblas_src;
 
+pub mod simd;
 pub mod cholesky;
 pub mod cls;
 pub mod iis;
@@ -22,3 +23,6 @@ pub mod genotypes;
 pub mod sqp;
 pub mod util;
 pub mod vcf;
+pub mod gradient;
+pub mod hessian;
+pub mod objective;
