@@ -26,3 +26,5 @@ pub mod vcf;
 pub mod gradient;
 pub mod hessian;
 pub mod objective;
+pub mod fused;
+pub mod buffer;
