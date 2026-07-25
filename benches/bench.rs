@@ -20,7 +20,7 @@ fn main() {
 //     })
 // }
 
-const N: usize = 100000;
+const N: usize = 1000000;
 
 fn generate_mat() -> MatrixNx9<f64> {
 
