@@ -104,7 +104,7 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
 
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") {
-        let ptd = unsafe { crate::simd::compute_pt_d_avx512(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
+        let ptd = unsafe { crate::simd::compute_pt_d_avx512_column_major(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
         // let ptd = unsafe { compute_pt_d_wide(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
 
         let mut tmp = Vector9::<f64>::zeros();

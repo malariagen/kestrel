@@ -198,7 +198,6 @@ fn calculate_mixture_component_matrix(
         // TODO should we make this more cache friendly?
         p_mat.set_row(locus, &stacked_m_t.column(locus * num_g + g).transpose());
     }
-
 }
 
 #[cfg(test)]

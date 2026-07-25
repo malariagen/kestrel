@@ -24,6 +24,7 @@ noodles = { version = "0.111.0", features = ["vcf"] }
 openblas-src = { version = "0.10.16", features = ["system"] }
 paralight = "0.0.12"
 pyo3 = "0.29.0"
+rand = "0.10.2"
 wide = "1.5.0"
 
 [profile.release]

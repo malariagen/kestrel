@@ -405,6 +405,7 @@ dependencies = [
  "openblas-src",
  "paralight",
  "pyo3",
+ "rand",
  "wide",
 ]
 

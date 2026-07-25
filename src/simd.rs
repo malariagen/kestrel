@@ -1,26 +1,10 @@
 use std::arch::x86_64::*;
 
-#[target_feature(enable = "avx512f")]
-pub unsafe fn compute_pt_d2_p_avx512(
-    rows: usize,
-    p_mat: &[f64], // rows x 9, column major
-    x: &[f64; 9],
-    eps: f64,
-) -> [[f64; 9]; 9] {
-
-    let p = p_mat.as_ptr();
-
-    let mut col_ptrs: [*const f64; 9] = std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
-
-    let mut h = [[0.0; 9]; 9];
-
-    h
-}
+use crate::matrix::{Block, BlockArray};
 
 
 #[target_feature(enable = "avx512f")]
-// TODO make this tiled
-pub unsafe fn compute_pt_d_avx512(
+pub unsafe fn compute_pt_d_avx512_column_major(
     rows: usize,
     p_mat: &[f64], // rows x 9, column major
     x: &[f64; 9],
@@ -110,6 +94,7 @@ pub unsafe fn compute_pt_d_avx512(
 
     g
 }
+
 
 #[target_feature(enable = "avx512f")]
 pub fn compute_pt_d_scalar_column(
