@@ -260,7 +260,7 @@ fn compute_obj_grad_d(
     (f, g)
 }
 
-fn compute_hessian(
+pub fn compute_hessian(
     p_mat: &MatrixNx9<f64>,
     d: &DVector<f64>,
     a_mat: &mut MatrixNx9<f64>,

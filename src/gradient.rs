@@ -47,7 +47,6 @@ pub fn compute_pt_d_scalar(
     }
 }
 
-
 #[target_feature(enable = "avx512f")]
 pub unsafe fn compute_pt_d_avx512_blocked(
     blocks: &[Block<f64, 8, 9>],
@@ -104,3 +103,60 @@ pub unsafe fn compute_pt_d_avx512_blocked(
 
     g
 }
+
+
+// #[target_feature(enable = "avx512f")]
+// pub unsafe fn compute_pt_d_avx512_row_major(
+//     rows: &[[f64; 9]],
+//     x: &[f64; 9],
+//     eps: f64,
+// ) -> [f64; 9] {
+
+//     let xs = [
+//         _mm512_set1_pd(x[0]),
+//         _mm512_set1_pd(x[1]),
+//         _mm512_set1_pd(x[2]),
+//         _mm512_set1_pd(x[3]),
+//         _mm512_set1_pd(x[4]),
+//         _mm512_set1_pd(x[5]),
+//         _mm512_set1_pd(x[6]),
+//         _mm512_set1_pd(x[7]),
+//         _mm512_set1_pd(x[8]),
+//     ];
+
+//     let mut columns = [_mm512_setzero_pd(); 9];
+//     let mut gradients = [_mm512_setzero_pd(); 9];
+
+//     let one = _mm512_set1_pd(1.0);
+
+//     for block in blocks.iter() {
+//         // Load columns of P from memory
+//         for col in 0..9 {
+//             columns[col] = unsafe { _mm512_load_pd(block[col].as_ptr()) };
+//         }
+
+//         // Calculate d
+//         // This computes a dot product between x and a row of p
+//         // TODO this could be manually unrolled a few times
+//         let mut d = _mm512_set1_pd(eps);
+//         for col in 0..9 {
+//             d = _mm512_fmadd_pd(xs[col], columns[col], d);
+//         }
+
+//         // TODO investigate reciprocal
+//         d = _mm512_div_pd(one, d);
+
+//         for col in 0..9 {
+//             gradients[col] = _mm512_fmadd_pd(columns[col], d, gradients[col]);
+//         }
+//     }
+
+//     let mut g = [0.0; 9];
+//     for col in 0..9 {
+//         g[col] = _mm512_reduce_add_pd(gradients[col]);
+//     }
+
+//     compute_pt_d_scalar(remainder, x, eps, &mut g);
+
+//     g
+// }

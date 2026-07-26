@@ -72,6 +72,7 @@ impl<T: Copy> BlockArray<T> {
 
         array
     }
+
 }
 
 pub fn test(n: usize) -> BlockArray<f64> {
