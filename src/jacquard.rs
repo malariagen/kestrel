@@ -1,4 +1,4 @@
-use std::{alloc::handle_alloc_error, cmp::max_by, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 use itertools::Itertools;
 use nalgebra::{DVector, vector};
@@ -14,9 +14,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    cls,
-    sqp::{self, Tuneables},
-    util::{Matrix9xN, MatrixNx9, Vector9},
+    cls, matrix::BlockBuffer, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub fn calculate_relatedness_coefficients(
@@ -228,6 +226,44 @@ fn calculate_mixture_component_matrix(
         p_mat.set_row(locus, &stacked_m_t.column(locus * num_g + g).transpose());
     }
 }
+
+fn calculate_mixture_component_matrix2<const L: usize>(
+    all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
+    stacked_m_t: &Matrix9xN<f64>,
+    genotypes_x: ArrayView2<i8>,
+    genotypes_y: ArrayView2<i8>,
+    lookup_table: &Array4<usize>,
+    p_mat: &mut BlockBuffer<f64, L, 9>,
+) {
+    let num_g = all_joint_genotypes.len();
+
+    let iter_x = genotypes_x.as_slice().unwrap().chunks_exact(2);
+    let iter_y = genotypes_y.as_slice().unwrap().chunks_exact(2);
+
+    let iter = iter_x.zip(iter_y).enumerate().map(|(locus, (geno_x, geno_y))| {
+
+        let (i, j) = (geno_x[0], geno_x[1]);
+        let (k, l) = (geno_y[0], geno_y[1]);
+
+        // TODO do a check here for missing data
+        // if i < 0 || j < 0 || k < 0 || l < 0 {
+        //     continue;
+        // }
+
+        // let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
+        let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
+
+        let column = stacked_m_t.column(locus * num_g + g);
+        let mut row = [0.0; 9];
+        for i in 0.. 9 {
+            row[i] = column[i];
+        }
+        row
+    });
+
+    p_mat.fill_from_rows(iter);
+}
+
 
 #[cfg(test)]
 mod test {

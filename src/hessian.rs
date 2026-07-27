@@ -1942,23 +1942,23 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes3(
 
         {
             // Row 0
-            let mut z00 = h00.load();
-            let mut z01 = h01.load();
-            let mut z02 = h02.load();
-            let mut z03 = h03.load();
-            let mut z04 = h04.load();
-            let mut z05 = h05.load();
-            let mut z06 = h06.load();
-            let mut z07 = h07.load();
-            let mut z08 = h08.load();
+            let mut z00 = _mm512_setzero_pd();
+            let mut z01 = _mm512_setzero_pd();
+            let mut z02 = _mm512_setzero_pd();
+            let mut z03 = _mm512_setzero_pd();
+            let mut z04 = _mm512_setzero_pd();
+            let mut z05 = _mm512_setzero_pd();
+            let mut z06 = _mm512_setzero_pd();
+            let mut z07 = _mm512_setzero_pd();
+            let mut z08 = _mm512_setzero_pd();
 
             // Row 1
-            let mut z11 = h11.load();
-            let mut z12 = h12.load();
-            let mut z13 = h13.load();
-            let mut z14 = h14.load();
-            let mut z15 = h15.load();
-            let mut z16 = h16.load();
+            let mut z11 = _mm512_setzero_pd();
+            let mut z12 = _mm512_setzero_pd();
+            let mut z13 = _mm512_setzero_pd();
+            let mut z14 = _mm512_setzero_pd();
+            let mut z15 = _mm512_setzero_pd();
+            let mut z16 = _mm512_setzero_pd();
 
             for block in scaled_column_buf.iter() {
                 // 2 permanent + 1 temporary = 3 registers
@@ -1995,24 +1995,24 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes3(
 
                 let c8 = block[8].load();
                 z08 = _mm512_fmadd_pd(c0, c8, z08);
-
-                // z00 = _mm512_fmadd_pd(c[0], c[0], z00);
-                // z01 = _mm512_fmadd_pd(c[0], c[1], z01);
-                // z02 = _mm512_fmadd_pd(c[0], c[2], z02);
-                // z03 = _mm512_fmadd_pd(c[0], c[3], z03);
-                // z04 = _mm512_fmadd_pd(c[0], c[4], z04);
-                // z05 = _mm512_fmadd_pd(c[0], c[5], z05);
-                // z06 = _mm512_fmadd_pd(c[0], c[6], z06);
-                // z07 = _mm512_fmadd_pd(c[0], c[7], z07);
-                // z08 = _mm512_fmadd_pd(c[0], c[8], z08);
-
-                // z11 = _mm512_fmadd_pd(c[1], c[1], z11);
-                // z12 = _mm512_fmadd_pd(c[1], c[2], z12);
-                // z13 = _mm512_fmadd_pd(c[1], c[3], z13);
-                // z14 = _mm512_fmadd_pd(c[1], c[4], z14);
-                // z15 = _mm512_fmadd_pd(c[1], c[5], z15);
-                // z16 = _mm512_fmadd_pd(c[1], c[6], z16);
             }
+
+            z00 = _mm512_add_pd(h00.load(), z00);
+            z01 = _mm512_add_pd(h01.load(), z01);
+            z02 = _mm512_add_pd(h02.load(), z02);
+            z03 = _mm512_add_pd(h03.load(), z03);
+            z04 = _mm512_add_pd(h04.load(), z04);
+            z05 = _mm512_add_pd(h05.load(), z05);
+            z06 = _mm512_add_pd(h06.load(), z06);
+            z07 = _mm512_add_pd(h07.load(), z07);
+            z08 = _mm512_add_pd(h08.load(), z08);
+
+            z11 = _mm512_add_pd(h11.load(), z11);
+            z12 = _mm512_add_pd(h12.load(), z12);
+            z13 = _mm512_add_pd(h13.load(), z13);
+            z14 = _mm512_add_pd(h14.load(), z14);
+            z15 = _mm512_add_pd(h15.load(), z15);
+            z16 = _mm512_add_pd(h16.load(), z16);
 
             // Row 0
             h00.store(z00);
@@ -2035,25 +2035,25 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes3(
         }
 
         {
-            let mut z17 = h17.load();
-            let mut z18 = h18.load();
+            let mut z17 = _mm512_setzero_pd();
+            let mut z18 = _mm512_setzero_pd();
 
             // Row 2
-            let mut z22 = h22.load();
-            let mut z23 = h23.load();
-            let mut z24 = h24.load();
-            let mut z25 = h25.load();
-            let mut z26 = h26.load();
-            let mut z27 = h27.load();
-            let mut z28 = h28.load();
+            let mut z22 = _mm512_setzero_pd();
+            let mut z23 = _mm512_setzero_pd();
+            let mut z24 = _mm512_setzero_pd();
+            let mut z25 = _mm512_setzero_pd();
+            let mut z26 = _mm512_setzero_pd();
+            let mut z27 = _mm512_setzero_pd();
+            let mut z28 = _mm512_setzero_pd();
 
             // Row 3
-            let mut z33 = h33.load();
-            let mut z34 = h34.load();
-            let mut z35 = h35.load();
-            let mut z36 = h36.load();
-            let mut z37 = h37.load();
-            let mut z38 = h38.load();
+            let mut z33 = _mm512_setzero_pd();
+            let mut z34 = _mm512_setzero_pd();
+            let mut z35 = _mm512_setzero_pd();
+            let mut z36 = _mm512_setzero_pd();
+            let mut z37 = _mm512_setzero_pd();
+            let mut z38 = _mm512_setzero_pd();
 
             for block in scaled_column_buf.iter() {
                 // 3 permanent + 1 temporary = 4
@@ -2087,25 +2087,25 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes3(
                 z18 = _mm512_fmadd_pd(c1, c8, z18);
                 z28 = _mm512_fmadd_pd(c2, c8, z28);
                 z38 = _mm512_fmadd_pd(c3, c8, z38);
-
-                // z17 = _mm512_fmadd_pd(c1, c7, z17);
-                // z18 = _mm512_fmadd_pd(c1, c8, z18);
-
-                // z22 = _mm512_fmadd_pd(c2, c2, z22);
-                // z23 = _mm512_fmadd_pd(c2, c3, z23);
-                // z24 = _mm512_fmadd_pd(c2, c4, z24);
-                // z25 = _mm512_fmadd_pd(c2, c5, z25);
-                // z26 = _mm512_fmadd_pd(c2, c6, z26);
-                // z27 = _mm512_fmadd_pd(c2, c7, z27);
-                // z28 = _mm512_fmadd_pd(c2, c8, z28);
-
-                // z33 = _mm512_fmadd_pd(c3, c3, z33);
-                // z34 = _mm512_fmadd_pd(c3, c4, z34);
-                // z35 = _mm512_fmadd_pd(c3, c5, z35);
-                // z36 = _mm512_fmadd_pd(c3, c6, z36);
-                // z37 = _mm512_fmadd_pd(c3, c7, z37);
-                // z38 = _mm512_fmadd_pd(c3, c8, z38);
             }
+
+            z17 = _mm512_add_pd(h17.load(), z17);
+            z18 = _mm512_add_pd(h18.load(), z18);
+
+            z22 = _mm512_add_pd(h22.load(), z22);
+            z23 = _mm512_add_pd(h23.load(), z23);
+            z24 = _mm512_add_pd(h24.load(), z24);
+            z25 = _mm512_add_pd(h25.load(), z25);
+            z26 = _mm512_add_pd(h26.load(), z26);
+            z27 = _mm512_add_pd(h27.load(), z27);
+            z28 = _mm512_add_pd(h28.load(), z28);
+
+            z33 = _mm512_add_pd(h33.load(), z33);
+            z34 = _mm512_add_pd(h34.load(), z34);
+            z35 = _mm512_add_pd(h35.load(), z35);
+            z36 = _mm512_add_pd(h36.load(), z36);
+            z37 = _mm512_add_pd(h37.load(), z37);
+            z38 = _mm512_add_pd(h38.load(), z38);
 
             h17.store(z17);
             h18.store(z18);
@@ -3596,34 +3596,34 @@ pub fn compute_pt_d2_p_avx512_tiled_two_passes3(
         // 24 accumulators + 4 = 28
         {
             // Row 0
-            let mut z00 = h00.load();
-            let mut z01 = h01.load();
-            let mut z02 = h02.load();
-            let mut z03 = h03.load();
-            let mut z04 = h04.load();
-            let mut z05 = h05.load();
-            let mut z06 = h06.load();
-            let mut z07 = h07.load();
-            let mut z08 = h08.load();
+            let mut z00 = _mm512_setzero_pd();
+            let mut z01 = _mm512_setzero_pd();
+            let mut z02 = _mm512_setzero_pd();
+            let mut z03 = _mm512_setzero_pd();
+            let mut z04 = _mm512_setzero_pd();
+            let mut z05 = _mm512_setzero_pd();
+            let mut z06 = _mm512_setzero_pd();
+            let mut z07 = _mm512_setzero_pd();
+            let mut z08 = _mm512_setzero_pd();
 
             // Row 1
-            let mut z11 = h11.load();
-            let mut z12 = h12.load();
-            let mut z13 = h13.load();
-            let mut z14 = h14.load();
-            let mut z15 = h15.load();
-            let mut z16 = h16.load();
-            let mut z17 = h17.load();
-            let mut z18 = h18.load();
+            let mut z11 = _mm512_setzero_pd();
+            let mut z12 = _mm512_setzero_pd();
+            let mut z13 = _mm512_setzero_pd();
+            let mut z14 = _mm512_setzero_pd();
+            let mut z15 = _mm512_setzero_pd();
+            let mut z16 = _mm512_setzero_pd();
+            let mut z17 = _mm512_setzero_pd();
+            let mut z18 = _mm512_setzero_pd();
 
             // Row 2
-            let mut z22 = h22.load();
-            let mut z23 = h23.load();
-            let mut z24 = h24.load();
-            let mut z25 = h25.load();
-            let mut z26 = h26.load();
-            let mut z27 = h27.load();
-            let mut z28 = h28.load();
+            let mut z22 = _mm512_setzero_pd();
+            let mut z23 = _mm512_setzero_pd();
+            let mut z24 = _mm512_setzero_pd();
+            let mut z25 = _mm512_setzero_pd();
+            let mut z26 = _mm512_setzero_pd();
+            let mut z27 = _mm512_setzero_pd();
+            let mut z28 = _mm512_setzero_pd();
 
             for block in scaled_column_buf.iter() {
                 // 3 permanent + 1 temporary = 4 registers
@@ -3670,6 +3670,33 @@ pub fn compute_pt_d2_p_avx512_tiled_two_passes3(
                 z18 = _mm512_fmadd_pd(c1, c8, z18);
                 z28 = _mm512_fmadd_pd(c2, c8, z28);
             }
+
+            z00 = _mm512_add_pd(h00.load(), z00);
+            z01 = _mm512_add_pd(h01.load(), z01);
+            z02 = _mm512_add_pd(h02.load(), z02);
+            z03 = _mm512_add_pd(h03.load(), z03);
+            z04 = _mm512_add_pd(h04.load(), z04);
+            z05 = _mm512_add_pd(h05.load(), z05);
+            z06 = _mm512_add_pd(h06.load(), z06);
+            z07 = _mm512_add_pd(h07.load(), z07);
+            z08 = _mm512_add_pd(h08.load(), z08);
+
+            z11 = _mm512_add_pd(h11.load(), z11);
+            z12 = _mm512_add_pd(h12.load(), z12);
+            z13 = _mm512_add_pd(h13.load(), z13);
+            z14 = _mm512_add_pd(h14.load(), z14);
+            z15 = _mm512_add_pd(h15.load(), z15);
+            z16 = _mm512_add_pd(h16.load(), z16);
+            z17 = _mm512_add_pd(h17.load(), z17);
+            z18 = _mm512_add_pd(h18.load(), z18);
+
+            z22 = _mm512_add_pd(h22.load(), z22);
+            z23 = _mm512_add_pd(h23.load(), z23);
+            z24 = _mm512_add_pd(h24.load(), z24);
+            z25 = _mm512_add_pd(h25.load(), z25);
+            z26 = _mm512_add_pd(h26.load(), z26);
+            z27 = _mm512_add_pd(h27.load(), z27);
+            z28 = _mm512_add_pd(h28.load(), z28);
 
             // Row 0
             h00.store(z00);
@@ -5635,13 +5662,13 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes2_kahan_refactor(
             // Kahan Row 0 & 1 (part 1)[cite: 1]
             for i in 0..15 {
                 let h_idx = i;
-                let s = h[h_idx].load();
-                let y = _mm512_sub_pd(z[i], c[h_idx].load());
-                let t = _mm512_add_pd(s, y);
-                let mut tmp = _mm512_sub_pd(t, s);
-                tmp = _mm512_sub_pd(tmp, y);
-                c[h_idx].store(tmp);
+                let mut s = h[h_idx].load();
+                z[i] = _mm512_sub_pd(z[i], c[h_idx].load());
+                let t = _mm512_add_pd(s, z[i]);
+                s = _mm512_sub_pd(t, s);
+                s = _mm512_sub_pd(s, z[i]);
                 h[h_idx].store(t);
+                c[h_idx].store(s);
             }
         }
 
@@ -5685,13 +5712,21 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes2_kahan_refactor(
             // Kahan Row 1 (continued), 2, & 3[cite: 1]
             for i in 0..15 {
                 let h_idx = i + 15;
-                let s = h[h_idx].load();
-                let y = _mm512_sub_pd(z[i], c[h_idx].load());
-                let t = _mm512_add_pd(s, y);
-                let mut tmp = _mm512_sub_pd(t, s);
-                tmp = _mm512_sub_pd(tmp, y);
-                c[h_idx].store(tmp);
+
+                let mut s = h[h_idx].load();
+                z[i] = _mm512_sub_pd(z[i], c[h_idx].load());
+                let t = _mm512_add_pd(s, z[i]);
+                s = _mm512_sub_pd(t, s);
+                s = _mm512_sub_pd(s, z[i]);
                 h[h_idx].store(t);
+                c[h_idx].store(s);
+                // let s = h[h_idx].load();
+                // let y = _mm512_sub_pd(z[i], c[h_idx].load());
+                // let t = _mm512_add_pd(s, y);
+                // let mut tmp = _mm512_sub_pd(t, s);
+                // tmp = _mm512_sub_pd(tmp, y);
+                // c[h_idx].store(tmp);
+                // h[h_idx].store(t);
             }
         }
 
@@ -5730,13 +5765,21 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes2_kahan_refactor(
             // Kahan Row 4, 5, 6, 7, & 8[cite: 1]
             for i in 0..15 {
                 let h_idx = i + 30;
-                let s = h[h_idx].load();
-                let y = _mm512_sub_pd(z[i], c[h_idx].load());
-                let t = _mm512_add_pd(s, y);
-                let mut tmp = _mm512_sub_pd(t, s);
-                tmp = _mm512_sub_pd(tmp, y);
-                c[h_idx].store(tmp);
+
+                let mut s = h[h_idx].load();
+                z[i] = _mm512_sub_pd(z[i], c[h_idx].load());
+                let t = _mm512_add_pd(s, z[i]);
+                s = _mm512_sub_pd(t, s);
+                s = _mm512_sub_pd(s, z[i]);
                 h[h_idx].store(t);
+                c[h_idx].store(s);
+                // let s = h[h_idx].load();
+                // let y = _mm512_sub_pd(z[i], c[h_idx].load());
+                // let t = _mm512_add_pd(s, y);
+                // let mut tmp = _mm512_sub_pd(t, s);
+                // tmp = _mm512_sub_pd(tmp, y);
+                // c[h_idx].store(tmp);
+                // h[h_idx].store(t);
             }
         }
     }
@@ -5903,11 +5946,11 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes3_kahan_refactor(
                 z04 = _mm512_fmadd_pd(c0, c4, z04);
                 z14 = _mm512_fmadd_pd(c1, c4, z14);
 
-                let c5 = block[5].load(); // Fixed typo from block[4][cite: 1]
+                let c5 = block[5].load();
                 z05 = _mm512_fmadd_pd(c0, c5, z05);
                 z15 = _mm512_fmadd_pd(c1, c5, z15);
 
-                let c6 = block[6].load(); // Fixed typo from block[4][cite: 1]
+                let c6 = block[6].load();
                 z06 = _mm512_fmadd_pd(c0, c6, z06);
                 z16 = _mm512_fmadd_pd(c1, c6, z16);
 

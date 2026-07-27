@@ -59,7 +59,7 @@ impl<T: Copy> DerefMut for AlignedBuffer<T> {
 use core::arch::x86_64::*;
 
 // TODO could make this f64x8
-#[repr(C, align(64))]
+#[repr(align(64))]
 #[derive(Clone, Copy)]
 pub struct Lane8(pub [f64; 8]);
 
@@ -83,8 +83,4 @@ impl Lane8 {
     pub fn store(&mut self, reg: __m512d) {
         unsafe { _mm512_store_pd(self.0.as_mut_ptr(), reg) }
     }
-}
-
-pub struct Avx512 {
-    reg: __m512d,
 }

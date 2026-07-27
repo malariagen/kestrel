@@ -26,6 +26,6 @@ pub mod objective;
 pub mod sqp;
 pub mod util;
 pub mod vcf;
-//pub mod fused;
+pub mod fused;
 pub mod buffer;
 pub mod matrix;

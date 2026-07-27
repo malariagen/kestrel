@@ -1,5 +1,5 @@
 use kestrel::{
-    matrix::BlockArray,
+    matrix::BlockBuffer,
     util::{Matrix9xN, MatrixNx9, Vector9},
 };
 use nalgebra::DVector;
@@ -37,7 +37,7 @@ fn generate_mat_t() -> Matrix9xN<f64> {
     mat
 }
 
-pub fn generate_random_block() -> BlockArray<f64> {
+pub fn generate_random_block() -> BlockBuffer<f64> {
     let mut rng = rand::rng();
 
     let mut v = vec![[0.0; 9]; N];
@@ -48,7 +48,7 @@ pub fn generate_random_block() -> BlockArray<f64> {
         // rng.fill(&mut v[i]);
     }
 
-    BlockArray::from_rows::<8, 9>(v.iter().copied(), v.len())
+    BlockBuffer::from_rows::<8, 9>(v.iter().copied(), v.len())
 }
 
 // YOU MUST RETURN FROM THESE FUNCTIONS OR THE COMPILER WILL OPTIMIZE THEM OUT
@@ -89,6 +89,25 @@ fn bench_three_passes(bencher: divan::Bencher) {
 }
 
 #[divan::bench]
+fn bench_g_h_fused(bencher: divan::Bencher) {
+    let eps = 1e-8;
+
+    let x = [1.0 / 9.0; 9];
+
+    let block = generate_random_block();
+
+    bencher
+        // .with_inputs(generate_mat_t)
+        .bench_local(move || {
+            let (blocks, r) = block.as_blocks::<8, 9>();
+            unsafe {
+                kestrel::fused::compute_g_h_fused_avx512(blocks, r, &x, eps)
+            }
+        });
+}
+
+
+#[divan::bench]
 fn bench_three_passes_kahan(bencher: divan::Bencher) {
     let eps = 1e-8;
 
@@ -102,6 +121,26 @@ fn bench_three_passes_kahan(bencher: divan::Bencher) {
             let (blocks, r) = block.as_blocks::<8, 9>();
             unsafe {
                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes_kahan(
+                    blocks, r, &x, eps,
+                )
+            }
+        });
+}
+
+#[divan::bench]
+fn bench_three_passes_kahan_refactor(bencher: divan::Bencher) {
+    let eps = 1e-8;
+
+    let x = [1.0 / 9.0; 9];
+
+    let block = generate_random_block();
+
+    bencher
+        // .with_inputs(generate_mat_t)
+        .bench_local(move || {
+            let (blocks, r) = block.as_blocks::<8, 9>();
+            unsafe {
+                kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes2_kahan_refactor(
                     blocks, r, &x, eps,
                 )
             }

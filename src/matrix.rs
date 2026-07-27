@@ -3,25 +3,21 @@ use crate::buffer::AlignedBuffer;
 // This is column-major
 pub type Block<T, const L: usize, const R: usize> = [[T; L]; R];
 
-pub struct BlockArray<T: Copy> {
+pub struct BlockBuffer<T: Copy, const L: usize, const R: usize> {
     buf: AlignedBuffer<T>,
     num_rows: usize,
-    row_len: usize,
-    lanes: usize,
 }
 
-impl<T: Copy> BlockArray<T> {
-    pub fn new(num_rows: usize, row_len: usize, lanes: usize) -> Self {
-        let buf = AlignedBuffer::new(num_rows * row_len, lanes);
-        BlockArray {
+impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
+    pub fn new(num_rows: usize) -> Self {
+        let buf = AlignedBuffer::new(num_rows * R, L);
+        BlockBuffer {
             buf,
             num_rows,
-            row_len,
-            lanes,
         }
     }
 
-    pub fn as_blocks<const L: usize, const R: usize>(&self) -> (&[Block<T, L, R>], &[[T; R]]) {
+    pub fn as_blocks(&self) -> (&[Block<T, L, R>], &[[T; R]]) {
         let block_len = L * R;
         let num_blocks = self.buf.len() / block_len;
         let remainder = self.buf.len() % block_len;
@@ -38,7 +34,7 @@ impl<T: Copy> BlockArray<T> {
         (block_slice, remainder_slice)
     }
 
-    pub fn as_blocks_mut<const L: usize, const R: usize>(
+    pub fn as_blocks_mut(
         &mut self,
     ) -> (&mut [Block<T, L, R>], &mut [[T; R]]) {
         let block_len = L * R;
@@ -61,13 +57,11 @@ impl<T: Copy> BlockArray<T> {
         (block_slice, remainder_slice)
     }
 
-    pub fn from_rows<const L: usize, const R: usize>(
+    pub fn fill_from_rows(
+        &mut self,
         mut iter: impl Iterator<Item = [T; R]>,
-        num_rows: usize,
-    ) -> Self {
-        let mut array = BlockArray::new(num_rows, R, L);
-
-        let (blocks, remainder) = array.as_blocks_mut::<L, R>();
+    ) {
+        let (blocks, remainder) = self.as_blocks_mut();
 
         for block in blocks.iter_mut() {
             for i in 0..L {
@@ -81,13 +75,5 @@ impl<T: Copy> BlockArray<T> {
         for row in remainder.iter_mut() {
             *row = iter.next().unwrap();
         }
-
-        array
     }
-}
-
-pub fn test(n: usize) -> BlockArray<f64> {
-    let x = vec![[0.0; 9]; n];
-    let array = BlockArray::from_rows::<8, 9>(x.iter().copied(), x.len());
-    array
 }
