@@ -145,6 +145,24 @@ fn bench_two_passes(bencher: divan::Bencher) {
 }
 
 #[divan::bench]
+fn bench_two_passes_kahan(bencher: divan::Bencher) {
+    let eps = 1e-8;
+
+    let x = [1.0 / 9.0; 9];
+
+    let block = generate_random_block();
+
+    bencher
+        // .with_inputs(generate_mat_t)
+        .bench_local(move || {
+            let (blocks, r) = block.as_blocks::<8, 9>();
+            unsafe {
+                kestrel::hessian::compute_pt_d2_p_avx512_tiled_two_passes_kahan(blocks, r, &x, eps)
+            }
+        });
+}
+
+#[divan::bench]
 fn bench_havx_untiled(bencher: divan::Bencher) {
     let eps = 1e-8;
 
@@ -222,21 +240,21 @@ fn bench_blocked(bencher: divan::Bencher) {
         });
 }
 
-#[divan::bench]
-fn bench_grad_scalar(bencher: divan::Bencher) {
-    let eps = 1e-8;
+// #[divan::bench]
+// fn bench_grad_scalar(bencher: divan::Bencher) {
+//     let eps = 1e-8;
 
-    let x = [1.0 / 9.0; 9];
+//     let x = [1.0 / 9.0; 9];
 
-    bencher
-        .with_inputs(generate_mat_t)
-        .bench_local_refs(move |mat| {
-            let (p, _) = mat.as_slice().as_chunks::<9>();
-            let mut g = [0.0; 9];
-            kestrel::gradient::compute_pt_d_scalar(&p, &x, eps, &mut g);
-            g
-        });
-}
+//     bencher
+//         .with_inputs(generate_mat_t)
+//         .bench_local_refs(move |mat| {
+//             let (p, _) = mat.as_slice().as_chunks::<9>();
+//             let mut g = [0.0; 9];
+//             kestrel::gradient::compute_pt_d_scalar(&p, &x, eps, &mut g);
+//             g
+//         });
+// }
 
 #[divan::bench]
 fn bench_grad_d(bencher: divan::Bencher) {
