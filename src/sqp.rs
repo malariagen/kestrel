@@ -1,8 +1,7 @@
 use nalgebra::DVector;
 
 use crate::{
-    cholesky, gradient, hessian, objective,
-    util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    cholesky, fused, gradient, hessian, matrix::BlockBuffer, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
@@ -357,10 +356,8 @@ fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
 }
 
 pub fn solve_sqp(
-    p_mat: &MatrixNx9<f64>,
-    p_mat_t: &Matrix9xN<f64>,
+    p_mat: &BlockBuffer<f64, 8, 9>,
     x0: &Vector9<f64>,
-    d: &mut DVector<f64>,
     tune: &Tuneables,
 ) -> (Vector9<f64>, u64) {
     let mut x = x0.clone();
@@ -379,7 +376,7 @@ pub fn solve_sqp(
 
         // let (f, g) = compute_obj_grad_d(p_mat, p_mat_t, &x, d, tune.epsilon);
         // let g = compute_grad_d(p_mat, &x, d, tune.epsilon);
-        let g = gradient::compute_grad(p_mat_t, &x, tune.epsilon);
+        let (g, h) = fused::compute_grad_hess(p_mat, &x, tune.epsilon);
 
         // For a convex function, a point x is optimal iff nab
         // For optimization subject to x >= 0, we have (Bertsekas Nonlinear Programming p. 238):
@@ -401,10 +398,7 @@ pub fn solve_sqp(
             return (x, iter);
         }
 
-        // let h = compute_hessian(p_mat, d, a_mat);
-        // let h = compute_hessian_t(p_mat_t, d);
-        // let h = compute_hessian2(p_mat, d);
-        let h = hessian::compute_hess(p_mat_t, &x, tune.epsilon);
+        // let h = hessian::compute_hess(p_mat_t, &x, tune.epsilon);
 
         // c = g - H x
         let mut c = g.clone();
@@ -412,9 +406,9 @@ pub fn solve_sqp(
 
         let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, false, true, tune);
 
-        let f = objective::compute_obj(p_mat_t, &x, tune.epsilon);
+        let f = objective::compute_obj(p_mat, &x, tune.epsilon);
 
-        let (xnew, bls_iter) = backtracking_line_search(p_mat, p_mat_t, &x, &y, f, &g, d, tune);
+        let (xnew, bls_iter) = backtracking_line_search(p_mat, &x, &y, f, &g, tune);
 
         x = xnew;
     }
@@ -624,13 +618,11 @@ fn feasible_step_size(y: &Vector9<f64>, q: &Vector9<f64>) -> (f64, Option<usize>
 }
 
 fn backtracking_line_search(
-    p_mat: &MatrixNx9<f64>,
-    p_mat_t: &Matrix9xN<f64>,
+    p_mat: &BlockBuffer<f64, 8, 9>,
     x: &Vector9<f64>,
     y: &Vector9<f64>,
     f: f64,
     g: &Vector9<f64>,
-    d: &mut DVector<f64>,
     tune: &Tuneables,
 ) -> (Vector9<f64>, u64) {
     let p = y - x;
@@ -644,7 +636,7 @@ fn backtracking_line_search(
         // TODO this can be made more efficient a la N&W
         // let fnew = compute_obj(p_mat, &xnew, d, tune.epsilon);
         // let fnew = compute_obj_scalar(p_mat, &xnew, tune.epsilon);
-        let fnew = objective::compute_obj(p_mat_t, &xnew, tune.epsilon);
+        let fnew = objective::compute_obj(p_mat, &xnew, tune.epsilon);
         if fnew <= f + alpha * t {
             return (xnew, iter);
         }

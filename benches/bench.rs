@@ -99,9 +99,8 @@ fn bench_g_h_fused(bencher: divan::Bencher) {
     bencher
         // .with_inputs(generate_mat_t)
         .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
             unsafe {
-                kestrel::fused::compute_g_h_fused_avx512(blocks, r, &x, eps)
+                kestrel::fused::compute_g_h_fused_avx512(block, &x, eps)
             }
         });
 }

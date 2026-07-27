@@ -60,18 +60,13 @@ fn calculate_max_alleles(genotypes: ArrayView3<i8>) -> Vec<usize> {
 // }
 
 struct ThreadBuffers {
-    p_mat: MatrixNx9<f64>,
-    p_mat_t: Matrix9xN<f64>,
-    d: DVector<f64>,
-    a_mat: MatrixNx9<f64>,
+    p_mat: BlockBuffer<f64, 8, 9>,
 }
+
 impl ThreadBuffers {
     fn new(num_loci: usize) -> Self {
         ThreadBuffers {
-            p_mat: MatrixNx9::zeros(num_loci),
-            p_mat_t: Matrix9xN::zeros(num_loci),
-            d: DVector::zeros(num_loci),
-            a_mat: MatrixNx9::zeros(num_loci),
+            p_mat: BlockBuffer::new(num_loci),
         }
     }
 }
@@ -157,7 +152,7 @@ fn calculate_coefficients_inner(
                     &Tuneables::new(),
                 );
 
-                calculate_mixture_component_matrix(
+                calculate_mixture_component_matrix2(
                     &all_joint_genotypes,
                     &stacked_m_t,
                     *genotypes_x,
@@ -166,13 +161,11 @@ fn calculate_coefficients_inner(
                     &mut buffers.p_mat,
                 );
 
-                buffers.p_mat_t = buffers.p_mat.transpose().to_owned();
+                // buffers.p_mat_t = buffers.p_mat.transpose().to_owned();
 
                 let (delta, _) = sqp::solve_sqp(
                     &buffers.p_mat,
-                    &buffers.p_mat_t,
                     &delta,
-                    &mut buffers.d,
                     &Tuneables::new(),
                 );
 

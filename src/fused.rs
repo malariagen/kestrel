@@ -1,11 +1,31 @@
 use core::arch::x86_64::*;
 
-use crate::{buffer::Lane8, matrix::Block, util::dot};
+use crate::{buffer::Lane8, matrix::{Block, BlockBuffer}, util::{Matrix9, Vector9, dot}};
 
 // h - 8*8*45 = 2880 bytes
 // column buffer - 8 * 8 * 9 * 32 = 18432 bytes (TODO avoid memset)
 
 const BLOCKS: usize = 32;
+
+pub fn compute_grad_hess(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector9<f64>, eps: f64) -> (Vector9<f64>, Matrix9<f64>) {
+    let mut x0 = [0.0; 9];
+    for i in 0..9 {
+        x0[i] = x[i];
+    }
+
+    let (g, h) = unsafe { compute_g_h_fused_avx512(p_mat, &x0, eps) };
+
+    let n = p_mat.num_rows() as f64;
+
+    let mut grad = Vector9::<f64>::zeros();
+    for i in 0..9 {
+        grad[i] = 1.0 - g[i] / n;
+    }
+
+    let hess = Matrix9::from_fn(|i, j| h[i][j] / n);
+
+    (grad, hess)
+}
 
 fn compute_g_h_fused_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut [f64; 9], h: &mut [[f64; 9]; 9]) {
 
@@ -39,8 +59,7 @@ fn compute_g_h_fused_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut 
 
 #[target_feature(enable = "avx512f")]
 pub fn compute_g_h_fused_avx512(
-    blocks: &[Block<f64, 8, 9>],
-    remainder: &[[f64; 9]],
+    p_mat: &BlockBuffer<f64, 8, 9>,
     x: &[f64; 9],
     eps: f64,
 ) -> ([f64; 9], [[f64; 9]; 9]) {
@@ -69,6 +88,7 @@ pub fn compute_g_h_fused_avx512(
     // This is one tile
     let mut scaled_column_buf = [[Lane8::zero(); 9]; BLOCKS];
 
+    let (blocks, remainder) = p_mat.as_blocks();
     let (tiles, partial_tile) = blocks.as_chunks::<BLOCKS>();
 
     for tile in tiles.iter() {

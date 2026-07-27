@@ -17,6 +17,10 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
         }
     }
 
+    pub fn num_rows(&self) -> usize {
+        self.num_rows
+    }
+
     pub fn as_blocks(&self) -> (&[Block<T, L, R>], &[[T; R]]) {
         let block_len = L * R;
         let num_blocks = self.buf.len() / block_len;
