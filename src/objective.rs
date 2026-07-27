@@ -1,7 +1,6 @@
 use crate::util::{Matrix9xN, Vector9, dot, sum};
 
 pub fn compute_obj(p_mat_t: &Matrix9xN<f64>, x: &Vector9<f64>, eps: f64) -> f64 {
-
     let mut x0 = [0.0; 9];
     for i in 0..9 {
         x0[i] = x[i];

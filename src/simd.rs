@@ -2,7 +2,6 @@ use std::arch::x86_64::*;
 
 use crate::matrix::{Block, BlockArray};
 
-
 #[target_feature(enable = "avx512f")]
 pub unsafe fn compute_pt_d_avx512_column_major(
     rows: usize,
@@ -10,7 +9,6 @@ pub unsafe fn compute_pt_d_avx512_column_major(
     x: &[f64; 9],
     eps: f64,
 ) -> [f64; 9] {
-
     assert!(p_mat.len() == rows * 9);
 
     let p = p_mat.as_ptr();
@@ -18,7 +16,8 @@ pub unsafe fn compute_pt_d_avx512_column_major(
     // In the matrix, P[r, c] = c * rows + r
     // This could be calculated on the fly, but LLVM likes the pointers to each column better
     // since it avoids arithmetic.
-    let mut col_ptrs: [*const f64; 9] = std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
+    let mut col_ptrs: [*const f64; 9] =
+        std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
 
     let xs = [
         _mm512_set1_pd(x[0]),
@@ -95,7 +94,6 @@ pub unsafe fn compute_pt_d_avx512_column_major(
     g
 }
 
-
 #[target_feature(enable = "avx512f")]
 pub fn compute_pt_d_scalar_column(
     rows: usize,
@@ -103,14 +101,14 @@ pub fn compute_pt_d_scalar_column(
     x: &[f64; 9],
     eps: f64,
 ) -> [f64; 9] {
-
     assert!(p_mat.len() == rows * 9);
 
     let mut g = [0.0; 9];
 
     let p = p_mat.as_ptr();
 
-    let mut col_ptrs: [*const f64; 9] = std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
+    let mut col_ptrs: [*const f64; 9] =
+        std::array::from_fn(|col| unsafe { p.add(col.unchecked_mul(rows)) });
 
     for _ in 0..rows {
         let mut d = 0.0;

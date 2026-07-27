@@ -11,19 +11,22 @@ pub struct AlignedBuffer<T: Copy> {
 
 impl<T: Copy> AlignedBuffer<T> {
     pub fn new(len: usize, multiple: usize) -> Self {
-
         assert!(std::mem::size_of::<T>() != 0, "Cannot use zero-sized type");
         assert!(len > 0, "Length must be nonzero");
 
-        let size = len.checked_mul(std::mem::size_of::<T>()).expect("Size overflow");
-        let align = multiple.checked_mul(std::mem::size_of::<T>()).expect("Align overflow");
+        let size = len
+            .checked_mul(std::mem::size_of::<T>())
+            .expect("Size overflow");
+        let align = multiple
+            .checked_mul(std::mem::size_of::<T>())
+            .expect("Align overflow");
 
         let layout = Layout::from_size_align(size, align).expect("Invalid layout");
 
         let ptr = unsafe { std::alloc::alloc_zeroed(layout) as *mut T };
         let ptr = match NonNull::new(ptr) {
             Some(p) => p,
-            None => std::alloc::handle_alloc_error(layout)
+            None => std::alloc::handle_alloc_error(layout),
         };
 
         AlignedBuffer { ptr, len, layout }
@@ -43,20 +46,15 @@ impl<T: Copy> Drop for AlignedBuffer<T> {
 impl<T: Copy> Deref for AlignedBuffer<T> {
     type Target = [T];
     fn deref(&self) -> &[T] {
-        unsafe {
-            std::slice::from_raw_parts(self.ptr.as_ptr(), self.len)
-        }
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
     }
 }
 
 impl<T: Copy> DerefMut for AlignedBuffer<T> {
     fn deref_mut(&mut self) -> &mut [T] {
-        unsafe {
-            std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len)
-        }
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 }
-
 
 use core::arch::x86_64::*;
 
@@ -85,4 +83,8 @@ impl Lane8 {
     pub fn store(&mut self, reg: __m512d) {
         unsafe { _mm512_store_pd(self.0.as_mut_ptr(), reg) }
     }
+}
+
+pub struct Avx512 {
+    reg: __m512d,
 }

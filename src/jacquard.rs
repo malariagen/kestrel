@@ -14,7 +14,9 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    cls, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9, Vector9},
+    cls,
+    sqp::{self, Tuneables},
+    util::{Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub fn calculate_relatedness_coefficients(
@@ -46,12 +48,13 @@ fn reorder_genotypes(mut genotypes: ArrayView3<i8>) -> Array3<i8> {
 }
 
 fn calculate_max_alleles(genotypes: ArrayView3<i8>) -> Vec<usize> {
-
-    genotypes.outer_iter().map(|variant| {
-        let max_allele = *variant.iter().max().unwrap();
-        usize::try_from(max_allele).unwrap() + 1
-    }).collect()
-
+    genotypes
+        .outer_iter()
+        .map(|variant| {
+            let max_allele = *variant.iter().max().unwrap();
+            usize::try_from(max_allele).unwrap() + 1
+        })
+        .collect()
 }
 
 // fn calculate_all_joint_genotypes(per_locus_alleles: &[i8]) -> Vec<> {
@@ -62,13 +65,18 @@ struct ThreadBuffers {
     p_mat: MatrixNx9<f64>,
     p_mat_t: Matrix9xN<f64>,
     d: DVector<f64>,
-    a_mat: MatrixNx9<f64>
+    a_mat: MatrixNx9<f64>,
 }
- impl ThreadBuffers {
+impl ThreadBuffers {
     fn new(num_loci: usize) -> Self {
-        ThreadBuffers { p_mat : MatrixNx9::zeros(num_loci), p_mat_t : Matrix9xN::zeros(num_loci), d : DVector::zeros(num_loci), a_mat : MatrixNx9::zeros(num_loci) }
+        ThreadBuffers {
+            p_mat: MatrixNx9::zeros(num_loci),
+            p_mat_t: Matrix9xN::zeros(num_loci),
+            d: DVector::zeros(num_loci),
+            a_mat: MatrixNx9::zeros(num_loci),
+        }
     }
- }
+}
 
 fn calculate_coefficients_inner(
     genotypes: &Array3<i8>,
@@ -124,36 +132,58 @@ fn calculate_coefficients_inner(
     (kinship.par_iter_mut(), pairs.par_iter())
         .zip_eq()
         .with_thread_pool(&mut thread_pool)
-        .for_each_init(|| ThreadBuffers::new(num_v), |buffers, (out, [(x, genotypes_x), (y, genotypes_y)])| {
-            let c = cls::calculate_quadratic_c_t(
-                &all_joint_genotypes,
-                &stacked_m_t,
-                *genotypes_x,
-                *genotypes_y,
-                &lookup_table,
-            );
-            // let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
+        .for_each_init(
+            || ThreadBuffers::new(num_v),
+            |buffers, (out, [(x, genotypes_x), (y, genotypes_y)])| {
+                let c = cls::calculate_quadratic_c_t(
+                    &all_joint_genotypes,
+                    &stacked_m_t,
+                    *genotypes_x,
+                    *genotypes_y,
+                    &lookup_table,
+                );
+                // let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
 
-            let delta0 = if x == y {
-                vector![0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
-            } else {
-                Vector9::<f64>::from_element(1.0 / 9.0)
-            };
+                let delta0 = if x == y {
+                    vector![0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+                } else {
+                    Vector9::<f64>::from_element(1.0 / 9.0)
+                };
 
-            let (delta, _) =
-                sqp::solve_qp_active_set(&quadratic_q, &c, &delta0, true, true, &Tuneables::new());
+                let (delta, _) = sqp::solve_qp_active_set(
+                    &quadratic_q,
+                    &c,
+                    &delta0,
+                    true,
+                    true,
+                    &Tuneables::new(),
+                );
 
-            calculate_mixture_component_matrix(&all_joint_genotypes, &stacked_m_t, *genotypes_x, *genotypes_y, &lookup_table, &mut buffers.p_mat);
+                calculate_mixture_component_matrix(
+                    &all_joint_genotypes,
+                    &stacked_m_t,
+                    *genotypes_x,
+                    *genotypes_y,
+                    &lookup_table,
+                    &mut buffers.p_mat,
+                );
 
-            buffers.p_mat_t = buffers.p_mat.transpose().to_owned();
+                buffers.p_mat_t = buffers.p_mat.transpose().to_owned();
 
-            let (delta, _) = sqp::solve_sqp(&buffers.p_mat, &buffers.p_mat_t, &delta, &mut buffers.d, &Tuneables::new());
+                let (delta, _) = sqp::solve_sqp(
+                    &buffers.p_mat,
+                    &buffers.p_mat_t,
+                    &delta,
+                    &mut buffers.d,
+                    &Tuneables::new(),
+                );
 
-            // println!("{} {} {}", x, y, delta.transpose());
-            let kinship = delta.dot(&kinship_vec);
-            *out = (*x, *y, kinship);
-            handle.inc();
-        });
+                // println!("{} {} {}", x, y, delta.transpose());
+                let kinship = delta.dot(&kinship_vec);
+                *out = (*x, *y, kinship);
+                handle.inc();
+            },
+        );
 
     bar.done();
 
@@ -174,7 +204,6 @@ fn calculate_mixture_component_matrix(
     lookup_table: &Array4<usize>,
     p_mat: &mut MatrixNx9<f64>,
 ) {
-
     let num_g = all_joint_genotypes.len();
 
     let iter_x = genotypes_x.as_slice().unwrap().chunks_exact(2);

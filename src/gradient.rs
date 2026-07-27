@@ -1,12 +1,10 @@
-use crate::{matrix::Block, util::{Matrix9xN, Vector9, dot}};
+use crate::{
+    matrix::Block,
+    util::{Matrix9xN, Vector9, dot},
+};
 use std::arch::x86_64::*;
 
-pub fn compute_grad(
-    p_mat_t: &Matrix9xN<f64>,
-    x: &Vector9<f64>,
-    eps: f64,
-) -> Vector9<f64> {
-
+pub fn compute_grad(p_mat_t: &Matrix9xN<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f64> {
     let mut x0 = [0.0; 9];
     for i in 0..9 {
         x0[i] = x[i];
@@ -28,12 +26,7 @@ pub fn compute_grad(
     g
 }
 
-pub fn compute_pt_d_scalar(
-    p_mat: &[[f64; 9]],
-    x: &[f64; 9],
-    eps: f64,
-    g: &mut [f64; 9]
-) {
+pub fn compute_pt_d_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut [f64; 9]) {
     for row in p_mat.iter() {
         let prod = dot(row, x);
 
@@ -54,7 +47,6 @@ pub unsafe fn compute_pt_d_avx512_blocked(
     x: &[f64; 9],
     eps: f64,
 ) -> [f64; 9] {
-
     let xs = [
         _mm512_set1_pd(x[0]),
         _mm512_set1_pd(x[1]),
@@ -103,7 +95,6 @@ pub unsafe fn compute_pt_d_avx512_blocked(
 
     g
 }
-
 
 // #[target_feature(enable = "avx512f")]
 // pub unsafe fn compute_pt_d_avx512_row_major(

@@ -1,7 +1,8 @@
 use nalgebra::DVector;
 
 use crate::{
-    cholesky, gradient, hessian, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    cholesky, gradient, hessian, objective,
+    util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
@@ -40,7 +41,10 @@ impl Tuneables {
 pub fn compute_obj_scalar(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> f64 {
     let num_v = p_mat.nrows();
 
-    let a = p_mat.row_iter().map(|row| (row.dot(&x.transpose()) + eps).ln()).sum::<f64>();
+    let a = p_mat
+        .row_iter()
+        .map(|row| (row.dot(&x.transpose()) + eps).ln())
+        .sum::<f64>();
 
     x.sum() - a / (num_v as f64) - 1.0
 }
@@ -48,12 +52,20 @@ pub fn compute_obj_scalar(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) ->
 pub fn compute_obj_scalar_t(p_mat_t: &Matrix9xN<f64>, x: &Vector9<f64>, eps: f64) -> f64 {
     let num_v = p_mat_t.ncols();
 
-    let a = p_mat_t.column_iter().map(|col| (col.dot(x) + eps).ln()).sum::<f64>();
+    let a = p_mat_t
+        .column_iter()
+        .map(|col| (col.dot(x) + eps).ln())
+        .sum::<f64>();
 
     x.sum() - a / (num_v as f64) - 1.0
 }
 
-pub fn compute_obj_old(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector<f64>, eps: f64) -> f64 {
+pub fn compute_obj_old(
+    p_mat: &MatrixNx9<f64>,
+    x: &Vector9<f64>,
+    d: &mut DVector<f64>,
+    eps: f64,
+) -> f64 {
     let num_v = p_mat.nrows();
 
     let mut x0 = [0.0; 9];
@@ -72,11 +84,7 @@ pub fn compute_obj_old(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, d: &mut DVector
     f
 }
 
-pub fn compute_grad_old(
-    p_mat: &MatrixNx9<f64>,
-    x: &Vector9<f64>,
-    eps: f64,
-) -> Vector9<f64> {
+pub fn compute_grad_old(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f64> {
     let n = p_mat.nrows();
 
     let mut x0 = [0.0; 9];
@@ -96,7 +104,6 @@ pub fn compute_grad_old(
 }
 
 fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f64> {
-
     let mut x0 = [0.0; 9];
     for i in 0..9 {
         x0[i] = x[i];
@@ -104,7 +111,9 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
 
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") {
-        let ptd = unsafe { crate::simd::compute_pt_d_avx512_column_major(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
+        let ptd = unsafe {
+            crate::simd::compute_pt_d_avx512_column_major(p_mat.nrows(), p_mat.as_slice(), &x0, eps)
+        };
         // let ptd = unsafe { compute_pt_d_wide(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
 
         let mut tmp = Vector9::<f64>::zeros();
@@ -115,7 +124,9 @@ fn compute_pt_d(p_mat: &MatrixNx9<f64>, x: &Vector9<f64>, eps: f64) -> Vector9<f
 
         return tmp;
     } else {
-        let ptd = unsafe { crate::simd::compute_pt_d_scalar_column(p_mat.nrows(), p_mat.as_slice(), &x0, eps) };
+        let ptd = unsafe {
+            crate::simd::compute_pt_d_scalar_column(p_mat.nrows(), p_mat.as_slice(), &x0, eps)
+        };
 
         let mut tmp = Vector9::<f64>::zeros();
 
@@ -136,7 +147,6 @@ pub fn compute_pt_d_scalar_row(
     x: &[f64; 9],
     eps: f64,
 ) -> [f64; 9] {
-
     assert!(p_mat.len() == rows * 9);
 
     let mut g = [0.0; 9];
@@ -337,7 +347,7 @@ fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
             lda,
             0.0,
             h.as_mut_slice(),
-            ldc
+            ldc,
         );
     }
 
