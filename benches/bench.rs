@@ -23,7 +23,7 @@ fn main() {
 //     })
 // }
 
-const N: usize = 100_0000;
+const N: usize = 100_000;
 
 fn generate_mat() -> MatrixNx9<f64> {
     let mat = MatrixNx9::<f64>::new_random(N);
@@ -54,24 +54,24 @@ pub fn generate_random_block() -> BlockArray<f64> {
 // YOU MUST RETURN FROM THESE FUNCTIONS OR THE COMPILER WILL OPTIMIZE THEM OUT
 // GAAAAAAAAAAAAAAA
 
+// #[divan::bench]
+// fn bench_h(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let mat = generate_mat_t();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (p, _) = mat.as_slice().as_chunks::<9>();
+//             kestrel::hessian::compute_pt_d2_p_scalar(&p, &x, eps)
+//         });
+// }
+
 #[divan::bench]
-fn bench_h(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let mat = generate_mat_t();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (p, _) = mat.as_slice().as_chunks::<9>();
-            kestrel::hessian::compute_pt_d2_p_scalar(&p, &x, eps)
-        });
-}
-
-#[divan::bench]
-fn bench_havx(bencher: divan::Bencher) {
+fn bench_three_passes(bencher: divan::Bencher) {
     let eps = 1e-8;
 
     let x = [1.0 / 9.0; 9];
@@ -84,6 +84,42 @@ fn bench_havx(bencher: divan::Bencher) {
             let (blocks, r) = block.as_blocks::<8, 9>();
             unsafe {
                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes3(blocks, r, &x, eps)
+            }
+        });
+}
+
+#[divan::bench]
+fn bench_three_passes_d(bencher: divan::Bencher) {
+    let eps = 1e-8;
+
+    let x = [1.0 / 9.0; 9];
+
+    let block = generate_random_block();
+
+    bencher
+        // .with_inputs(generate_mat_t)
+        .bench_local(move || {
+            let (blocks, r) = block.as_blocks::<8, 9>();
+            unsafe {
+                kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes3_d(blocks, r, &x, eps)
+            }
+        });
+}
+
+#[divan::bench]
+fn bench_two_passes(bencher: divan::Bencher) {
+    let eps = 1e-8;
+
+    let x = [1.0 / 9.0; 9];
+
+    let block = generate_random_block();
+
+    bencher
+        // .with_inputs(generate_mat_t)
+        .bench_local(move || {
+            let (blocks, r) = block.as_blocks::<8, 9>();
+            unsafe {
+                kestrel::hessian::compute_pt_d2_p_avx512_tiled_two_passes3(blocks, r, &x, eps)
             }
         });
 }
