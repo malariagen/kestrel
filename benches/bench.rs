@@ -23,7 +23,7 @@ fn main() {
 //     })
 // }
 
-const N: usize = 100_000;
+const N: usize = 100_0000;
 
 fn generate_mat() -> MatrixNx9<f64> {
     let mat = MatrixNx9::<f64>::new_random(N);
@@ -84,6 +84,26 @@ fn bench_three_passes(bencher: divan::Bencher) {
             let (blocks, r) = block.as_blocks::<8, 9>();
             unsafe {
                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes3(blocks, r, &x, eps)
+            }
+        });
+}
+
+#[divan::bench]
+fn bench_three_passes_kahan(bencher: divan::Bencher) {
+    let eps = 1e-8;
+
+    let x = [1.0 / 9.0; 9];
+
+    let block = generate_random_block();
+
+    bencher
+        // .with_inputs(generate_mat_t)
+        .bench_local(move || {
+            let (blocks, r) = block.as_blocks::<8, 9>();
+            unsafe {
+                kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes_kahan(
+                    blocks, r, &x, eps,
+                )
             }
         });
 }
