@@ -32,8 +32,8 @@ panic = "abort"
 codegen-units = 1
 overflow-checks = true
 lto = true
-debug = "line-tables-only"
 
+debug = true
 # echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
 
 

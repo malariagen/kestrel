@@ -69,7 +69,7 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
 
         for block in blocks.iter_mut() {
             for i in 0..L {
-                let row = iter.next().unwrap();
+                let row = unsafe { iter.next().unwrap_unchecked() };
                 for c in 0..R {
                     block[c][i] = row[c];
                 }
@@ -77,7 +77,7 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
         }
 
         for row in remainder.iter_mut() {
-            *row = iter.next().unwrap();
+            *row = unsafe { iter.next().unwrap_unchecked() };
         }
     }
 }
