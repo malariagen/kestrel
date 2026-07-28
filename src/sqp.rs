@@ -406,7 +406,7 @@ pub fn solve_sqp(
 
         let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, false, true, tune);
 
-        let f = objective::compute_obj(p_mat, &x, tune.epsilon);
+        let f = objective::compute_obj_avx(p_mat, &x, tune.epsilon);
 
         let (xnew, bls_iter) = backtracking_line_search(p_mat, &x, &y, f, &g, tune);
 
@@ -634,9 +634,8 @@ fn backtracking_line_search(
         // Numerically this is always feasible (>= 0) for floats
         let xnew = x + alpha * p;
         // TODO this can be made more efficient a la N&W
-        // let fnew = compute_obj(p_mat, &xnew, d, tune.epsilon);
-        // let fnew = compute_obj_scalar(p_mat, &xnew, tune.epsilon);
-        let fnew = objective::compute_obj(p_mat, &xnew, tune.epsilon);
+        // let fnew = objective::compute_obj_avx(p_mat, &xnew, tune.epsilon);
+        let fnew = objective::compute_obj_avx(p_mat, &xnew, tune.epsilon);
         if fnew <= f + alpha * t {
             return (xnew, iter);
         }
