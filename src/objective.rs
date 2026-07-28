@@ -88,7 +88,7 @@ pub fn compute_obj_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], eps: f64
         //     d = _mm512_fmadd_pd(zx[col], c[col], d);
         // }
 
-        let mut d0 = _mm512_mul_pd(zx[0], c[0]);
+        let mut d0 = _mm512_fmadd_pd(zx[0], c[0], ze);
         let mut d1 = _mm512_mul_pd(zx[1], c[1]);
         let mut d2 = _mm512_mul_pd(zx[2], c[2]);
 
@@ -100,9 +100,8 @@ pub fn compute_obj_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], eps: f64
         d1 = _mm512_fmadd_pd(zx[7], c[7], d1);
         d2 = _mm512_fmadd_pd(zx[8], c[8], d2);
 
-        let d01 = _mm512_add_pd(d0, d1);
-        let d2e = _mm512_add_pd(d2, ze);
-        let d   = _mm512_add_pd(d01, d2e);
+        let mut d = _mm512_add_pd(d0, d1);
+        d = _mm512_add_pd(d, d2);
 
         let l = log_avx512(d);
 

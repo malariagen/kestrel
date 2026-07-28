@@ -79,8 +79,9 @@ pub fn compute_g_h_fused_avx512(
     let mut h = [Lane8::zero(); 45];
 
     // Register allocation:
+    // - 1 for one (though this can be broadcasted as a constant)
+    // - 1 for eps (can be broadcasted from stack)
     // - 9 for x
-    // - 1 for one
     // For calculation of d: 1 for d + 9 columns + 9 gradient = 19
     // For each Hessian pass: 15 accumulators + at most 5 columns = 20
 
@@ -121,9 +122,10 @@ pub fn compute_g_h_fused_avx512(
 
 
 #[target_feature(enable = "avx512f")]
-fn tile_loop(tile: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64, g: &mut [Lane8; 9], h: &mut [Lane8; 45], scaled_column_buf: &mut [[Lane8; 9]; BLOCKS]) {
+pub fn tile_loop(tile: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64, g: &mut [Lane8; 9], h: &mut [Lane8; 45], scaled_column_buf: &mut [[Lane8; 9]; BLOCKS]) {
 
     let one = _mm512_set1_pd(1.0);
+    let ze = _mm512_set1_pd(eps);
 
     let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
 
@@ -143,10 +145,25 @@ fn tile_loop(tile: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64, g: &mut [Lane8; 
             // Calculate d
             // This computes a dot product between x and a row of p
             // TODO this could be manually unrolled a few times
-            let mut d = _mm512_set1_pd(eps);
-            for col in 0..9 {
-                d = _mm512_fmadd_pd(zx[col], c[col], d);
-            }
+            // let mut d = _mm512_set1_pd(eps);
+            // for col in 0..9 {
+            //     d = _mm512_fmadd_pd(zx[col], c[col], d);
+            // }
+
+            let mut d0 = _mm512_fmadd_pd(zx[0], c[0], ze);
+            let mut d1 = _mm512_mul_pd(zx[1], c[1]);
+            let mut d2 = _mm512_mul_pd(zx[2], c[2]);
+
+            d0 = _mm512_fmadd_pd(zx[3], c[3], d0);
+            d1 = _mm512_fmadd_pd(zx[4], c[4], d1);
+            d2 = _mm512_fmadd_pd(zx[5], c[5], d2);
+
+            d0 = _mm512_fmadd_pd(zx[6], c[6], d0);
+            d1 = _mm512_fmadd_pd(zx[7], c[7], d1);
+            d2 = _mm512_fmadd_pd(zx[8], c[8], d2);
+
+            let mut d = _mm512_add_pd(d0, d1);
+            d = _mm512_add_pd(d, d2);
 
             // TODO investigate reciprocal
             d = _mm512_div_pd(one, d);
