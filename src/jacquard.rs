@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use itertools::Itertools;
-use nalgebra::{DVector, vector};
+use nalgebra::vector;
 use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3};
 use paralight::{
     iter::{
@@ -31,6 +31,61 @@ pub fn calculate_relatedness_coefficients(
 
     calculate_coefficients_inner(&genotypes, allele_frequencies)
 }
+
+pub fn calculate_relatedness_coefficients_no_freq(
+    genotypes: ArrayView3<i8>,
+) -> Array2<f64> {
+    let num_v = genotypes.shape()[0];
+    let num_s = genotypes.shape()[1];
+    let num_h = genotypes.shape()[2];
+
+    let allele_frequencies = &calculate_allele_frequencies(genotypes.view());
+
+    assert_eq!(num_h, 2);
+
+    let genotypes = reorder_genotypes(genotypes.view());
+
+    calculate_coefficients_inner(&genotypes, allele_frequencies)
+}
+
+fn calculate_allele_frequencies(genotypes: ArrayView3<i8>) -> Array2<f64> {
+    let num_v = genotypes.shape()[0];
+    let num_s = genotypes.shape()[1];
+    let num_h = genotypes.shape()[2];
+
+    let max_a = (genotypes.iter().max().unwrap() + 1) as usize;
+
+    let mut freq = Array2::<f64>::zeros((num_v, max_a));
+
+    for v in 0..num_v {
+        for s in 0..num_s {
+            for h in 0..num_h {
+                let allele = genotypes[(v, s, h)];
+                if allele >= 0 {
+                    freq[(v, allele as usize)] += 1.0;
+                }
+            }
+
+        }
+    }
+
+    for v in 0..num_v {
+        let mut total = 0.0;
+        for a in 0..max_a {
+            total += freq[(v, a)];
+        }
+
+        if total > 0.0 {
+            for a in 0..max_a {
+                freq[(v, a)] /= total;
+            }
+        }
+    }
+
+
+    freq
+}
+
 
 fn reorder_genotypes(mut genotypes: ArrayView3<i8>) -> Array3<i8> {
     genotypes.swap_axes(0, 1);
@@ -152,22 +207,20 @@ fn calculate_coefficients_inner(
                     &Tuneables::new(),
                 );
 
-                calculate_mixture_component_matrix2(
-                    &all_joint_genotypes,
-                    &stacked_m_t,
-                    *genotypes_x,
-                    *genotypes_y,
-                    &lookup_table,
-                    &mut buffers.p_mat,
-                );
+                // calculate_mixture_component_matrix2(
+                //     &all_joint_genotypes,
+                //     &stacked_m_t,
+                //     *genotypes_x,
+                //     *genotypes_y,
+                //     &lookup_table,
+                //     &mut buffers.p_mat,
+                // );
 
-                // buffers.p_mat_t = buffers.p_mat.transpose().to_owned();
-
-                let (delta, _) = sqp::solve_sqp(
-                    &buffers.p_mat,
-                    &delta,
-                    &Tuneables::new(),
-                );
+                // let (delta, _) = sqp::solve_sqp(
+                //     &buffers.p_mat,
+                //     &delta,
+                //     &Tuneables::new(),
+                // );
 
                 // println!("{} {} {}", x, y, delta.transpose());
                 let kinship = delta.dot(&kinship_vec);

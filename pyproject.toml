@@ -4,10 +4,18 @@ build-backend = "maturin"
 
 [project]
 name = "kestrel"
-requires-python = ">=3.8"
+requires-python = ">=3.11,<3.13"
+#requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+
+dependencies = [
+    "malariagen-data @ git+https://github.com/malariagen/malariagen-data-python.git",
+    "matplotlib>=3.11.1",
+    "nbformat>=5.10.4",
+]
+
