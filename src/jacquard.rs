@@ -14,7 +14,10 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    cls, matrix::BlockBuffer, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9, Vector9},
+    cls,
+    matrix::BlockBuffer,
+    sqp::{self, Tuneables},
+    util::{Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub fn calculate_relatedness_coefficients(
@@ -32,9 +35,7 @@ pub fn calculate_relatedness_coefficients(
     calculate_coefficients_inner(&genotypes, allele_frequencies)
 }
 
-pub fn calculate_relatedness_coefficients_no_freq(
-    genotypes: ArrayView3<i8>,
-) -> Array2<f64> {
+pub fn calculate_relatedness_coefficients_no_freq(genotypes: ArrayView3<i8>) -> Array2<f64> {
     let num_v = genotypes.shape()[0];
     let num_s = genotypes.shape()[1];
     let num_h = genotypes.shape()[2];
@@ -65,7 +66,6 @@ fn calculate_allele_frequencies(genotypes: ArrayView3<i8>) -> Array2<f64> {
                     freq[(v, allele as usize)] += 1.0;
                 }
             }
-
         }
     }
 
@@ -82,10 +82,8 @@ fn calculate_allele_frequencies(genotypes: ArrayView3<i8>) -> Array2<f64> {
         }
     }
 
-
     freq
 }
-
 
 fn reorder_genotypes(mut genotypes: ArrayView3<i8>) -> Array3<i8> {
     genotypes.swap_axes(0, 1);
@@ -286,30 +284,31 @@ fn calculate_mixture_component_matrix2<const L: usize>(
     let iter_x = genotypes_x.as_slice().unwrap().chunks_exact(2);
     let iter_y = genotypes_y.as_slice().unwrap().chunks_exact(2);
 
-    let iter = iter_x.zip(iter_y).enumerate().map(|(locus, (geno_x, geno_y))| {
+    let iter = iter_x
+        .zip(iter_y)
+        .enumerate()
+        .map(|(locus, (geno_x, geno_y))| {
+            let (i, j) = (geno_x[0], geno_x[1]);
+            let (k, l) = (geno_y[0], geno_y[1]);
 
-        let (i, j) = (geno_x[0], geno_x[1]);
-        let (k, l) = (geno_y[0], geno_y[1]);
+            // TODO do a check here for missing data
+            // if i < 0 || j < 0 || k < 0 || l < 0 {
+            //     continue;
+            // }
 
-        // TODO do a check here for missing data
-        // if i < 0 || j < 0 || k < 0 || l < 0 {
-        //     continue;
-        // }
+            // let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
+            let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
 
-        // let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
-        let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
-
-        let column = stacked_m_t.column(locus * num_g + g);
-        let mut row = [0.0; 9];
-        for i in 0.. 9 {
-            row[i] = column[i];
-        }
-        row
-    });
+            let column = stacked_m_t.column(locus * num_g + g);
+            let mut row = [0.0; 9];
+            for i in 0..9 {
+                row[i] = column[i];
+            }
+            row
+        });
 
     p_mat.fill_from_rows(iter);
 }
-
 
 #[cfg(test)]
 mod test {

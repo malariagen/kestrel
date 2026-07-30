@@ -1,6 +1,5 @@
 use std::arch::x86_64::*;
 
-
 #[target_feature(enable = "avx512f")]
 pub unsafe fn compute_pt_d_avx512_column_major(
     rows: usize,

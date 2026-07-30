@@ -98,13 +98,8 @@ fn bench_g_h_fused(bencher: divan::Bencher) {
 
     bencher
         // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            unsafe {
-                kestrel::fused::compute_g_h_fused_avx512(block, &x, eps)
-            }
-        });
+        .bench_local(move || unsafe { kestrel::fused::compute_g_h_fused_avx512(block, &x, eps) });
 }
-
 
 #[divan::bench]
 fn bench_three_passes_kahan(bencher: divan::Bencher) {

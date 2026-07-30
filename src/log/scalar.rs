@@ -1,12 +1,11 @@
-use crate::log::D1_32;
-use crate::log::{C_6, C_5, C_4, C_3, C_2, C_1, C_0, LOG_2_HI, LOG_2_LO};
+use crate::log::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, D1_32, LOG_2_HI, LOG_2_LO};
 
-// Adapted from https://github.com/burrbull/sleef-rs/blob/master/src/f64/u10.rs
-
-// Why not just the ln() function from libm? In the objective calculation, using
+// Why not just use the ln() function from libm? In the objective calculation, using
 // that requires a function call, which requires storing registers on the stack.
 // LLVM generates sub-optimal assembly for the ZMM registers, so it's better to
 // make our own that can be inlined.
+
+// Adapted from https://github.com/burrbull/sleef-rs/blob/master/src/f64/u10.rs
 
 #[inline]
 pub fn log_scalar(mut d: f64) -> f64 {
@@ -25,18 +24,18 @@ pub fn log_scalar(mut d: f64) -> f64 {
     }
 
     let u = m - 1.0;
-    let l = add_as_doubled(m, 1.0);
+    let l = two_sum_ss(m, 1.0);
 
-    let x = div(u, l);
+    let x = div_sd(u, l);
     let x2 = x.0 * x.0;
     let x4 = x2 * x2;
     let x8 = x4 * x4;
 
-    let t = poly7( x2, x4, x8, C_6, C_5, C_4, C_3, C_2, C_1, C_0);
+    let t = poly7(x2, x4, x8, C_6, C_5, C_4, C_3, C_2, C_1, C_0);
 
-    let mut s = mul((LOG_2_HI, LOG_2_LO), e as f64);
-    s = add_checked_double(s, (x.0 + x.0, x.1 + x.1));
-    s = add_checked(s, (x2 * x.0) * t);
+    let mut s = mul_ds((LOG_2_HI, LOG_2_LO), e as f64);
+    s = fast_two_sum_dd(s, (x.0 + x.0, x.1 + x.1));
+    s = fast_two_sum_ds(s, (x2 * x.0) * t);
 
     if d == 0.0 {
         f64::NEG_INFINITY
@@ -62,7 +61,7 @@ fn ldexp3k(d: f64, e: i32) -> f64 {
 }
 
 #[inline]
-fn add_as_doubled(s: f64, o: f64) -> (f64, f64) {
+fn two_sum_ss(s: f64, o: f64) -> (f64, f64) {
     let r0 = s + o;
     let v = r0 - s;
 
@@ -74,7 +73,7 @@ fn add_as_doubled(s: f64, o: f64) -> (f64, f64) {
 }
 
 #[inline]
-fn add_checked_double(s: (f64, f64), o: (f64, f64)) -> (f64, f64) {
+fn fast_two_sum_dd(s: (f64, f64), o: (f64, f64)) -> (f64, f64) {
     let r0 = s.0 + o.0;
 
     let a = s.0 - r0;
@@ -85,7 +84,7 @@ fn add_checked_double(s: (f64, f64), o: (f64, f64)) -> (f64, f64) {
 }
 
 #[inline]
-fn add_checked(s: (f64, f64), o: f64) -> (f64, f64) {
+fn fast_two_sum_ds(s: (f64, f64), o: f64) -> (f64, f64) {
     let r0 = s.0 + o;
 
     let a = s.0 - r0;
@@ -95,14 +94,14 @@ fn add_checked(s: (f64, f64), o: f64) -> (f64, f64) {
 }
 
 #[inline]
-fn mul(s: (f64, f64), o: f64) -> (f64, f64) {
+fn mul_ds(s: (f64, f64), o: f64) -> (f64, f64) {
     let r0 = s.0 * o;
     let a = s.1.mul_add(o, s.0.mul_add(o, -r0));
     (r0, a)
 }
 
 #[inline]
-fn div(s: f64, o: (f64, f64)) -> (f64, f64) {
+fn div_sd(s: f64, o: (f64, f64)) -> (f64, f64) {
     let t = 1.0 / o.0;
 
     let q0 = s * t;
@@ -115,7 +114,18 @@ fn div(s: f64, o: (f64, f64)) -> (f64, f64) {
 }
 
 #[inline]
-fn poly7(x: f64, x2: f64, x4: f64, c6: f64, c5: f64, c4: f64, c3: f64, c2: f64, c1: f64, c0: f64) -> f64 {
+fn poly7(
+    x: f64,
+    x2: f64,
+    x4: f64,
+    c6: f64,
+    c5: f64,
+    c4: f64,
+    c3: f64,
+    c2: f64,
+    c1: f64,
+    c0: f64,
+) -> f64 {
     x4.mul_add(poly3(x, x2, c6, c5, c4), poly4(x, x2, c3, c2, c1, c0))
 }
 
@@ -126,5 +136,5 @@ fn poly3(x: f64, x2: f64, c2: f64, c1: f64, c0: f64) -> f64 {
 
 #[inline]
 fn poly4(x: f64, x2: f64, c3: f64, c2: f64, c1: f64, c0: f64) -> f64 {
-    x2.mul_add( x.mul_add(c3, c2), x.mul_add(c1, c0))
+    x2.mul_add(x.mul_add(c3, c2), x.mul_add(c1, c0))
 }

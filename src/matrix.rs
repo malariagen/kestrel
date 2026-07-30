@@ -11,10 +11,7 @@ pub struct BlockBuffer<T: Copy, const L: usize, const R: usize> {
 impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
     pub fn new(num_rows: usize) -> Self {
         let buf = AlignedBuffer::new(num_rows * R, L);
-        BlockBuffer {
-            buf,
-            num_rows,
-        }
+        BlockBuffer { buf, num_rows }
     }
 
     pub fn num_rows(&self) -> usize {
@@ -38,9 +35,7 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
         (block_slice, remainder_slice)
     }
 
-    pub fn as_blocks_mut(
-        &mut self,
-    ) -> (&mut [Block<T, L, R>], &mut [[T; R]]) {
+    pub fn as_blocks_mut(&mut self) -> (&mut [Block<T, L, R>], &mut [[T; R]]) {
         let block_len = L * R;
         let num_blocks = self.buf.len() / block_len;
         let remainder = self.buf.len() % block_len;
@@ -61,10 +56,7 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
         (block_slice, remainder_slice)
     }
 
-    pub fn fill_from_rows(
-        &mut self,
-        mut iter: impl Iterator<Item = [T; R]>,
-    ) {
+    pub fn fill_from_rows(&mut self, mut iter: impl Iterator<Item = [T; R]>) {
         let (blocks, remainder) = self.as_blocks_mut();
 
         for block in blocks.iter_mut() {

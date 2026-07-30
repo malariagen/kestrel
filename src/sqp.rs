@@ -1,7 +1,10 @@
 use nalgebra::DVector;
 
 use crate::{
-    cholesky, fused, gradient, hessian, matrix::BlockBuffer, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    cholesky, fused, gradient, hessian,
+    matrix::BlockBuffer,
+    objective,
+    util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {

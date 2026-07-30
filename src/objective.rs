@@ -1,7 +1,15 @@
-use crate::{log::{avx512::log_avx512, scalar::log_scalar}, matrix::BlockBuffer, util::{Vector9, dot, sum}};
+use crate::{
+    log::{avx512::log_avx512, scalar::log_scalar},
+    matrix::BlockBuffer,
+    util::{Vector9, dot, sum},
+};
 use core::arch::x86_64::*;
 
-pub fn compute_obj<const L: usize>(p_mat: &BlockBuffer<f64, L, 9>, x: &Vector9<f64>, eps: f64) -> f64 {
+pub fn compute_obj<const L: usize>(
+    p_mat: &BlockBuffer<f64, L, 9>,
+    x: &Vector9<f64>,
+    eps: f64,
+) -> f64 {
     let mut x0 = [0.0; 9];
     for i in 0..9 {
         x0[i] = x[i];
@@ -38,7 +46,11 @@ fn compute_obj_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64) -> f64 {
     s
 }
 
-fn compute_obj_block<const L: usize>(p_mat: &BlockBuffer<f64, L, 9>, x: &[f64; 9], eps: f64) -> f64 {
+fn compute_obj_block<const L: usize>(
+    p_mat: &BlockBuffer<f64, L, 9>,
+    x: &[f64; 9],
+    eps: f64,
+) -> f64 {
     let (blocks, remainder) = p_mat.as_blocks();
 
     let mut s = 0.0;
@@ -72,15 +84,13 @@ pub fn compute_obj_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], eps: f64
     // 21
     let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
 
-    let ze =_mm512_set1_pd(eps);
+    let ze = _mm512_set1_pd(eps);
 
     let mut zs = _mm512_setzero_pd();
 
     for block in blocks.iter() {
-
         // 30
-        let c: [__m512d; 9] =
-            std::array::from_fn(|i| unsafe { _mm512_load_pd(block[i].as_ptr()) });
+        let c: [__m512d; 9] = std::array::from_fn(|i| unsafe { _mm512_load_pd(block[i].as_ptr()) });
 
         // Calculate d
         // This computes a dot product between x and a row of p
@@ -127,7 +137,12 @@ pub fn compute_obj_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], eps: f64
 // Gah! Need to make scalar log function
 
 #[target_feature(enable = "avx512f,avx512dq")]
-pub fn compute_obj_2avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], y: &[f64; 9], eps: f64) -> (f64, f64) {
+pub fn compute_obj_2avx512(
+    p_mat: &BlockBuffer<f64, 8, 9>,
+    x: &[f64; 9],
+    y: &[f64; 9],
+    eps: f64,
+) -> (f64, f64) {
     // 18
     // let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
     // let zy: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(y[i]));
@@ -139,7 +154,7 @@ pub fn compute_obj_2avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], y: &[f6
 
     for block in blocks.iter() {
         // let c: [__m512d; 9] =
-            // std::array::from_fn(|i| unsafe { _mm512_load_pd(block[i].as_ptr()) });
+        // std::array::from_fn(|i| unsafe { _mm512_load_pd(block[i].as_ptr()) });
         // Calculate d
         // This computes a dot product between x and a row of p
         // TODO this could be manually unrolled a few times

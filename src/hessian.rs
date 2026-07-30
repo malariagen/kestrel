@@ -4746,7 +4746,6 @@ pub fn compute_pt_d2_p_avx512_tiled_three_passes_kahan(
     (grad, hess)
 }
 
-
 #[target_feature(enable = "avx512f")]
 pub fn compute_pt_d2_p_avx512_tiled_two_passes_kahan(
     blocks: &[Block<f64, 8, 9>],
@@ -5218,7 +5217,6 @@ pub fn compute_pt_d2_p_avx512_tiled_two_passes_kahan(
         }
 
         {
-
             // Row 3
             let mut z33 = _mm512_setzero_pd();
             let mut z34 = _mm512_setzero_pd();

@@ -1,13 +1,21 @@
 use core::arch::x86_64::*;
 
-use crate::{buffer::Lane8, matrix::{Block, BlockBuffer}, util::{Matrix9, Vector9, dot}};
+use crate::{
+    buffer::Lane8,
+    matrix::{Block, BlockBuffer},
+    util::{Matrix9, Vector9, dot},
+};
 
 // h - 8*8*45 = 2880 bytes
 // column buffer - 8 * 8 * 9 * 32 = 18432 bytes (TODO avoid memset)
 
 const BLOCKS: usize = 32;
 
-pub fn compute_grad_hess(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector9<f64>, eps: f64) -> (Vector9<f64>, Matrix9<f64>) {
+pub fn compute_grad_hess(
+    p_mat: &BlockBuffer<f64, 8, 9>,
+    x: &Vector9<f64>,
+    eps: f64,
+) -> (Vector9<f64>, Matrix9<f64>) {
     let mut x0 = [0.0; 9];
     for i in 0..9 {
         x0[i] = x[i];
@@ -27,8 +35,13 @@ pub fn compute_grad_hess(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector9<f64>, eps: 
     (grad, hess)
 }
 
-fn compute_g_h_fused_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut [f64; 9], h: &mut [[f64; 9]; 9]) {
-
+fn compute_g_h_fused_scalar(
+    p_mat: &[[f64; 9]],
+    x: &[f64; 9],
+    eps: f64,
+    g: &mut [f64; 9],
+    h: &mut [[f64; 9]; 9],
+) {
     for row in p_mat.iter() {
         let prod = dot(row, x);
 
@@ -54,7 +67,6 @@ fn compute_g_h_fused_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut 
             }
         }
     }
-
 }
 
 #[target_feature(enable = "avx512f")]
@@ -63,7 +75,6 @@ pub fn compute_g_h_fused_avx512(
     x: &[f64; 9],
     eps: f64,
 ) -> ([f64; 9], [[f64; 9]; 9]) {
-
     let mut g = [Lane8::zero(); 9];
 
     // Upper triangular Hessian accumulators stored in row-major order:
@@ -120,10 +131,15 @@ pub fn compute_g_h_fused_avx512(
     (grad, hess)
 }
 
-
 #[target_feature(enable = "avx512f")]
-pub fn tile_loop(tile: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64, g: &mut [Lane8; 9], h: &mut [Lane8; 45], scaled_column_buf: &mut [[Lane8; 9]; BLOCKS]) {
-
+pub fn tile_loop(
+    tile: &[Block<f64, 8, 9>],
+    x: &[f64; 9],
+    eps: f64,
+    g: &mut [Lane8; 9],
+    h: &mut [Lane8; 45],
+    scaled_column_buf: &mut [[Lane8; 9]; BLOCKS],
+) {
     let one = _mm512_set1_pd(1.0);
     let ze = _mm512_set1_pd(eps);
 
