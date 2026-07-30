@@ -5,21 +5,15 @@ use crate::log::{C_6, C_5, C_4, C_3, C_2, C_1, C_0, LOG_2_HI, LOG_2_LO};
 // Adapted from https://github.com/burrbull/sleef-rs/blob/master/src/f64x/u10.rs
 // and https://github.com/shibatch/sleef/blob/master/src/libm/sleefsimddp.c
 
-// #[inline]
+#[inline]
 #[target_feature(enable = "avx512f,avx512dq")]
-// This uses 11 registers total (from the assembly)
 // There are 14 constants in this assembly.
-// In a loop, all of them will be broadcasted to registers...
+// In a loop, all of them may be broadcasted to registers...
 pub fn log_avx512(d: __m512d) -> __m512d {
     let p = _mm512_mul_pd(d, _mm512_set1_pd(1.0 / 0.75));
     let not_inf = !_mm512_fpclass_pd_mask(p, 0x08);
     // The above multiplication could overflow, so we overwrite the exponent to 1024
     let e = _mm512_mask_getexp_pd(_mm512_set1_pd(1024.0), not_inf, p);
-
-    // let mut e = _mm512_getexp_pd(p);
-    // let is_inf = _mm512_fpclass_pd_mask(e, 0x08);
-    // let mask = _mm512_cmp_pd_mask(e, _mm512_set1_pd(f64::INFINITY), _CMP_EQ_OQ);
-    // e = _mm512_mask_blend_pd(is_inf, e, _mm512_set1_pd(1024.0));
 
     let m = _mm512_getmant_pd(d, _MM_MANT_NORM_P75_1P5, _MM_MANT_SIGN_NAN);
 
@@ -30,7 +24,7 @@ pub fn log_avx512(d: __m512d) -> __m512d {
     let u = _mm512_sub_pd(m, one);
     let l = add_as_doubled(m, one);
 
-    let x = div_half(u, l);
+    let x = div(u, l);
     let x2 = _mm512_mul_pd(x.0, x.0);
     let x4 = _mm512_mul_pd(x2, x2);
     let x8 = _mm512_mul_pd(x4, x4);
@@ -81,20 +75,6 @@ fn two_sum(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
 
 #[inline]
 #[target_feature(enable = "avx512f")]
-fn sub_as_doubled(s: __m512d, o: __m512d) -> (__m512d, __m512d) {
-    // In the above version, replace o with -o and simplify
-    let r0 = _mm512_sub_pd(s, o);
-    let v = _mm512_sub_pd(r0, s);
-
-    let a = _mm512_sub_pd(r0, v);
-    let b = _mm512_add_pd(o, v);
-    let c = _mm512_sub_pd(s, a);
-    let d = _mm512_sub_pd(c, b);
-    (r0, d)
-}
-
-#[inline]
-#[target_feature(enable = "avx512f")]
 fn add_checked_double(s: (__m512d, __m512d), o: (__m512d, __m512d)) -> (__m512d, __m512d) {
     let r0 = _mm512_add_pd(s.0, o.0);
 
@@ -126,7 +106,7 @@ fn mul(s: (__m512d, __m512d), o: __m512d) -> (__m512d, __m512d) {
 
 #[inline]
 #[target_feature(enable = "avx512f")]
-fn div_half(s: __m512d, o: (__m512d, __m512d)) -> (__m512d, __m512d) {
+fn div(s: __m512d, o: (__m512d, __m512d)) -> (__m512d, __m512d) {
     let one = _mm512_set1_pd(1.0);
 
     let t = _mm512_div_pd(one, o.0);
@@ -136,22 +116,6 @@ fn div_half(s: __m512d, o: (__m512d, __m512d)) -> (__m512d, __m512d) {
 
     let mut q1 = _mm512_fnmadd_pd(o.1, t, _mm512_fnmadd_pd(o.0, t, one));
     q1 = _mm512_fmadd_pd(q0, q1, u);
-
-    (q0, q1)
-}
-
-#[inline]
-#[target_feature(enable = "avx512f")]
-fn div(s: (__m512d, __m512d), o: (__m512d, __m512d)) -> (__m512d, __m512d) {
-    let one = _mm512_set1_pd(1.0);
-
-    let t = _mm512_div_pd(one, o.0);
-
-    let q0 = _mm512_mul_pd(s.0, t);
-    let u = _mm512_fmsub_pd(t, s.0, q0);
-
-    let mut q1 = _mm512_fnmadd_pd(o.1, t, _mm512_fnmadd_pd(o.0, t, one));
-    q1 = _mm512_fmadd_pd(q0, q1, _mm512_fmadd_pd(s.1, t, u));
 
     (q0, q1)
 }
