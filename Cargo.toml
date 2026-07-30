@@ -9,9 +9,9 @@ license = "MPL-2.0"
 #categories = ["command-line-utilities", "cryptography"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lib]
-name = "kestrel"
-crate-type = ["cdylib"]
+# [lib]
+# name = "kestrel"
+# crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1.0.103"
