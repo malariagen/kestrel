@@ -1,8 +1,7 @@
 use nalgebra::DVector;
 
 use crate::{
-    cholesky, fused, gradient, hessian,
-    matrix::BlockBuffer,
+    cholesky, fused, blockbuffer::BlockBuffer,
     objective,
     util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
@@ -602,7 +601,25 @@ pub fn solve_qp_active_set(
     (y, iter)
 }
 
-fn feasible_step_size(y: &Vector9<f64>, q: &Vector9<f64>) -> (f64, Option<usize>) {
+pub fn feasible_step_size(y: &Vector9<f64>, q: &Vector9<f64>) -> (f64, Option<usize>) {
+    let mut alpha = 1.0;
+    let mut blocking_index = None;
+    for i in 0..9 {
+        if q[i] < 0.0 {
+            // We want to solve y[i] + a*q[i] = 0
+            let a = -y[i] / q[i];
+            // In theory we could use <= because of exact blockage
+            if a < alpha {
+                alpha = a;
+                blocking_index = Some(i);
+            }
+        }
+    }
+
+    (alpha, blocking_index)
+}
+
+pub fn feasible_step_size3(y: &[f64; 9], q: &[f64; 9]) -> (f64, Option<usize>) {
     let mut alpha = 1.0;
     let mut blocking_index = None;
     for i in 0..9 {

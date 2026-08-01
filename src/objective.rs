@@ -1,7 +1,5 @@
 use crate::{
-    log::{avx512::log_avx512, scalar::log_scalar},
-    matrix::BlockBuffer,
-    util::{Vector9, dot, sum},
+    algebra::{dot, sum}, blockbuffer::BlockBuffer, log::{avx512::log_avx512, scalar::log_scalar}, util::Vector9,
 };
 use core::arch::x86_64::*;
 

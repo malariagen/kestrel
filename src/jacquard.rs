@@ -15,7 +15,7 @@ use lockfree_progress_bar::ProgressBar;
 
 use crate::{
     cls,
-    matrix::BlockBuffer,
+    blockbuffer::BlockBuffer,
     sqp::{self, Tuneables},
     util::{Matrix9xN, MatrixNx9, Vector9},
 };

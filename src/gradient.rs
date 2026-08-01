@@ -1,6 +1,5 @@
 use crate::{
-    matrix::Block,
-    util::{Matrix9xN, Vector9, dot},
+    algebra::dot, blockbuffer::Block, util::{Matrix9xN, Vector9},
 };
 use std::arch::x86_64::*;
 

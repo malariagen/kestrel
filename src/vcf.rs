@@ -55,6 +55,8 @@ pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
 
         let mut variants = Vec::with_capacity(num_samples);
 
+        // TODO remove unknown data, and deal with MNPs and in/dels
+
         for result in gt_series.iter(&header) {
             let value = result?.context("No genotype for sample found")?;
             if let SeriesValue::Genotype(gt) = value {

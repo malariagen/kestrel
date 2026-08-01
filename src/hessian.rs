@@ -1,7 +1,5 @@
 use crate::{
-    buffer::Lane8,
-    matrix::Block,
-    util::{Matrix9, Matrix9xN, Vector9, dot},
+    algebra::dot, blockbuffer::Block, buffer::Lane8, util::{Matrix9, Matrix9xN, Vector9},
 };
 
 use core::arch::x86_64::*;

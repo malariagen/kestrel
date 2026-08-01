@@ -1,9 +1,7 @@
 use core::arch::x86_64::*;
 
 use crate::{
-    buffer::Lane8,
-    matrix::{Block, BlockBuffer},
-    util::{Matrix9, Vector9, dot},
+    algebra::dot, blockbuffer::{Block, BlockBuffer}, buffer::Lane8, util::{Matrix9, Vector9},
 };
 
 // h - 8*8*45 = 2880 bytes

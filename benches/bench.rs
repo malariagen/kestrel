@@ -1,5 +1,5 @@
 use kestrel::{
-    matrix::BlockBuffer,
+    blockbuffer::BlockBuffer,
     util::{Matrix9xN, MatrixNx9, Vector9},
 };
 use nalgebra::DVector;

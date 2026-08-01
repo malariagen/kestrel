@@ -7,20 +7,3 @@ pub type Matrix9xN<T> = Matrix<T, U9, Dyn, VecStorage<T, U9, Dyn>>;
 pub type DMatrixView9<'a, T> = Matrix<T, Dyn, Dyn, ViewStorage<'a, T, Dyn, Dyn, U1, U9>>;
 pub type DMatrixViewMut9<'a, T> = Matrix<T, Dyn, Dyn, ViewStorageMut<'a, T, Dyn, Dyn, U1, U9>>;
 pub type DVectorViewMut9<'a, T> = Matrix<T, Dyn, U1, ViewStorageMut<'a, T, Dyn, U1, U1, U9>>;
-
-pub fn dot<const N: usize>(x: &[f64; N], y: &[f64; N]) -> f64 {
-    let mut sum = 0.0;
-    for i in 0..N {
-        sum = x[i].mul_add(y[i], sum);
-    }
-
-    sum
-}
-
-pub fn sum<const N: usize>(x: &[f64; N]) -> f64 {
-    let mut sum = 0.0;
-    for i in 0..N {
-        sum += x[i];
-    }
-    sum
-}
