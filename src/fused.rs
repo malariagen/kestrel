@@ -170,7 +170,6 @@ pub fn tile_loop(
             let mut d = _mm512_add_pd(d0, d1);
             d = _mm512_add_pd(d, d2);
 
-            // TODO investigate reciprocal
             d = _mm512_div_pd(one, d);
 
             for col in 0..9 {

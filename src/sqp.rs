@@ -392,7 +392,7 @@ pub fn solve_sqp(
             .enumerate()
             .filter(|(row, _)| x[*row] > 0.0)
             .map(|(_, gx)| *gx)
-            .min_by(|i, j| i.partial_cmp(j).expect("Found a NaN"))
+            .min_by(|i, j| i.total_cmp(j))
             .expect("Working set is full!");
 
         if gmin >= -tune.sqp_conv_tol {
@@ -431,9 +431,10 @@ pub fn solve_qp_active_set(
     modify: bool,
     tune: &Tuneables,
 ) -> (Vector<9>, u64) {
-    let mut working_set = [false; 9];
 
     let mut y = y0.clone();
+
+    let mut working_set = [false; 9];
 
     for row in 0..9 {
         if y[row] == 0.0 {
@@ -448,48 +449,28 @@ pub fn solve_qp_active_set(
             y = l1_normalize(&y);
         }
 
-        // let mut free_indices = [0_usize; 9];
-        // let mut free_count = 0;
-        // for i in 0..9 {
-        //     if !working_set[i] {
-        //         free_indices[free_count] = i;
-        //         free_count += 1;
-        //     }
-        // }
+        let mut free_indices = [0; 9];
+        let mut free_count = 0;
+        for i in 0..9 {
+            if !working_set[i] {
+                free_indices[free_count] = i;
+                free_count += 1;
+            }
+        }
 
-        // TODO we could move all the buffers outside of the loop in theory
+        // Removes some bounds checks
+        assert!(free_count <= 9);
+
         let mut y_free = [0.0; 9];
-        let mut free_count = 0;
-        for row in 0..9 {
-            if !working_set[row] {
-                y_free[free_count] = y[row];
-                free_count += 1;
-            }
-        }
-
-        let mut q_mat_free = [[0.0; 9]; 9];
-        let mut nonzero_col = 0;
-        for col in 0..9 {
-            if !working_set[col] {
-                let mut nonzero_row = 0;
-                for row in 0..9 {
-                    if !working_set[row] {
-                        q_mat_free[nonzero_row][nonzero_col] = q_mat[row][col];
-                        nonzero_row += 1;
-                    }
-                }
-                nonzero_col += 1;
-            }
-        }
-
-        debug_assert_eq!(free_count, nonzero_col);
-
         let mut c_free = [0.0; 9];
-        let mut free_count = 0;
-        for row in 0..9 {
-            if !working_set[row] {
-                c_free[free_count] = c[row];
-                free_count += 1;
+        let mut q_mat_free = [[0.0; 9]; 9];
+        for i in 0..free_count {
+            let free_i = free_indices[i];
+            y_free[i] = y[free_i];
+            c_free[i] = c[free_i];
+            for j in 0..free_count {
+                let free_j = free_indices[j];
+                q_mat_free[i][j] = q_mat[free_i][free_j];
             }
         }
 
@@ -591,7 +572,7 @@ pub fn solve_qp_active_set(
     (y, iter)
 }
 
-pub fn feasible_step_size(y: &Vector<9>, q: &Vector<9>) -> (f64, Option<usize>) {
+fn feasible_step_size(y: &Vector<9>, q: &Vector<9>) -> (f64, Option<usize>) {
     let mut alpha = 1.0;
     let mut blocking_index = None;
     for i in 0..9 {
@@ -626,7 +607,6 @@ fn backtracking_line_search(
         // Numerically this is always feasible (>= 0) for floats
         let xnew = add(x, &scale_mul(alpha, &p));
         // TODO this can be made more efficient a la N&W
-        // let fnew = objective::compute_obj_avx(p_mat, &xnew, tune.epsilon);
         let fnew = objective::compute_obj_avx(p_mat, &xnew, tune.epsilon);
         if fnew <= f + alpha * t {
             return (xnew, iter);

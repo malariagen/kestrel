@@ -33,6 +33,7 @@ fn compute_obj_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64) -> f64 {
     for row in p_mat.iter() {
         let prod = dot(row, x);
         let t = log_scalar(prod + eps);
+        // let t = (prod + eps).ln();
         // TODO kahan?
         s += t;
     }
