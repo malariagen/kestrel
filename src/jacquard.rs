@@ -1,7 +1,6 @@
 use std::num::NonZeroUsize;
 
 use itertools::Itertools;
-use nalgebra::vector;
 use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3};
 use paralight::{
     iter::{
@@ -14,10 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    cls,
-    blockbuffer::BlockBuffer,
-    sqp::{self, Tuneables},
-    util::{Matrix9xN, MatrixNx9, Vector9},
+    algebra::dot, blockbuffer::BlockBuffer, cls, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9},
 };
 
 pub fn calculate_relatedness_coefficients(
@@ -147,7 +143,7 @@ fn calculate_coefficients_inner(
     //     quadratic_q[(i, i)] += tau;
     // }
 
-    let kinship_vec: Vector9<f64> = vector![1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
+    let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
     let num_s = genotypes.shape()[0];
 
@@ -191,37 +187,49 @@ fn calculate_coefficients_inner(
                 // let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
 
                 let delta0 = if x == y {
-                    vector![0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+                    [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
                 } else {
-                    Vector9::<f64>::from_element(1.0 / 9.0)
+                    [1.0 / 9.0; 9]
                 };
 
+                let mut q_mat = [[0.0; 9]; 9];
+                for i in 0..9 {
+                    for j in 0..9 {
+                        q_mat[i][j] = quadratic_q[(i, j)];
+                    }
+                }
+
+                let mut c_vec = [0.0; 9];
+                for i in 0..9 {
+                    c_vec[i] = c[i];
+                }
+
                 let (delta, _) = sqp::solve_qp_active_set(
-                    &quadratic_q,
-                    &c,
+                    &q_mat,
+                    &c_vec,
                     &delta0,
                     true,
                     true,
                     &Tuneables::new(),
                 );
 
-                // calculate_mixture_component_matrix2(
-                //     &all_joint_genotypes,
-                //     &stacked_m_t,
-                //     *genotypes_x,
-                //     *genotypes_y,
-                //     &lookup_table,
-                //     &mut buffers.p_mat,
-                // );
+                calculate_mixture_component_matrix2(
+                    &all_joint_genotypes,
+                    &stacked_m_t,
+                    *genotypes_x,
+                    *genotypes_y,
+                    &lookup_table,
+                    &mut buffers.p_mat,
+                );
 
-                // let (delta, _) = sqp::solve_sqp(
-                //     &buffers.p_mat,
-                //     &delta,
-                //     &Tuneables::new(),
-                // );
+                let (delta, _) = sqp::solve_sqp(
+                    &buffers.p_mat,
+                    &delta,
+                    &Tuneables::new(),
+                );
 
                 // println!("{} {} {}", x, y, delta.transpose());
-                let kinship = delta.dot(&kinship_vec);
+                let kinship = dot(&delta, &kinship_vec);
                 *out = (*x, *y, kinship);
                 handle.inc();
             },

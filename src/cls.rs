@@ -1,6 +1,6 @@
 use crate::iis;
 use crate::util::{Matrix9, Matrix9xN, MatrixNx9, Vector9};
-use ndarray::{Array2, Array4, ArrayRef2, ArrayView2};
+use ndarray::{Array4, ArrayRef2, ArrayView2};
 
 pub fn calculate_stacked_m(
     all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],

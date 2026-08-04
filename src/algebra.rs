@@ -1,8 +1,8 @@
 
 // Rust requires a massive song-and-dance
 
-type Vector<const N: usize> = [f64; N];
-type Matrix<const N: usize> = [[f64; N]; N];
+pub type Vector<const N: usize> = [f64; N];
+pub type Matrix<const N: usize> = [[f64; N]; N];
 
 pub fn dot<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> f64 {
     let mut sum = 0.0;
@@ -10,6 +10,15 @@ pub fn dot<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> f64 {
         sum = x[i].mul_add(y[i], sum);
     }
 
+    sum
+}
+
+#[inline]
+pub fn dot_n<const N: usize>(n: usize, x: &Vector<N>, y: &Vector<N>) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..n {
+        sum = x[i].mul_add(y[i], sum);
+    }
     sum
 }
 
@@ -21,14 +30,56 @@ pub fn sum<const N: usize>(x: &Vector<N>) -> f64 {
     sum
 }
 
+pub fn sum_n<const N: usize>(n: usize, x: &Vector<N>) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..n {
+        sum += x[i];
+    }
+    sum
+}
+
 pub fn mul<const N: usize>(m: &Matrix<N>, v: &Vector<N>) -> Vector<N> {
     std::array::from_fn(|i| dot(&m[i], v))
+}
+
+pub fn mul_n<const N: usize>(n: usize, m: &Matrix<N>, v: &Vector<N>) -> Vector<N> {
+    let mut p = [0.0; N];
+    for i in 0..n {
+        p[i] = dot_n(n, &m[i], v);
+    }
+    p
+}
+
+pub fn scale_mul<const N: usize>(a: f64, x: &Vector<N>) -> Vector<N> {
+    std::array::from_fn(|i| a*x[i])
 }
 
 pub fn add<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Vector<N> {
     std::array::from_fn(|i| x[i] + y[i])
 }
 
+pub fn add_n<const N: usize>(n: usize, x: &Vector<N>, y: &Vector<N>) -> Vector<N> {
+    let mut s = [0.0; N];
+    for i in 0..n {
+        s[i] = x[i] + y[i];
+    }
+    s
+}
+
 pub fn sub<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Vector<N> {
     std::array::from_fn(|i| x[i] - y[i])
+}
+
+// This already assumes the vector is non-negative
+pub fn l1_normalize<const N: usize>(x: &Vector<N>) -> Vector<N> {
+    let s = sum(x);
+    std::array::from_fn(|i| x[i]/s)
+}
+
+pub fn scale_div_mut<const N: usize>(m: &mut Matrix<N>, a: f64) {
+    for i in 0..N {
+        for j in 0..N {
+            m[i][j] /= a;
+        }
+    }
 }

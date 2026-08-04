@@ -155,3 +155,4 @@ fn poly4(x: __m512d, x2: __m512d, c3: f64, c2: f64, c1: f64, c0: f64) -> __m512d
         _mm512_fmadd_pd(x, _mm512_set1_pd(c1), _mm512_set1_pd(c0)),
     )
 }
+

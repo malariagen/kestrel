@@ -1,5 +1,5 @@
 use crate::{
-    algebra::{dot, sum}, blockbuffer::BlockBuffer, log::{avx512::log_avx512, scalar::log_scalar}, util::Vector9,
+    algebra::{Vector, dot, sum}, blockbuffer::BlockBuffer, log::{avx512::log_avx512, scalar::log_scalar}, util::Vector9,
 };
 use core::arch::x86_64::*;
 
@@ -20,17 +20,12 @@ pub fn compute_obj<const L: usize>(
     return sum(&x0) - s / (n as f64) - 1.0;
 }
 
-pub fn compute_obj_avx(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector9<f64>, eps: f64) -> f64 {
-    let mut x0 = [0.0; 9];
-    for i in 0..9 {
-        x0[i] = x[i];
-    }
-
-    let s = unsafe { compute_obj_avx512(p_mat, &x0, eps) };
+pub fn compute_obj_avx(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f64 {
+    let s = unsafe { compute_obj_avx512(p_mat, x, eps) };
 
     let n = p_mat.num_rows();
 
-    return sum(&x0) - s / (n as f64) - 1.0;
+    return sum(&x) - s / (n as f64) - 1.0;
 }
 
 fn compute_obj_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64) -> f64 {

@@ -1,8 +1,7 @@
 use core::arch::x86_64::*;
 
 use crate::{
-    algebra::dot, blockbuffer::{Block, BlockBuffer}, buffer::Lane8, util::{Matrix9, Vector9},
-};
+    algebra::{Matrix, Vector, dot, scale_div_mut}, blockbuffer::{Block, BlockBuffer}, buffer::Lane8};
 
 // h - 8*8*45 = 2880 bytes
 // column buffer - 8 * 8 * 9 * 32 = 18432 bytes (TODO avoid memset)
@@ -11,26 +10,18 @@ const BLOCKS: usize = 32;
 
 pub fn compute_grad_hess(
     p_mat: &BlockBuffer<f64, 8, 9>,
-    x: &Vector9<f64>,
+    x: &Vector<9>,
     eps: f64,
-) -> (Vector9<f64>, Matrix9<f64>) {
-    let mut x0 = [0.0; 9];
-    for i in 0..9 {
-        x0[i] = x[i];
-    }
-
-    let (g, h) = unsafe { compute_g_h_fused_avx512(p_mat, &x0, eps) };
+) -> (Vector<9>, Matrix<9>) {
+    let (g, mut h) = unsafe { compute_g_h_fused_avx512(p_mat, x, eps) };
 
     let n = p_mat.num_rows() as f64;
 
-    let mut grad = Vector9::<f64>::zeros();
-    for i in 0..9 {
-        grad[i] = 1.0 - g[i] / n;
-    }
+    let grad: Vector<9> = std::array::from_fn(|i| 1.0 - g[i] / n);
 
-    let hess = Matrix9::from_fn(|i, j| h[i][j] / n);
+    scale_div_mut(&mut h, n);
 
-    (grad, hess)
+    (grad, h)
 }
 
 fn compute_g_h_fused_scalar(

@@ -1,9 +1,9 @@
+use std::str::from_boxed_utf8_unchecked;
+
 use nalgebra::DVector;
 
 use crate::{
-    cholesky, fused, blockbuffer::BlockBuffer,
-    objective,
-    util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    algebra::{Matrix, Vector, add, add_n, dot, l1_normalize, mul, mul_n, scale_mul, sub, sum_n}, blockbuffer::BlockBuffer, cholesky, fused, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
@@ -359,22 +359,21 @@ fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
 
 pub fn solve_sqp(
     p_mat: &BlockBuffer<f64, 8, 9>,
-    x0: &Vector9<f64>,
+    x0: &Vector<9>,
     tune: &Tuneables,
-) -> (Vector9<f64>, u64) {
-    let mut x = x0.clone();
+) -> (Vector<9>, u64) {
+    let mut x = *x0;
 
     for iter in 0..tune.sqp_max_iter {
         // We manually truncate some values to zero, which will put them in the active set
         // If we guessed wrong this will be corrected later
-        x.apply(|val| {
+        x.iter_mut().for_each(|val| {
             if *val <= tune.sqp_zero_threshold {
                 *val = 0.0;
             }
         });
 
-        let sum = x.sum();
-        x /= sum;
+        x = l1_normalize(&x);
 
         // let (f, g) = compute_obj_grad_d(p_mat, p_mat_t, &x, d, tune.epsilon);
         // let g = compute_grad_d(p_mat, &x, d, tune.epsilon);
@@ -403,8 +402,7 @@ pub fn solve_sqp(
         // let h = hessian::compute_hess(p_mat_t, &x, tune.epsilon);
 
         // c = g - H x
-        let mut c = g.clone();
-        c.gemv(-1.0, &h, &x, 1.0);
+        let c = sub(&g, &mul(&h, &x));
 
         let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, false, true, tune);
 
@@ -426,13 +424,13 @@ pub fn solve_sqp(
 
 // Minimize 1/2 y^T Q y + c^T y, subject to y >= 0 and sum(y) = 1
 pub fn solve_qp_active_set(
-    q_mat: &Matrix9<f64>,
-    c: &Vector9<f64>,
-    y0: &Vector9<f64>,
+    q_mat: &Matrix<9>,
+    c: &Vector<9>,
+    y0: &Vector<9>,
     sum_to_one: bool,
     modify: bool,
     tune: &Tuneables,
-) -> (Vector9<f64>, u64) {
+) -> (Vector<9>, u64) {
     let mut working_set = [false; 9];
 
     let mut y = y0.clone();
@@ -447,8 +445,7 @@ pub fn solve_qp_active_set(
 
     while iter < tune.qp_max_iter {
         if sum_to_one {
-            let sum = y.sum();
-            y /= sum;
+            y = l1_normalize(&y);
         }
 
         // let mut free_indices = [0_usize; 9];
@@ -461,24 +458,23 @@ pub fn solve_qp_active_set(
         // }
 
         // TODO we could move all the buffers outside of the loop in theory
-        let mut y_free_buf = Vector9::<f64>::zeros();
+        let mut y_free = [0.0; 9];
         let mut free_count = 0;
         for row in 0..9 {
             if !working_set[row] {
-                y_free_buf[free_count] = y[row];
+                y_free[free_count] = y[row];
                 free_count += 1;
             }
         }
-        let y_free = y_free_buf.rows(0, free_count);
 
-        let mut q_mat_free_buf = Matrix9::<f64>::zeros();
+        let mut q_mat_free = [[0.0; 9]; 9];
         let mut nonzero_col = 0;
         for col in 0..9 {
             if !working_set[col] {
                 let mut nonzero_row = 0;
                 for row in 0..9 {
                     if !working_set[row] {
-                        q_mat_free_buf[(nonzero_row, nonzero_col)] = q_mat[(row, col)];
+                        q_mat_free[nonzero_row][nonzero_col] = q_mat[row][col];
                         nonzero_row += 1;
                     }
                 }
@@ -488,69 +484,64 @@ pub fn solve_qp_active_set(
 
         debug_assert_eq!(free_count, nonzero_col);
 
-        let q_mat_free = q_mat_free_buf.view((0, 0), (nonzero_col, nonzero_col));
-
-        let mut c_free_buf = Vector9::<f64>::zeros();
+        let mut c_free = [0.0; 9];
         let mut free_count = 0;
         for row in 0..9 {
             if !working_set[row] {
-                c_free_buf[free_count] = c[row];
+                c_free[free_count] = c[row];
                 free_count += 1;
             }
         }
 
-        let mut g_free = c_free_buf.rows_mut(0, free_count);
-        g_free.gemv(1.0, &q_mat_free, &y_free, 1.0);
+        // g_f = c_f + Q_f y_f
+        let mut g_free = add_n(free_count, &c_free, &mul_n(free_count, &q_mat_free, &y_free));
 
-        let mut l_buf = Matrix9::<f64>::zeros();
-        let mut sub_l = l_buf.view_mut((0, 0), (q_mat_free.nrows(), q_mat_free.ncols()));
-
-        let mut d_buf = Vector9::<f64>::zeros();
-        let mut sub_d = d_buf.rows_mut(0, q_mat_free.nrows());
+        let mut sub_l = [[0.0; 9]; 9];
+        let mut sub_d = [0.0; 9];
 
         if modify {
-            cholesky::modify_gmw(q_mat_free, &mut sub_l, &mut sub_d);
+            cholesky::modify_gmw_n(free_count, &q_mat_free, &mut sub_l, &mut sub_d);
         } else {
-            cholesky::unmodified(q_mat_free, &mut sub_l, &mut sub_d);
+            cholesky::unmodified_n(free_count, &q_mat_free, &mut sub_l, &mut sub_d);
         }
 
         // We now want to solve L D L^T q = g
-        // Forward substitution
-        sub_l.solve_lower_triangular_mut(&mut g_free);
-        // Diagonal scaling
-        g_free.component_div_assign(&sub_d);
-        // Backward substitution
-        sub_l.tr_solve_lower_triangular_mut(&mut g_free);
+        cholesky::solve_ldl_mut_n(free_count, &sub_l, &sub_d, &mut g_free);
 
         let lambda = if sum_to_one {
-            let mut ones_buf = Vector9::<f64>::from_element(1.0);
-            let mut ones = ones_buf.rows_mut(0, g_free.nrows());
+            let mut ones_free = [0.0; 9];
+            for i in 0..free_count {
+                ones_free[i] = 1.0;
+            }
 
-            sub_l.solve_lower_triangular_mut(&mut ones);
-            ones.component_div_assign(&sub_d);
-            sub_l.tr_solve_lower_triangular_mut(&mut ones);
-            let lambda = g_free.sum() / ones.sum();
+            cholesky::solve_ldl_mut_n(free_count, &sub_l, &sub_d, &mut ones_free);
+
+            let lambda = sum_n(free_count, &g_free) / sum_n(free_count, &ones_free);
 
             // g_free = lambda * ones - g_free
-            g_free.axpy(lambda, &ones, -1.0);
+            // TODO check
+            g_free = sub(&scale_mul(lambda, &ones_free), &g_free);
             lambda
         } else {
-            g_free.neg_mut();
+            // TODO check
+            g_free = std::array::from_fn(|i| -g_free[i]);
             0.0
         };
 
-        if g_free.amax() <= tune.qp_zero_search_tol {
+        // TODO check
+        let m = g_free.iter().map(|x| x.abs()).max_by(|a, b| a.total_cmp(b)).unwrap();
+
+        if m <= tune.qp_zero_search_tol {
             // q is roughly zero, so check KKT to see if we are at an optimum solution
 
             // The free set is full, aka the working set is empty
-            if g_free.nrows() == 9 {
+            if free_count == 9 {
                 return (y, iter);
             }
 
             // This is the gradient of the QP
-            let mut g = c.clone();
             // g = c + Qy
-            g.gemv(1.0, &q_mat, &y, 1.0);
+            let g = add(c, &mul(&q_mat, &y));
 
             let smallest_multiplier_index = (0..9)
                 .filter(|row| working_set[*row])
@@ -565,7 +556,7 @@ pub fn solve_qp_active_set(
 
             working_set[smallest_multiplier_index] = false;
         } else {
-            let mut p = Vector9::<f64>::zeros();
+            let mut p = [0.0; 9];
             let mut free_count = 0;
             for row in 0..9 {
                 if !working_set[row] {
@@ -580,9 +571,8 @@ pub fn solve_qp_active_set(
             let (alpha, blocking_index) = feasible_step_size(&y, &p);
 
             // y += alpha * p
-            y.axpy(alpha, &p, 1.0);
             // This could be slightly below 0 in some cases due to rounding, so clamp
-            y.apply(|x| *x = x.max(0.0));
+            y = std::array::from_fn(|i| (y[i] + alpha * p[i]).max(0.0));
 
             // TODO have a thing where this only adds to the blocking set if two or more non-zero
 
@@ -601,25 +591,7 @@ pub fn solve_qp_active_set(
     (y, iter)
 }
 
-pub fn feasible_step_size(y: &Vector9<f64>, q: &Vector9<f64>) -> (f64, Option<usize>) {
-    let mut alpha = 1.0;
-    let mut blocking_index = None;
-    for i in 0..9 {
-        if q[i] < 0.0 {
-            // We want to solve y[i] + a*q[i] = 0
-            let a = -y[i] / q[i];
-            // In theory we could use <= because of exact blockage
-            if a < alpha {
-                alpha = a;
-                blocking_index = Some(i);
-            }
-        }
-    }
-
-    (alpha, blocking_index)
-}
-
-pub fn feasible_step_size3(y: &[f64; 9], q: &[f64; 9]) -> (f64, Option<usize>) {
+pub fn feasible_step_size(y: &Vector<9>, q: &Vector<9>) -> (f64, Option<usize>) {
     let mut alpha = 1.0;
     let mut blocking_index = None;
     for i in 0..9 {
@@ -639,20 +611,20 @@ pub fn feasible_step_size3(y: &[f64; 9], q: &[f64; 9]) -> (f64, Option<usize>) {
 
 fn backtracking_line_search(
     p_mat: &BlockBuffer<f64, 8, 9>,
-    x: &Vector9<f64>,
-    y: &Vector9<f64>,
+    x: &Vector<9>,
+    y: &Vector<9>,
     f: f64,
-    g: &Vector9<f64>,
+    g: &Vector<9>,
     tune: &Tuneables,
-) -> (Vector9<f64>, u64) {
-    let p = y - x;
-    let t = tune.bls_sufficient_decrease * g.dot(&p);
+) -> (Vector<9>, u64) {
+    let p = sub(y, x);
+    let t = tune.bls_sufficient_decrease * dot(g, &p);
 
     // We know that y = x + p is already feasible, so this is a feasible starting point
     let mut alpha = 1.0;
     for iter in 0..tune.bls_max_iter {
         // Numerically this is always feasible (>= 0) for floats
-        let xnew = x + alpha * p;
+        let xnew = add(x, &scale_mul(alpha, &p));
         // TODO this can be made more efficient a la N&W
         // let fnew = objective::compute_obj_avx(p_mat, &xnew, tune.epsilon);
         let fnew = objective::compute_obj_avx(p_mat, &xnew, tune.epsilon);
@@ -667,5 +639,5 @@ fn backtracking_line_search(
     // return the last one. This could happen because of floating
     // point problems, and it's better to be robust instead of
     // throwing errors (let the main loop handle it).
-    return (x + alpha * p, tune.bls_max_iter);
+    return (add(x, &scale_mul(alpha, &p)), tune.bls_max_iter);
 }
