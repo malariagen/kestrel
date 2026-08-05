@@ -42,7 +42,7 @@ pub fn calculate_quadratic_q_mat(stacked_m: &MatrixNx9<f64>, num_v: usize) -> Ma
     q
 }
 
-pub fn calculate_quadratic_c(
+pub fn calculate_quadratic_c_old(
     all_joint_genotypes: &[((i8, i8), (i8, i8), i8)],
     stacked_m: &MatrixNx9<f64>,
     genotypes_x: ArrayView2<i8>,
@@ -113,10 +113,11 @@ pub fn calculate_quadratic_c_t(
         //     continue;
         // }
 
-        // let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
-        let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
+        let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
+        // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
 
-        c -= stacked_m_t.column(locus * num_g + g);
+        c -= unsafe { stacked_m_t.column(locus.unchecked_mul(num_g).unchecked_add(*g)) };
+        // c -= unsafe { stacked_m_t.column(locus.unchecked_mul(num_g).unchecked_add(g) * num_g + g) };
 
         // We need a map from gx, gy to the g index, that is faster than a linear search
         // for (g, (ogx, ogy, _)) in all_joint_genotypes.iter().enumerate() {

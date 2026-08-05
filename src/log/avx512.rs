@@ -1,15 +1,21 @@
 use core::arch::x86_64::*;
 
-use crate::log::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, LOG_2_HI, LOG_2_LO};
+use crate::log::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, LOG_2_HI, LOG_2_LO, Log};
 
 // Adapted from https://github.com/burrbull/sleef-rs/blob/master/src/f64x/u10.rs
 // and https://github.com/shibatch/sleef/blob/master/src/libm/sleefsimddp.c
 
-#[inline]
+impl Log for __m512d {
+    #[inline]
+    fn log(self) -> Self {
+        unsafe { log_avx512(self) }
+    }
+}
+
 #[target_feature(enable = "avx512f,avx512dq")]
 // There are 14 constants in this assembly.
 // In a loop, all of them may be broadcasted to registers...
-pub fn log_avx512(d: __m512d) -> __m512d {
+fn log_avx512(d: __m512d) -> __m512d {
     let p = _mm512_mul_pd(d, _mm512_set1_pd(1.0 / 0.75));
     let not_inf = !_mm512_fpclass_pd_mask(p, 0x08);
     // The above multiplication could overflow, so we overwrite the exponent to 1024
@@ -44,7 +50,7 @@ pub fn log_avx512(d: __m512d) -> __m512d {
     _mm512_fixupimm_pd(r, d, _mm512_set1_epi64(CONTROL), 0)
 }
 
-// TODO this is just Knuth 2sum, rename to clarify
+// TODO make my own doubled library for each SIMD type
 
 #[inline]
 #[target_feature(enable = "avx512f")]

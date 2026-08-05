@@ -177,41 +177,40 @@ fn calculate_coefficients_inner(
         .for_each_init(
             || ThreadBuffers::new(num_v),
             |buffers, (out, [(x, genotypes_x), (y, genotypes_y)])| {
-                let c = cls::calculate_quadratic_c_t(
-                    &all_joint_genotypes,
-                    &stacked_m_t,
-                    *genotypes_x,
-                    *genotypes_y,
-                    &lookup_table,
-                );
-                // let c = cls::calculate_quadratic_c(&all_joint_genotypes, &stacked_m, *genotypes_x, *genotypes_y, allele_frequencies);
 
-                let delta0 = if x == y {
+                let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
                 } else {
                     [1.0 / 9.0; 9]
                 };
+                // let c = cls::calculate_quadratic_c_t(
+                //     &all_joint_genotypes,
+                //     &stacked_m_t,
+                //     *genotypes_x,
+                //     *genotypes_y,
+                //     &lookup_table,
+                // );
 
-                let mut q_mat = [[0.0; 9]; 9];
-                for i in 0..9 {
-                    for j in 0..9 {
-                        q_mat[i][j] = quadratic_q[(i, j)];
-                    }
-                }
+                // let mut q_mat = [[0.0; 9]; 9];
+                // for i in 0..9 {
+                //     for j in 0..9 {
+                //         q_mat[i][j] = quadratic_q[(i, j)];
+                //     }
+                // }
 
-                let mut c_vec = [0.0; 9];
-                for i in 0..9 {
-                    c_vec[i] = c[i];
-                }
+                // let mut c_vec = [0.0; 9];
+                // for i in 0..9 {
+                //     c_vec[i] = c[i];
+                // }
 
-                let (delta, _) = sqp::solve_qp_active_set(
-                    &q_mat,
-                    &c_vec,
-                    &delta0,
-                    true,
-                    true,
-                    &Tuneables::new(),
-                );
+                // let (delta, _) = sqp::solve_qp_active_set(
+                //     &q_mat,
+                //     &c_vec,
+                //     &delta,
+                //     true,
+                //     true,
+                //     &Tuneables::new(),
+                // );
 
                 calculate_mixture_component_matrix2(
                     &all_joint_genotypes,
@@ -304,10 +303,11 @@ fn calculate_mixture_component_matrix2<const L: usize>(
             //     continue;
             // }
 
-            // let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
-            let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
+            let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
+            // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
 
-            let column = stacked_m_t.column(locus * num_g + g);
+            let column = unsafe { stacked_m_t.column(locus.unchecked_mul(num_g).unchecked_add(*g)) };
+            // let column = stacked_m_t.column(locus * num_g + g);
             let mut row = [0.0; 9];
             for i in 0..9 {
                 row[i] = column[i];

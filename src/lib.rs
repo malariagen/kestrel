@@ -38,6 +38,7 @@ pub mod blockbuffer;
 pub mod objective;
 pub mod simd;
 pub mod sqp;
+pub mod eigenval;
 pub mod util;
 pub mod vcf;
 pub mod algebra;

@@ -1,4 +1,4 @@
-use crate::log::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, D1_32, LOG_2_HI, LOG_2_LO};
+use super::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, D1_32, LOG_2_HI, LOG_2_LO, Log};
 
 // Why not just use the ln() function from libm? In the objective calculation, using
 // that requires a function call, which requires storing registers on the stack.
@@ -7,8 +7,14 @@ use crate::log::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, D1_32, LOG_2_HI, LOG_2_LO};
 
 // Adapted from https://github.com/burrbull/sleef-rs/blob/master/src/f64/u10.rs
 
-#[inline]
-pub fn log_scalar(mut d: f64) -> f64 {
+impl Log for f64 {
+    #[inline]
+    fn log(self) -> Self {
+        log_scalar(self)
+    }
+}
+
+fn log_scalar(mut d: f64) -> f64 {
     // Normalize d if subnormal
     let o = d < f64::MIN_POSITIVE;
     if o {

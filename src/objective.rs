@@ -1,5 +1,5 @@
 use crate::{
-    algebra::{Vector, dot, sum}, blockbuffer::BlockBuffer, log::{avx512::log_avx512, scalar::log_scalar}, util::Vector9,
+    algebra::{Vector, dot, sum}, blockbuffer::BlockBuffer, log::Log, util::Vector9,
 };
 use core::arch::x86_64::*;
 
@@ -32,7 +32,7 @@ fn compute_obj_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64) -> f64 {
     let mut s = 0.0;
     for row in p_mat.iter() {
         let prod = dot(row, x);
-        let t = log_scalar(prod + eps);
+        let t = Log::log(prod + eps);
         // let t = (prod + eps).ln();
         // TODO kahan?
         s += t;
@@ -113,7 +113,8 @@ pub fn compute_obj_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], eps: f64
         let mut d = _mm512_add_pd(d0, d1);
         d = _mm512_add_pd(d, d2);
 
-        let l = log_avx512(d);
+        // let l = log_avx512(d);
+        let l = d.log();
 
         // TODO kahan
         zs = _mm512_add_pd(l, zs);
@@ -165,8 +166,8 @@ pub fn compute_obj_2avx512(
             // dy = _mm512_fmadd_pd(zy[col], c, dy);
         }
 
-        let lx = log_avx512(dx);
-        let ly = log_avx512(dy);
+        let lx = dx.log();
+        let ly = dy.log();
 
         // TODO kahan
         zxs = _mm512_add_pd(lx, zxs);
