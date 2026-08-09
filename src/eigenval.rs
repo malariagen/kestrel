@@ -1,7 +1,9 @@
 use crate::algebra::{Matrix, Vector};
 
 // See Numerical Recipes, Chapter 11
-pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Vector<N> {
+// This should be used for N <= 10
+// For larger N use QR
+pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Option<Vector<N>> {
     let mut d = [0.0; N];
 
     // A 2x2 matrix can be diagonalized in a single iteration
@@ -20,7 +22,7 @@ pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Vector<
             d[1] = t.mul_add(b, c);
         }
 
-        return d;
+        return Some(d);
     }
 
     let mut a = *m;
@@ -98,17 +100,9 @@ pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Vector<
         }
 
         if !did_a_sweep {
-            break;
+            return Some(d);
         }
     }
 
-    d
-}
-
-pub fn test() -> Vector<4> {
-    eigenvals_jacobi(&[[10.0; 4]; 4], 50)
-}
-
-pub fn tes2t() -> Vector<2> {
-    eigenvals_jacobi(&[[10.0; 2]; 2], 50)
+    None
 }

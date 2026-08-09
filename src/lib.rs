@@ -33,6 +33,7 @@ pub mod gradient;
 pub mod hessian;
 pub mod iis;
 pub mod jacquard;
+pub mod hypot;
 pub mod log;
 pub mod blockbuffer;
 pub mod objective;

@@ -1,8 +1,7 @@
 use kestrel::{
-    blockbuffer::BlockBuffer,
-    util::{Matrix9xN, MatrixNx9, Vector9},
+    blockbuffer::BlockBuffer, eigenval::eigenvals_jacobi, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
-use nalgebra::DVector;
+use nalgebra::{DVector, Matrix2, Matrix4};
 use ndarray::Axis;
 use rand::{Rng, RngExt};
 
@@ -37,7 +36,7 @@ fn generate_mat_t() -> Matrix9xN<f64> {
     mat
 }
 
-pub fn generate_random_block() -> BlockBuffer<f64> {
+pub fn generate_random_block() -> BlockBuffer<f64, 8, 9> {
     let mut rng = rand::rng();
 
     let mut v = vec![[0.0; 9]; N];
@@ -48,7 +47,25 @@ pub fn generate_random_block() -> BlockBuffer<f64> {
         // rng.fill(&mut v[i]);
     }
 
-    BlockBuffer::from_rows::<8, 9>(v.iter().copied(), v.len())
+    let mut buf = BlockBuffer::new(v.len());
+
+    buf.fill_from_rows(v.iter().copied());
+
+    buf
+}
+
+pub fn generate_random_mat<const M: usize>() -> [[f64; M]; M] {
+    let mut rng = rand::rng();
+
+    let mut v = [[0.0; M]; M];
+    for i in 0..M {
+        for j in 0..M {
+            v[i][j] = rng.random();
+        }
+        // rng.fill(&mut v[i]);
+    }
+
+    v
 }
 
 // YOU MUST RETURN FROM THESE FUNCTIONS OR THE COMPILER WILL OPTIMIZE THEM OUT
@@ -70,206 +87,226 @@ pub fn generate_random_block() -> BlockBuffer<f64> {
 //         });
 // }
 
-#[divan::bench]
-fn bench_three_passes(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe {
-                kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes3(blocks, r, &x, eps)
-            }
-        });
-}
-
-#[divan::bench]
-fn bench_g_h_fused(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || unsafe { kestrel::fused::compute_g_h_fused_avx512(block, &x, eps) });
-}
-
-#[divan::bench]
-fn bench_three_passes_kahan(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe {
-                kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes_kahan(
-                    blocks, r, &x, eps,
-                )
-            }
-        });
-}
-
-#[divan::bench]
-fn bench_three_passes_kahan_refactor(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe {
-                kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes2_kahan_refactor(
-                    blocks, r, &x, eps,
-                )
-            }
-        });
-}
-
-#[divan::bench]
-fn bench_three_passes_d(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe {
-                kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes3_d(blocks, r, &x, eps)
-            }
-        });
-}
-
-#[divan::bench]
-fn bench_two_passes(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe {
-                kestrel::hessian::compute_pt_d2_p_avx512_tiled_two_passes3(blocks, r, &x, eps)
-            }
-        });
-}
-
-#[divan::bench]
-fn bench_two_passes_kahan(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe {
-                kestrel::hessian::compute_pt_d2_p_avx512_tiled_two_passes_kahan(blocks, r, &x, eps)
-            }
-        });
-}
-
-#[divan::bench]
-fn bench_havx_untiled(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
-
-    bencher
-        // .with_inputs(generate_mat_t)
-        .bench_local(move || {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe {
-                kestrel::hessian::compute_pt_d2_p_avx512_three_pass_untiled(blocks, r, &x, eps)
-            }
-        });
-}
-
-#[divan::bench]
-fn bench_h_openblas(bencher: divan::Bencher) {
-    let eps = 1e-8;
-    let x = [1.0 / 9.0; 9];
-
-    let d = DVector::from_element(N, 0.1);
-    let mut a_mat = MatrixNx9::zeros(N);
-
-    bencher
-        .with_inputs(generate_mat)
-        .bench_local_refs(move |mat| kestrel::sqp::compute_hessian(&mat, &d, &mut a_mat));
-}
-
 // #[divan::bench]
-// fn bench_h2(bencher: divan::Bencher) {
-
+// fn bench_three_passes(bencher: divan::Bencher) {
 //     let eps = 1e-8;
 
-//     let x = [1.0/9.0; 9];
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
 
 //     bencher
-//     .with_inputs(generate_mat_t)
-//     .bench_local_refs(move |mat| {
-//         let (p, _) = mat.as_slice().as_chunks::<9>();
-//         kestrel::hessian::compute_pt_d2_p_scalar2(&p, &x, eps);
-//     });
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe {
+//                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes3(blocks, r, &x, eps)
+//             }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_g_h_fused(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || unsafe { kestrel::fused::compute_g_h_fused_avx512(&block, &x, eps) });
+// }
+
+// #[divan::bench]
+// fn bench_three_passes_kahan(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe {
+//                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes_kahan(
+//                     blocks, r, &x, eps,
+//                 )
+//             }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_three_passes_kahan_refactor(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe {
+//                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes2_kahan_refactor(
+//                     blocks, r, &x, eps,
+//                 )
+//             }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_three_passes_d(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe {
+//                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_three_passes3_d(blocks, r, &x, eps)
+//             }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_two_passes(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe {
+//                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_two_passes3(blocks, r, &x, eps)
+//             }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_two_passes_kahan(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe {
+//                 kestrel::hessian::compute_pt_d2_p_avx512_tiled_two_passes_kahan(blocks, r, &x, eps)
+//             }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_havx_untiled(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_mat_t)
+//         .bench_local(move || {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe {
+//                 kestrel::hessian::compute_pt_d2_p_avx512_three_pass_untiled(blocks, r, &x, eps)
+//             }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_h_openblas(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+//     let x = [1.0 / 9.0; 9];
+
+//     let d = DVector::from_element(N, 0.1);
+//     let mut a_mat = MatrixNx9::zeros(N);
+
+//     bencher
+//         .with_inputs(generate_mat)
+//         .bench_local_refs(move |mat| kestrel::sqp::compute_hessian(&mat, &d, &mut a_mat));
+// }
+
+// // #[divan::bench]
+// // fn bench_h2(bencher: divan::Bencher) {
+
+// //     let eps = 1e-8;
+
+// //     let x = [1.0/9.0; 9];
+
+// //     bencher
+// //     .with_inputs(generate_mat_t)
+// //     .bench_local_refs(move |mat| {
+// //         let (p, _) = mat.as_slice().as_chunks::<9>();
+// //         kestrel::hessian::compute_pt_d2_p_scalar2(&p, &x, eps);
+// //     });
+// // }
+
+// #[divan::bench]
+// fn bench_scalar_column(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let mat = generate_mat();
+
+//     bencher
+//         // .with_inputs(generate_mat())
+//         .bench_local(|| {
+//             let p = mat.as_slice();
+//             unsafe { kestrel::simd::compute_pt_d_scalar_column(N, &p, &x, eps) }
+//         });
+// }
+
+// #[divan::bench]
+// fn bench_blocked(bencher: divan::Bencher) {
+//     let eps = 1e-8;
+
+//     let x = [1.0 / 9.0; 9];
+
+//     let block = generate_random_block();
+
+//     bencher
+//         // .with_inputs(generate_random_block())
+//         .bench_local(|| {
+//             let (blocks, r) = block.as_blocks();
+//             unsafe { kestrel::gradient::compute_pt_d_avx512_blocked(blocks, r, &x, eps) }
+//         });
 // }
 
 #[divan::bench]
-fn bench_scalar_column(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let mat = generate_mat();
+fn bench_eigen_nalgebra(bencher: divan::Bencher) {
 
     bencher
-        // .with_inputs(generate_mat())
-        .bench_local(|| {
-            let p = mat.as_slice();
-            unsafe { kestrel::simd::compute_pt_d_scalar_column(N, &p, &x, eps) }
+        .with_inputs(|| Matrix2::<f64>::new_random())
+        .bench_local_refs(move |mat| {
+            mat.symmetric_eigenvalues()
         });
 }
 
 #[divan::bench]
-fn bench_blocked(bencher: divan::Bencher) {
-    let eps = 1e-8;
-
-    let x = [1.0 / 9.0; 9];
-
-    let block = generate_random_block();
+fn bench_eigen_me(bencher: divan::Bencher) {
 
     bencher
-        // .with_inputs(generate_random_block())
-        .bench_local(|| {
-            let (blocks, r) = block.as_blocks::<8, 9>();
-            unsafe { kestrel::gradient::compute_pt_d_avx512_blocked(blocks, r, &x, eps) }
+        .with_inputs(|| generate_random_mat::<2>())
+        .bench_local_refs(move |mat| {
+            eigenvals_jacobi(mat, 50)
         });
 }
 
@@ -289,18 +326,18 @@ fn bench_blocked(bencher: divan::Bencher) {
 //         });
 // }
 
-#[divan::bench]
-fn bench_grad_d(bencher: divan::Bencher) {
-    let mut d = DVector::<f64>::zeros(N);
+// #[divan::bench]
+// fn bench_grad_d(bencher: divan::Bencher) {
+//     let mut d = DVector::<f64>::zeros(N);
 
-    let eps = 1e-8;
+//     let eps = 1e-8;
 
-    let x = Vector9::from_element(1.0 / 9.0);
+//     let x = Vector9::from_element(1.0 / 9.0);
 
-    bencher
-        .with_inputs(generate_mat)
-        .bench_local_refs(move |mat| kestrel::sqp::compute_grad_d(&mat, &x, &mut d, eps));
-}
+//     bencher
+//         .with_inputs(generate_mat)
+//         .bench_local_refs(move |mat| kestrel::sqp::compute_grad_d(&mat, &x, &mut d, eps));
+// }
 
 // #[divan::bench]
 // fn bench_grad(bencher: divan::Bencher) {
@@ -316,18 +353,19 @@ fn bench_grad_d(bencher: divan::Bencher) {
 //     });
 // }
 
-#[divan::bench]
-fn bench_grad_nalgebra(bencher: divan::Bencher) {
-    let mut d = DVector::<f64>::zeros(N);
+// #[divan::bench]
+// fn bench_grad_nalgebra(bencher: divan::Bencher) {
+//     let mut d = DVector::<f64>::zeros(N);
 
-    let eps = 1e-8;
+//     let eps = 1e-8;
 
-    let x = Vector9::from_element(1.0 / 9.0);
+//     let x = Vector9::from_element(1.0 / 9.0);
 
-    bencher
-        .with_inputs(generate_mat)
-        .bench_local_refs(move |mat| kestrel::sqp::compute_grad_d_nalgebra(&mat, &x, &mut d, eps));
-}
+//     bencher
+//         .with_inputs(generate_mat)
+//         .bench_local_refs(move |mat| kestrel::sqp::compute_grad_d_nalgebra(&mat, &x, &mut d, eps));
+// }
+
 
 // #[divan::bench]
 // fn bench_column(bencher: divan::Bencher) {

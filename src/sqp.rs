@@ -404,6 +404,10 @@ pub fn solve_sqp(
 
         let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, false, true, tune);
 
+        // This will always decrease the value of the objective function
+        // Doing it here means we could possibly do fewer backtracks
+        let y = l1_normalize(&y);
+
         let f = objective::compute_obj_avx(p_mat, &x, tune.epsilon);
 
         let (xnew, bls_iter) = backtracking_line_search(p_mat, &x, &y, f, &g, tune);
