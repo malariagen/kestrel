@@ -2,11 +2,12 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use itertools::Itertools;
-use ndarray::{Array2, Array3};
+use ndarray::{Array2, Array3, Array4};
 use noodles::vcf::variant::record::info::field::Value as InfoValue;
 use noodles::vcf::variant::record::info::field::value::Array as InfoArray;
 use noodles::vcf::variant::record::samples::Series;
 use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
+use noodles::vcf::variant::record::samples::series::value::Array as SeriesArray;
 
 pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
@@ -105,4 +106,89 @@ pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
     }
 
     Ok((gt, af))
+}
+
+pub fn parse_vcf_gl(file: &Path) -> Result<Array4<f64>> {
+    let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
+    let header = reader.read_header()?;
+
+    let num_samples = header.sample_names().len();
+
+    let mut skipped = 0;
+
+    let mut likelihoods = Vec::<Vec<[f64; 10]>>::new(); // V x S x 10
+
+    'variant: for result in reader.records() {
+        let record = result?;
+
+        let samples = record.samples();
+        let gl_series = samples.select("GL").context("No GL data found")?;
+
+        let mut variant_gls = Vec::with_capacity(num_samples);
+
+        // TODO remove unknown data, and deal with MNPs and in/dels
+
+        for result in gl_series.iter(&header) {
+            let value = result?.context("No genotype likelihood for sample found")?;
+            if let SeriesValue::Array(gl_array) = value {
+                if let SeriesArray::Float(gl_float) = gl_array {
+                    if let Some(option_gl) = gl_float.iter().collect_array::<10>() {
+                        let mut gl = [0.0; 10];
+                        for (out, item) in gl.iter_mut().zip(option_gl) {
+                            // let val = item?.context("Error reading genotype likelihood");
+                            let val = item.unwrap();
+                            // vcfgl produced 0:.,.,.,.,.,.,.,.,.,. at a site for one sample
+                            // so just skip that site
+                            match val {
+                                Some(v) => *out = v.into(),
+                                None => {
+                                    skipped += 1;
+                                    continue 'variant;
+                                }
+                            }
+                        }
+                        // println!("{} {:?}", record.variant_start().unwrap().unwrap(), gl);
+                        // // TODO error handling
+                        // let gl: [f64; 10] = option_gl.map(|item| item.transpose());
+                        variant_gls.push(gl)
+                    } else {
+                        // Not 4-allelic
+                        continue 'variant;
+                    }
+                } else {
+                    bail!("Array {:?} does not contain floats", gl_array);
+                }
+            } else {
+                bail!("Value {:?} is not an array", value);
+            }
+        }
+
+        likelihoods.push(variant_gls);
+    }
+
+    let num_variants = likelihoods.len();
+
+    println!("Parsed {} variants, skipped {}", num_variants, skipped);
+
+    let mut gls = Array4::<f64>::zeros((num_variants, num_samples, 4, 4));
+    for v in 0..num_variants {
+        for s in 0..num_samples {
+            let sample_gls = likelihoods[v][s];
+            // Normalize by the maximum GL to avoid possible underflow
+            // (This matches what PL does)
+            let max_gl = sample_gls.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+            for i in 0..4 {
+                for j in i..4 {
+                    // The index of (i, j) where i <= j (see the VCF spec)
+                    let index = j*(j+1)/2 + i;
+                    let gl = sample_gls[index];
+                    let prob = 10.0f64.powf(gl - max_gl);
+                    gls[[v, s, i, j]] = prob;
+                    gls[[v, s, j, i]] = prob;
+                }
+            }
+        }
+    }
+
+    Ok(gls)
 }

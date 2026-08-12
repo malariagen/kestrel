@@ -12,6 +12,11 @@ fn main() -> Result<()> {
 
     // let file = Path::new("../relatedness/sims/human/first_cousin_n50.vcf.gz");
     let vcf_file = Path::new(&args[1]);
+
+    let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
+
+    return Ok(());
+
     let (gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
 
     // let gt = concatenate(Axis(0), &[gt.view(), gt.view(), gt.view()]).unwrap();
