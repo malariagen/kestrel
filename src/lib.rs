@@ -25,6 +25,7 @@ mod kestrel {
 extern crate openblas_src;
 
 //pub mod genotypes;
+pub mod allele;
 pub mod buffer;
 pub mod cholesky;
 pub mod cls;

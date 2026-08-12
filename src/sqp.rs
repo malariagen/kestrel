@@ -355,11 +355,16 @@ fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
     h
 }
 
-pub fn solve_sqp(
-    p_mat: &BlockBuffer<f64, 8, 9>,
-    x0: &Vector<9>,
+pub fn solve_sqp<const N: usize, Obj, GradHess>(
+    obj: Obj,
+    grad_hess: GradHess,
+    x0: &Vector<N>,
     tune: &Tuneables,
-) -> (Vector<9>, u64) {
+) -> (Vector<N>, u64)
+where Obj: Fn(&Vector<N>, f64) -> f64,
+    GradHess: Fn(&Vector<N>, f64) -> (Vector<N>, Matrix<N>)
+{
+
     let mut x = *x0;
 
     for iter in 0..tune.sqp_max_iter {
@@ -375,7 +380,7 @@ pub fn solve_sqp(
 
         // let (f, g) = compute_obj_grad_d(p_mat, p_mat_t, &x, d, tune.epsilon);
         // let g = compute_grad_d(p_mat, &x, d, tune.epsilon);
-        let (g, h) = fused::compute_grad_hess(p_mat, &x, tune.epsilon);
+        let (g, h) = grad_hess(&x, tune.epsilon);
 
         // For a convex function, a point x is optimal iff nab
         // For optimization subject to x >= 0, we have (Bertsekas Nonlinear Programming p. 238):
@@ -408,9 +413,7 @@ pub fn solve_sqp(
         // Doing it here means we could possibly do fewer backtracks
         let y = l1_normalize(&y);
 
-        let f = objective::compute_obj_avx(p_mat, &x, tune.epsilon);
-
-        let (xnew, bls_iter) = backtracking_line_search(p_mat, &x, &y, f, &g, tune);
+        let (xnew, bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
         x = xnew;
     }
@@ -425,20 +428,20 @@ pub fn solve_sqp(
 // Can do loop-unrolling for small matrices to calculate Cholesky of submatrices.
 
 // Minimize 1/2 y^T Q y + c^T y, subject to y >= 0 and sum(y) = 1
-pub fn solve_qp_active_set(
-    q_mat: &Matrix<9>,
-    c: &Vector<9>,
-    y0: &Vector<9>,
+pub fn solve_qp_active_set<const N: usize>(
+    q_mat: &Matrix<N>,
+    c: &Vector<N>,
+    y0: &Vector<N>,
     sum_to_one: bool,
     modify: bool,
     tune: &Tuneables,
-) -> (Vector<9>, u64) {
+) -> (Vector<N>, u64) {
 
     let mut y = y0.clone();
 
-    let mut working_set = [false; 9];
+    let mut working_set = [false; N];
 
-    for row in 0..9 {
+    for row in 0..N {
         if y[row] == 0.0 {
             working_set[row] = true;
         }
@@ -451,9 +454,9 @@ pub fn solve_qp_active_set(
             y = l1_normalize(&y);
         }
 
-        let mut free_indices = [0; 9];
+        let mut free_indices = [0; N];
         let mut free_count = 0;
-        for i in 0..9 {
+        for i in 0..N {
             if !working_set[i] {
                 free_indices[free_count] = i;
                 free_count += 1;
@@ -461,11 +464,11 @@ pub fn solve_qp_active_set(
         }
 
         // Removes some bounds checks
-        assert!(free_count <= 9);
+        assert!(free_count <= N);
 
-        let mut y_free = [0.0; 9];
-        let mut c_free = [0.0; 9];
-        let mut q_mat_free = [[0.0; 9]; 9];
+        let mut y_free = [0.0; N];
+        let mut c_free = [0.0; N];
+        let mut q_mat_free = [[0.0; N]; N];
         for i in 0..free_count {
             let free_i = free_indices[i];
             y_free[i] = y[free_i];
@@ -479,8 +482,8 @@ pub fn solve_qp_active_set(
         // g_f = c_f + Q_f y_f
         let mut g_free = add_n(free_count, &c_free, &mul_n(free_count, &q_mat_free, &y_free));
 
-        let mut sub_l = [[0.0; 9]; 9];
-        let mut sub_d = [0.0; 9];
+        let mut sub_l = [[0.0; N]; N];
+        let mut sub_d = [0.0; N];
 
         if modify {
             cholesky::modify_gmw_n(free_count, &q_mat_free, &mut sub_l, &mut sub_d);
@@ -492,7 +495,7 @@ pub fn solve_qp_active_set(
         cholesky::solve_ldl_mut_n(free_count, &sub_l, &sub_d, &mut g_free);
 
         let lambda = if sum_to_one {
-            let mut ones_free = [0.0; 9];
+            let mut ones_free = [0.0; N];
             for i in 0..free_count {
                 ones_free[i] = 1.0;
             }
@@ -518,7 +521,7 @@ pub fn solve_qp_active_set(
             // q is roughly zero, so check KKT to see if we are at an optimum solution
 
             // The free set is full, aka the working set is empty
-            if free_count == 9 {
+            if free_count == N {
                 return (y, iter);
             }
 
@@ -526,7 +529,7 @@ pub fn solve_qp_active_set(
             // g = c + Qy
             let g = add(c, &mul(&q_mat, &y));
 
-            let smallest_multiplier_index = (0..9)
+            let smallest_multiplier_index = (0..N)
                 .filter(|row| working_set[*row])
                 .min_by(|i, j| g[*i].partial_cmp(&g[*j]).expect("Found a NaN"))
                 .expect("Working set is full!");
@@ -539,9 +542,9 @@ pub fn solve_qp_active_set(
 
             working_set[smallest_multiplier_index] = false;
         } else {
-            let mut p = [0.0; 9];
+            let mut p = [0.0; N];
             let mut free_count = 0;
-            for row in 0..9 {
+            for row in 0..N {
                 if !working_set[row] {
                     p[row] = g_free[free_count];
                     free_count += 1;
@@ -574,10 +577,10 @@ pub fn solve_qp_active_set(
     (y, iter)
 }
 
-fn feasible_step_size(y: &Vector<9>, q: &Vector<9>) -> (f64, Option<usize>) {
+fn feasible_step_size<const N: usize>(y: &Vector<N>, q: &Vector<N>) -> (f64, Option<usize>) {
     let mut alpha = 1.0;
     let mut blocking_index = None;
-    for i in 0..9 {
+    for i in 0..N {
         if q[i] < 0.0 {
             // We want to solve y[i] + a*q[i] = 0
             let a = -y[i] / q[i];
@@ -592,14 +595,17 @@ fn feasible_step_size(y: &Vector<9>, q: &Vector<9>) -> (f64, Option<usize>) {
     (alpha, blocking_index)
 }
 
-fn backtracking_line_search(
-    p_mat: &BlockBuffer<f64, 8, 9>,
-    x: &Vector<9>,
-    y: &Vector<9>,
-    f: f64,
-    g: &Vector<9>,
+fn backtracking_line_search<const N: usize, Obj>(
+    obj: Obj,
+    x: &Vector<N>,
+    y: &Vector<N>,
+    g: &Vector<N>,
     tune: &Tuneables,
-) -> (Vector<9>, u64) {
+) -> (Vector<N>, u64)
+where Obj: Fn(&Vector<N>, f64) -> f64
+{
+    let f = obj(&x, tune.epsilon);
+
     let p = sub(y, x);
     let t = tune.bls_sufficient_decrease * dot(g, &p);
 
@@ -609,7 +615,7 @@ fn backtracking_line_search(
         // Numerically this is always feasible (>= 0) for floats
         let xnew = add(x, &scale_mul(alpha, &p));
         // TODO this can be made more efficient a la N&W
-        let fnew = objective::compute_obj_avx(p_mat, &xnew, tune.epsilon);
+        let fnew = obj(&xnew, tune.epsilon);
         if fnew <= f + alpha * t {
             return (xnew, iter);
         }

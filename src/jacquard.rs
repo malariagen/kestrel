@@ -13,7 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::dot, blockbuffer::BlockBuffer, cls, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9},
+    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, fused, objective, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9},
 };
 
 pub fn calculate_relatedness_coefficients(
@@ -221,8 +221,12 @@ fn calculate_coefficients_inner(
                     &mut buffers.p_mat,
                 );
 
+                let obj = |x: &Vector<9>, eps| objective::compute_obj_avx(&buffers.p_mat, &x, eps);
+                let grad_hess = |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
+
                 let (delta, _) = sqp::solve_sqp(
-                    &buffers.p_mat,
+                    obj,
+                    grad_hess,
                     &delta,
                     &Tuneables::new(),
                 );

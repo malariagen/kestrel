@@ -10,12 +10,10 @@ use ndarray::{Axis, concatenate};
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
-    // let file = Path::new("../relatedness/sims/human/first_cousin_n50.vcf.gz");
     let vcf_file = Path::new(&args[1]);
 
-    let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
-
-    return Ok(());
+    // let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
+    // return Ok(());
 
     let (gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
 
