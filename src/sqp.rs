@@ -31,8 +31,9 @@ impl Tuneables {
             bls_max_iter: 10,
             bls_sufficient_decrease: 1e-4,
             bls_step_size_reduce: 0.9,
-            // epsilon: 1e-8,
-            epsilon: 0.0,
+            // epsilon: f64::EPSILON,
+            // epsilon: 0.0,
+            epsilon: 1e-8,
             sqp_zero_threshold: 1e-8,
         }
     }
@@ -419,7 +420,7 @@ where Obj: Fn(&Vector<N>, f64) -> f64,
         // c = g - H x
         let c = sub(&g, &mul(&h, &x));
 
-        let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, false, true, tune);
+        let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, true, true, tune);
         println!("{iter} {x:?} {y:?} {g:?} {qp_iter}");
 
         // This will always decrease the value of the objective function
@@ -446,11 +447,17 @@ fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> 
     //   If x == 0 then the partial derivative is >= 0
     //   If x > 0.0, then the partial derivative is equal to zero.
 
+    // This is the Lagrange multiplier
+    let lambda = dot(x, g);
+
+    // What we actually have is if x == 0 then >= lambda
+    // And if x > 0.0 then x == lambda
+
     x.iter().zip(g.iter()).all(|(&xi, &gi)| {
         if xi == 0.0 {
-            gi >= -tol
+            gi >= lambda - tol
         } else {
-            gi.abs() <= tol
+            (gi - lambda).abs() <= tol
         }
     })
 }
@@ -570,10 +577,12 @@ pub fn solve_qp_active_set<const N: usize>(
 
             let smallest_muliplier = g[smallest_multiplier_index] - lambda;
 
+            println!("m {m} smallest mult {smallest_muliplier}");
             if smallest_muliplier >= -tune.qp_conv_tol {
                 return (y, iter);
             }
 
+            println!("Removing {smallest_multiplier_index} from working set");
             working_set[smallest_multiplier_index] = false;
         } else {
             let mut p = [0.0; N];
