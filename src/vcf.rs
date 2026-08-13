@@ -9,6 +9,8 @@ use noodles::vcf::variant::record::samples::Series;
 use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
 use noodles::vcf::variant::record::samples::series::value::Array as SeriesArray;
 
+use crate::algebra::Matrix;
+
 pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
@@ -108,7 +110,8 @@ pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
     Ok((gt, af))
 }
 
-pub fn parse_vcf_gl(file: &Path) -> Result<Array4<f64>> {
+// pub fn parse_vcf_gl(file: &Path) -> Result<Array4<f64>> {
+pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
 
@@ -170,21 +173,57 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Array4<f64>> {
 
     println!("Parsed {} variants, skipped {}", num_variants, skipped);
 
-    let mut gls = Array4::<f64>::zeros((num_variants, num_samples, 4, 4));
+    // let mut gls = Array4::<f64>::zeros((num_variants, num_samples, 4, 4));
+    // for v in 0..num_variants {
+    //     for s in 0..num_samples {
+    //         let sample_gls = likelihoods[v][s];
+    //         // Normalize by the maximum GL to avoid possible underflow
+    //         // (This matches what PL does)
+    //         let max_gl = sample_gls.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+    //         for i in 0..4 {
+    //             for j in i..4 {
+    //                 // The index of (i, j) where i <= j (see the VCF spec)
+    //                 let index = j*(j+1)/2 + i;
+    //                 let gl = sample_gls[index];
+    //                 let prob = 10.0f64.powf(gl - max_gl);
+    //                 gls[[v, s, i, j]] = prob;
+    //                 gls[[v, s, j, i]] = prob;
+    //             }
+    //         }
+    //     }
+    // }
+
+    let mut gls = Vec::with_capacity(num_variants);
     for v in 0..num_variants {
+        let mut a = Vec::with_capacity(num_samples);
         for s in 0..num_samples {
             let sample_gls = likelihoods[v][s];
             // Normalize by the maximum GL to avoid possible underflow
             // (This matches what PL does)
             let max_gl = sample_gls.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+            let mut m = [[0.0; 4]; 4];
             for i in 0..4 {
                 for j in i..4 {
                     // The index of (i, j) where i <= j (see the VCF spec)
                     let index = j*(j+1)/2 + i;
                     let gl = sample_gls[index];
                     let prob = 10.0f64.powf(gl - max_gl);
-                    gls[[v, s, i, j]] = prob;
-                    gls[[v, s, j, i]] = prob;
+                    m[i][j] = prob;
+                    m[j][i] = prob;
+                }
+            }
+            a.push(m);
+        }
+        gls.push(a);
+    }
+
+    for v in gls.iter() {
+        for mat in v.iter() {
+            for i in 0..4 {
+                for j in 0..4 {
+                    if mat[i][j] * mat[i][j] < mat[i][i] * mat[j][j] {
+                        println!("Check did not work for {:?}", mat);
+                    }
                 }
             }
         }

@@ -1,7 +1,7 @@
 use nalgebra::DVector;
 
 use crate::{
-    algebra::{Matrix, Vector, add, add_n, dot, l1_normalize, mul, mul_n, scale_mul, sub, sum_n}, blockbuffer::BlockBuffer, cholesky, fused, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    algebra::{Matrix, Vector, add, add_n, dot, l1_normalize, mul, mul_n, scale_mul, sub, sum_n}, blockbuffer::BlockBuffer, cholesky, eigenval::eigenvals_jacobi, fused, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
@@ -31,7 +31,8 @@ impl Tuneables {
             bls_max_iter: 10,
             bls_sufficient_decrease: 1e-4,
             bls_step_size_reduce: 0.9,
-            epsilon: 1e-8,
+            // epsilon: 1e-8,
+            epsilon: 0.0,
             sqp_zero_threshold: 1e-8,
         }
     }
@@ -364,17 +365,16 @@ pub fn solve_sqp<const N: usize, Obj, GradHess>(
 where Obj: Fn(&Vector<N>, f64) -> f64,
     GradHess: Fn(&Vector<N>, f64) -> (Vector<N>, Matrix<N>)
 {
-
     let mut x = *x0;
 
     for iter in 0..tune.sqp_max_iter {
         // We manually truncate some values to zero, which will put them in the active set
         // If we guessed wrong this will be corrected later
-        x.iter_mut().for_each(|val| {
-            if *val <= tune.sqp_zero_threshold {
-                *val = 0.0;
-            }
-        });
+        // x.iter_mut().for_each(|val| {
+        //     if *val <= tune.sqp_zero_threshold {
+        //         *val = 0.0;
+        //     }
+        // });
 
         x = l1_normalize(&x);
 
@@ -382,24 +382,36 @@ where Obj: Fn(&Vector<N>, f64) -> f64,
         // let g = compute_grad_d(p_mat, &x, d, tune.epsilon);
         let (g, h) = grad_hess(&x, tune.epsilon);
 
-        // For a convex function, a point x is optimal iff nab
-        // For optimization subject to x >= 0, we have (Bertsekas Nonlinear Programming p. 238):
-        // At the optimal point, all partial derivatives are >= 0, and:
-        // If x == 0 then the partial derivative is >= 0
-        // And if x > 0.0, then the partial derivative is equal to zero.
-        //  However, because of the special structure of the objective function
-        //  we only need to check if it's >= -conv tol in this case (I think)
+        // let eigs = eigenvals_jacobi(&h, 50).unwrap();
+        // for e in eigs.iter() {
+        //     // let tol = -1e-5;
+        //     let tol = 0.0;
+        //     if *e < tol {
+        //         println!("Not PSD: {:?} {}", x, e);
+        //     }
+        // }
 
-        let gmin = g
-            .iter()
-            .enumerate()
-            .filter(|(row, _)| x[*row] > 0.0)
-            .map(|(_, gx)| *gx)
-            .min_by(|i, j| i.total_cmp(j))
-            .expect("Working set is full!");
+        // For an x inside the unit simplex, we always have x^T g = 0.
+        // For a vertex like [1, 0, 0, 0], this means that g_1 = 0.
 
-        if gmin >= -tune.sqp_conv_tol {
-            return (x, iter);
+        // TODO check this
+        // and also check when adding constraints that we have at least one to add
+        // or ensure that an error gets thrown or whatever
+
+        // let gmin = g
+        //     .iter()
+        //     .enumerate()
+        //     .filter(|(row, _)| x[*row] > 0.0)
+        //     .map(|(_, gx)| *gx)
+        //     .min_by(|i, j| i.total_cmp(j))
+        //     .expect("Working set is full!");
+
+        // if gmin >= -tune.sqp_conv_tol {
+        //     return (x, iter);
+        // }
+
+        if check_convergence(&x, &g, tune.sqp_conv_tol) {
+            return (x, iter)
         }
 
         // let h = hessian::compute_hess(p_mat_t, &x, tune.epsilon);
@@ -408,6 +420,7 @@ where Obj: Fn(&Vector<N>, f64) -> f64,
         let c = sub(&g, &mul(&h, &x));
 
         let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, false, true, tune);
+        println!("{iter} {x:?} {y:?} {g:?} {qp_iter}");
 
         // This will always decrease the value of the objective function
         // Doing it here means we could possibly do fewer backtracks
@@ -416,9 +429,30 @@ where Obj: Fn(&Vector<N>, f64) -> f64,
         let (xnew, bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
         x = xnew;
+
+        // println!("{iter} {x:?} {g:?} {qp_iter} {bls_iter}");
     }
 
     (x, tune.sqp_max_iter)
+}
+
+// TODO: x^T L_i x could only be zero for positive x if some entries of L_i are zero
+// So check that this will never happen when reading the data!
+// Also check this for Jacquard coefficients
+// TODO also print a warning when the algorithm doesn't converge within the iterations
+
+fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> bool {
+    // For optimization subject to x >= 0, we have (Bertsekas Nonlinear Programming p. 238):
+    //   If x == 0 then the partial derivative is >= 0
+    //   If x > 0.0, then the partial derivative is equal to zero.
+
+    x.iter().zip(g.iter()).all(|(&xi, &gi)| {
+        if xi == 0.0 {
+            gi >= -tol
+        } else {
+            gi.abs() <= tol
+        }
+    })
 }
 
 // Hmm, they use a pseudo-inverse for the constrained least squares problem. Perhaps we could too?
@@ -531,7 +565,7 @@ pub fn solve_qp_active_set<const N: usize>(
 
             let smallest_multiplier_index = (0..N)
                 .filter(|row| working_set[*row])
-                .min_by(|i, j| g[*i].partial_cmp(&g[*j]).expect("Found a NaN"))
+                .min_by(|i, j| g[*i].total_cmp(&g[*j]))
                 .expect("Working set is full!");
 
             let smallest_muliplier = g[smallest_multiplier_index] - lambda;
@@ -550,6 +584,7 @@ pub fn solve_qp_active_set<const N: usize>(
                     free_count += 1;
                 }
             }
+            println!("QP {iter} {p:?}");
             // In theory we should use y[free_set] and q[free_set] to calculate this.
             // However, we know that q[working_set] == 0.0, so this will be equivalent
             // as long as there is at least one element in the free set. The current
@@ -561,6 +596,7 @@ pub fn solve_qp_active_set<const N: usize>(
             y = std::array::from_fn(|i| (y[i] + alpha * p[i]).max(0.0));
 
             // TODO have a thing where this only adds to the blocking set if two or more non-zero
+            // But I think our check above will catch this
 
             if let Some(index) = blocking_index {
                 // print("Adding", blocking_index, "to working set")

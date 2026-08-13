@@ -12,8 +12,9 @@ fn main() -> Result<()> {
 
     let vcf_file = Path::new(&args[1]);
 
-    // let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
-    // return Ok(());
+    let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
+    kestrel::allele::calculate_allele_probabilities(&gl);
+    return Ok(());
 
     let (gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
 
