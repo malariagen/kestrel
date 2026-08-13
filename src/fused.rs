@@ -17,7 +17,8 @@ pub fn compute_grad_hess(
 
     let n = p_mat.num_rows() as f64;
 
-    let grad: Vector<9> = std::array::from_fn(|i| 1.0 - g[i] / n);
+    // let grad: Vector<9> = std::array::from_fn(|i| 1.0 - g[i] / n);
+    let grad: Vector<9> = std::array::from_fn(|i| - g[i] / n);
 
     scale_div_mut(&mut h, n);
 

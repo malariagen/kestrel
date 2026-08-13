@@ -32,7 +32,6 @@ impl Tuneables {
             bls_sufficient_decrease: 1e-4,
             bls_step_size_reduce: 0.9,
             // epsilon: f64::EPSILON,
-            // epsilon: 0.0,
             epsilon: 1e-8,
             sqp_zero_threshold: 1e-8,
         }
@@ -421,13 +420,11 @@ where Obj: Fn(&Vector<N>, f64) -> f64,
         let c = sub(&g, &mul(&h, &x));
 
         let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, true, true, tune);
-        println!("{iter} {x:?} {y:?} {g:?} {qp_iter}");
-
-        // This will always decrease the value of the objective function
-        // Doing it here means we could possibly do fewer backtracks
-        let y = l1_normalize(&y);
 
         let (xnew, bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
+
+        // println!("{iter} {x:?} {y:?} {g:?} {qp_iter} {bls_iter}");
+        // println!("{iter} {x:?} {g:?} {qp_iter} {bls_iter}");
 
         x = xnew;
 
@@ -577,12 +574,12 @@ pub fn solve_qp_active_set<const N: usize>(
 
             let smallest_muliplier = g[smallest_multiplier_index] - lambda;
 
-            println!("m {m} smallest mult {smallest_muliplier}");
+            // println!("m {m} smallest mult {smallest_muliplier}");
             if smallest_muliplier >= -tune.qp_conv_tol {
                 return (y, iter);
             }
 
-            println!("Removing {smallest_multiplier_index} from working set");
+            // println!("Removing {smallest_multiplier_index} from working set");
             working_set[smallest_multiplier_index] = false;
         } else {
             let mut p = [0.0; N];
@@ -593,7 +590,7 @@ pub fn solve_qp_active_set<const N: usize>(
                     free_count += 1;
                 }
             }
-            println!("QP {iter} {p:?}");
+            // println!("QP {iter} {p:?}");
             // In theory we should use y[free_set] and q[free_set] to calculate this.
             // However, we know that q[working_set] == 0.0, so this will be equivalent
             // as long as there is at least one element in the free set. The current
