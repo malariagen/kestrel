@@ -6,8 +6,8 @@ use ndarray::{Array2, Array3, Array4};
 use noodles::vcf::variant::record::info::field::Value as InfoValue;
 use noodles::vcf::variant::record::info::field::value::Array as InfoArray;
 use noodles::vcf::variant::record::samples::Series;
-use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
 use noodles::vcf::variant::record::samples::series::value::Array as SeriesArray;
+use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
 
 use crate::algebra::Matrix;
 
@@ -205,7 +205,7 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
             for i in 0..4 {
                 for j in i..4 {
                     // The index of (i, j) where i <= j (see the VCF spec)
-                    let index = j*(j+1)/2 + i;
+                    let index = j * (j + 1) / 2 + i;
                     let gl = sample_gls[index];
                     let prob = 10.0f64.powf(gl - max_gl);
                     m[i][j] = prob;

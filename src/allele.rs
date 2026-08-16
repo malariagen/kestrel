@@ -1,24 +1,18 @@
 use ndarray::{Array2, Array4};
 
-use crate::{algebra::{Matrix, Vector, add, dot, mul, outer, scale_div, scale_mul, sum}, sqp::{self, Tuneables}};
+use crate::{
+    algebra::{Matrix, Vector, add, dot, mul, outer, scale_div, scale_mul, sum},
+    sqp::{self, Tuneables},
+};
 
-
-pub fn calculate_allele_probabilities(
-    likelihoods: &[Vec<Matrix<4>>],
-) {
-
+pub fn calculate_allele_probabilities(likelihoods: &[Vec<Matrix<4>>]) {
     for likel in likelihoods.iter() {
         let x0 = [0.25; 4];
 
         let obj = |x: &Vector<4>, eps| calculate_objective(&likel, &x, eps);
         let grad_hess = |x: &Vector<4>, eps| calculate_grad_hess(&likel, &x, eps);
 
-        let (x, _) = sqp::solve_sqp(
-            obj,
-            grad_hess,
-            &x0,
-            &Tuneables::new(),
-        );
+        let (x, _) = sqp::solve_sqp(obj, grad_hess, &x0, &Tuneables::new());
 
         if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
             println!("MULTI");
@@ -34,12 +28,7 @@ pub fn calculate_allele_probabilities(
 
 // }
 
-
-pub fn calculate_objective(
-    likelihoods: &[Matrix<4>],
-    x: &Vector<4>,
-    eps: f64
-) -> f64 {
+pub fn calculate_objective(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -> f64 {
     let mut s = 0.0;
 
     for mat in likelihoods.iter() {
@@ -50,7 +39,7 @@ pub fn calculate_objective(
     let n = likelihoods.len();
 
     // 2.0 * sum(x) - s / (n as f64) - 2.0
-    - s / (n as f64)
+    -s / (n as f64)
 }
 
 // Instead of a matrix with 1 elem in each spot
@@ -66,7 +55,7 @@ pub fn calculate_objective(
 pub fn calculate_grad_hess(
     likelihoods: &[Matrix<4>],
     x: &Vector<4>,
-    eps: f64
+    eps: f64,
 ) -> (Vector<4>, Matrix<4>) {
     let mut g = [0.0; 4];
     let mut h = [[0.0; 4]; 4];
@@ -93,7 +82,7 @@ pub fn calculate_grad_hess(
     let n = likelihoods.len();
 
     // let grad = std::array::from_fn(|i| 2.0 * (1.0 - g[i] / (n as f64)));
-    let grad = std::array::from_fn(|i| - 2.0 * g[i] / (n as f64));
+    let grad = std::array::from_fn(|i| -2.0 * g[i] / (n as f64));
 
     let mut hess = [[0.0; 4]; 4];
     for i in 0..4 {

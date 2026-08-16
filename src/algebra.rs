@@ -1,4 +1,3 @@
-
 // Rust requires a massive song-and-dance
 
 pub type Vector<const N: usize> = [f64; N];
@@ -61,7 +60,7 @@ pub fn mul_n<const N: usize>(n: usize, m: &Matrix<N>, v: &Vector<N>) -> Vector<N
 }
 
 pub fn scale_mul<const N: usize>(a: f64, x: &Vector<N>) -> Vector<N> {
-    std::array::from_fn(|i| a*x[i])
+    std::array::from_fn(|i| a * x[i])
 }
 
 pub fn scale_div<const N: usize>(d: f64, x: &Vector<N>) -> Vector<N> {
@@ -87,7 +86,7 @@ pub fn sub<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Vector<N> {
 // This already assumes the vector is non-negative
 pub fn l1_normalize<const N: usize>(x: &Vector<N>) -> Vector<N> {
     let s = sum(x);
-    std::array::from_fn(|i| x[i]/s)
+    std::array::from_fn(|i| x[i] / s)
 }
 
 pub fn scale_div_mut<const N: usize>(m: &mut Matrix<N>, a: f64) {

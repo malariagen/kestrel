@@ -1,7 +1,12 @@
 use nalgebra::DVector;
 
 use crate::{
-    algebra::{Matrix, Vector, add, add_n, dot, l1_normalize, mul, mul_n, scale_mul, sub, sum_n}, blockbuffer::BlockBuffer, cholesky, eigenval::eigenvals_jacobi, fused, objective, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    algebra::{Matrix, Vector, add, add_n, dot, l1_normalize, mul, mul_n, scale_mul, sub, sum_n},
+    blockbuffer::BlockBuffer,
+    cholesky,
+    eigenval::eigenvals_jacobi,
+    fused, objective,
+    util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
@@ -362,8 +367,9 @@ pub fn solve_sqp<const N: usize, Obj, GradHess>(
     x0: &Vector<N>,
     tune: &Tuneables,
 ) -> (Vector<N>, u64)
-where Obj: Fn(&Vector<N>, f64) -> f64,
-    GradHess: Fn(&Vector<N>, f64) -> (Vector<N>, Matrix<N>)
+where
+    Obj: Fn(&Vector<N>, f64) -> f64,
+    GradHess: Fn(&Vector<N>, f64) -> (Vector<N>, Matrix<N>),
 {
     let mut x = *x0;
 
@@ -411,7 +417,7 @@ where Obj: Fn(&Vector<N>, f64) -> f64,
         // }
 
         if check_convergence(&x, &g, tune.sqp_conv_tol) {
-            return (x, iter)
+            return (x, iter);
         }
 
         // let h = hessian::compute_hess(p_mat_t, &x, tune.epsilon);
@@ -474,7 +480,6 @@ pub fn solve_qp_active_set<const N: usize>(
     modify: bool,
     tune: &Tuneables,
 ) -> (Vector<N>, u64) {
-
     let mut y = y0.clone();
 
     let mut working_set = [false; N];
@@ -518,7 +523,11 @@ pub fn solve_qp_active_set<const N: usize>(
         }
 
         // g_f = c_f + Q_f y_f
-        let mut g_free = add_n(free_count, &c_free, &mul_n(free_count, &q_mat_free, &y_free));
+        let mut g_free = add_n(
+            free_count,
+            &c_free,
+            &mul_n(free_count, &q_mat_free, &y_free),
+        );
 
         let mut sub_l = [[0.0; N]; N];
         let mut sub_d = [0.0; N];
@@ -553,7 +562,11 @@ pub fn solve_qp_active_set<const N: usize>(
         };
 
         // TODO check
-        let m = g_free.iter().map(|x| x.abs()).max_by(|a, b| a.total_cmp(b)).unwrap();
+        let m = g_free
+            .iter()
+            .map(|x| x.abs())
+            .max_by(|a, b| a.total_cmp(b))
+            .unwrap();
 
         if m <= tune.qp_zero_search_tol {
             // q is roughly zero, so check KKT to see if we are at an optimum solution
@@ -644,7 +657,8 @@ fn backtracking_line_search<const N: usize, Obj>(
     g: &Vector<N>,
     tune: &Tuneables,
 ) -> (Vector<N>, u64)
-where Obj: Fn(&Vector<N>, f64) -> f64
+where
+    Obj: Fn(&Vector<N>, f64) -> f64,
 {
     let f = obj(&x, tune.epsilon);
 

@@ -13,7 +13,11 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, fused, objective, sqp::{self, Tuneables}, util::{Matrix9xN, MatrixNx9},
+    algebra::{Vector, dot},
+    blockbuffer::BlockBuffer,
+    cls, fused, objective,
+    sqp::{self, Tuneables},
+    util::{Matrix9xN, MatrixNx9},
 };
 
 pub fn calculate_relatedness_coefficients(
@@ -177,7 +181,6 @@ fn calculate_coefficients_inner(
         .for_each_init(
             || ThreadBuffers::new(num_v),
             |buffers, (out, [(x, genotypes_x), (y, genotypes_y)])| {
-
                 let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
                 } else {
@@ -222,14 +225,10 @@ fn calculate_coefficients_inner(
                 );
 
                 let obj = |x: &Vector<9>, eps| objective::compute_obj_avx(&buffers.p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
+                let grad_hess =
+                    |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
 
-                let (delta, _) = sqp::solve_sqp(
-                    obj,
-                    grad_hess,
-                    &delta,
-                    &Tuneables::new(),
-                );
+                let (delta, _) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
 
                 // println!("{} {} {}", x, y, delta.transpose());
                 let kinship = dot(&delta, &kinship_vec);
@@ -310,7 +309,8 @@ fn calculate_mixture_component_matrix2<const L: usize>(
             let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
             // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
 
-            let column = unsafe { stacked_m_t.column(locus.unchecked_mul(num_g).unchecked_add(*g)) };
+            let column =
+                unsafe { stacked_m_t.column(locus.unchecked_mul(num_g).unchecked_add(*g)) };
             // let column = stacked_m_t.column(locus * num_g + g);
             let mut row = [0.0; 9];
             for i in 0..9 {

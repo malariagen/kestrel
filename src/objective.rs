@@ -1,5 +1,8 @@
 use crate::{
-    algebra::{Vector, dot, sum}, blockbuffer::BlockBuffer, log::Log, util::Vector9,
+    algebra::{Vector, dot, sum},
+    blockbuffer::BlockBuffer,
+    log::Log,
+    util::Vector9,
 };
 use core::arch::x86_64::*;
 
@@ -26,7 +29,7 @@ pub fn compute_obj_avx(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) 
     let n = p_mat.num_rows();
 
     // return sum(&x) - s / (n as f64) - 1.0;
-    - s / (n as f64)
+    -s / (n as f64)
 }
 
 fn compute_obj_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64) -> f64 {

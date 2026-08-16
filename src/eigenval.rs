@@ -12,11 +12,11 @@ pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Option<
         let b = m[0][1];
         let c = m[1][1];
 
-        if b.abs() <= f64::EPSILON*(a.abs() + c.abs()) {
+        if b.abs() <= f64::EPSILON * (a.abs() + c.abs()) {
             d[0] = a;
             d[1] = c;
         } else {
-            let theta = (c - a)/(2.0 * b);
+            let theta = (c - a) / (2.0 * b);
             let t = theta.signum() / (theta.abs() + theta.hypot(1.0));
             d[0] = (-t).mul_add(b, a);
             d[1] = t.mul_add(b, c);
@@ -40,7 +40,7 @@ pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Option<
 
         // Sweep over every off-diagonal element in the upper triangle
         for p in 0..N {
-            for q in (p+1)..N {
+            for q in (p + 1)..N {
                 let a_qq = a[q][q];
                 let a_pp = a[p][p];
                 let a_pq = a[p][q];
@@ -77,7 +77,7 @@ pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Option<
                 }
 
                 // p < j < q
-                for j in (p+1)..q {
+                for j in (p + 1)..q {
                     let a_pj = a[p][j];
                     let a_jq = a[j][q];
                     a[p][j] = (-s).mul_add(tau.mul_add(a_pj, a_jq), a_pj);
@@ -85,7 +85,7 @@ pub fn eigenvals_jacobi<const N: usize>(m: &Matrix<N>, max_iter: u64) -> Option<
                 }
 
                 // q < j < N
-                for j in (q+1)..N {
+                for j in (q + 1)..N {
                     let a_pj = a[p][j];
                     let a_qj = a[q][j];
                     a[p][j] = (-s).mul_add(tau.mul_add(a_pj, a_qj), a_pj);

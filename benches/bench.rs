@@ -1,5 +1,7 @@
 use kestrel::{
-    blockbuffer::BlockBuffer, eigenval::eigenvals_jacobi, util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
+    blockbuffer::BlockBuffer,
+    eigenval::eigenvals_jacobi,
+    util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 use nalgebra::{DVector, Matrix2, Matrix4};
 use ndarray::Axis;
@@ -292,22 +294,16 @@ pub fn generate_random_mat<const M: usize>() -> [[f64; M]; M] {
 
 #[divan::bench]
 fn bench_eigen_nalgebra(bencher: divan::Bencher) {
-
     bencher
         .with_inputs(|| Matrix2::<f64>::new_random())
-        .bench_local_refs(move |mat| {
-            mat.symmetric_eigenvalues()
-        });
+        .bench_local_refs(move |mat| mat.symmetric_eigenvalues());
 }
 
 #[divan::bench]
 fn bench_eigen_me(bencher: divan::Bencher) {
-
     bencher
         .with_inputs(|| generate_random_mat::<2>())
-        .bench_local_refs(move |mat| {
-            eigenvals_jacobi(mat, 50)
-        });
+        .bench_local_refs(move |mat| eigenvals_jacobi(mat, 50));
 }
 
 // #[divan::bench]
@@ -365,7 +361,6 @@ fn bench_eigen_me(bencher: divan::Bencher) {
 //         .with_inputs(generate_mat)
 //         .bench_local_refs(move |mat| kestrel::sqp::compute_grad_d_nalgebra(&mat, &x, &mut d, eps));
 // }
-
 
 // #[divan::bench]
 // fn bench_column(bencher: divan::Bencher) {

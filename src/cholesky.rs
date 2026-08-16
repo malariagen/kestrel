@@ -1,4 +1,7 @@
-use crate::{algebra::{Matrix, Vector}, util::{DMatrixView9, DMatrixViewMut9, DVectorViewMut9}};
+use crate::{
+    algebra::{Matrix, Vector},
+    util::{DMatrixView9, DMatrixViewMut9, DVectorViewMut9},
+};
 
 pub fn modify_gmw(
     a: DMatrixView9<f64>,
@@ -99,12 +102,7 @@ pub fn unmodified(
     }
 }
 
-pub fn modify_gmw_n<const N: usize>(
-    n: usize,
-    a: &Matrix<N>,
-    l: &mut Matrix<N>,
-    d: &mut Vector<N>,
-) {
+pub fn modify_gmw_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, d: &mut Vector<N>) {
     assert!(n <= N);
 
     // We can get a lower bound on the condition number from d
@@ -167,12 +165,7 @@ pub fn modify_gmw_n<const N: usize>(
     }
 }
 
-pub fn unmodified_n<const N: usize>(
-    n: usize,
-    a: &Matrix<N>,
-    l: &mut Matrix<N>,
-    d: &mut Vector<N>,
-) {
+pub fn unmodified_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, d: &mut Vector<N>) {
     // This removes the bounds checks in the assembly
     assert!(n <= N);
 
@@ -206,7 +199,6 @@ pub fn unmodified_n<const N: usize>(
 
 // This solves LDL^T x = b and returns it in b
 pub fn solve_ldl_mut_n<const N: usize>(n: usize, l: &Matrix<N>, d: &Vector<N>, b: &mut Vector<N>) {
-
     assert!(n <= N);
 
     // Forward substitution
@@ -227,7 +219,7 @@ pub fn solve_ldl_mut_n<const N: usize>(n: usize, l: &Matrix<N>, d: &Vector<N>, b
     // Backward substitution
     for i in (0..n).rev() {
         let mut s = 0.0;
-        for j in (i+1)..n {
+        for j in (i + 1)..n {
             s = b[j].mul_add(l[j][i], s);
         }
         // Normally we also divide by m[i][i], but here we know that is 1
@@ -235,13 +227,7 @@ pub fn solve_ldl_mut_n<const N: usize>(n: usize, l: &Matrix<N>, d: &Vector<N>, b
     }
 }
 
-
-pub fn unmodified_9(
-    n: usize,
-    a: &Matrix<9>,
-    l: &mut Matrix<9>,
-    d: &mut Vector<9>,
-) {
+pub fn unmodified_9(n: usize, a: &Matrix<9>, l: &mut Matrix<9>, d: &mut Vector<9>) {
     unmodified_n(n, a, l, d);
     modify_gmw_n(n, a, l, d);
 }

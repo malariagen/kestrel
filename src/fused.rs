@@ -1,7 +1,10 @@
 use core::arch::x86_64::*;
 
 use crate::{
-    algebra::{Matrix, Vector, dot, scale_div_mut}, blockbuffer::{Block, BlockBuffer}, buffer::Lane8};
+    algebra::{Matrix, Vector, dot, scale_div_mut},
+    blockbuffer::{Block, BlockBuffer},
+    buffer::Lane8,
+};
 
 // h - 8*8*45 = 2880 bytes
 // column buffer - 8 * 8 * 9 * 32 = 18432 bytes (TODO avoid memset)
@@ -18,7 +21,7 @@ pub fn compute_grad_hess(
     let n = p_mat.num_rows() as f64;
 
     // let grad: Vector<9> = std::array::from_fn(|i| 1.0 - g[i] / n);
-    let grad: Vector<9> = std::array::from_fn(|i| - g[i] / n);
+    let grad: Vector<9> = std::array::from_fn(|i| -g[i] / n);
 
     scale_div_mut(&mut h, n);
 
