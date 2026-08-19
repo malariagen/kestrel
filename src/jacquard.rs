@@ -13,11 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot},
-    blockbuffer::BlockBuffer,
-    cls, fused, objective,
-    sqp::{self, Tuneables},
-    util::{Matrix9xN, MatrixNx9},
+    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, sqp::{self, Tuneables}
 };
 
 pub fn calculate_relatedness_coefficients(
@@ -136,8 +132,7 @@ fn calculate_coefficients_inner(
     let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a);
     let stacked_m = cls::calculate_stacked_m(&all_joint_genotypes, allele_frequencies);
     let lookup_table = cls::calculate_joint_genotype_lookup_table(&all_joint_genotypes, num_a);
-    let stacked_m_t = stacked_m.transpose().to_owned();
-    let mut quadratic_q = cls::calculate_quadratic_q_mat(&stacked_m, num_v);
+    let quadratic_q = cls::calculate_quadratic_q_mat(&stacked_m, num_v);
 
     // let eigen = quadratic_q.symmetric_eigenvalues();
     // let delta = 1e-8;
@@ -186,49 +181,36 @@ fn calculate_coefficients_inner(
                 } else {
                     [1.0 / 9.0; 9]
                 };
-                // let c = cls::calculate_quadratic_c_t(
+                let c = cls::calculate_quadratic_c(
+                    &all_joint_genotypes,
+                    &stacked_m,
+                    *genotypes_x,
+                    *genotypes_y,
+                    &lookup_table,
+                );
+
+                let (delta, _) = sqp::solve_qp_active_set(
+                    &quadratic_q,
+                    &c,
+                    &delta,
+                    true,
+                    &Tuneables::new(),
+                );
+
+                // calculate_mixture_component_matrix2(
                 //     &all_joint_genotypes,
                 //     &stacked_m_t,
                 //     *genotypes_x,
                 //     *genotypes_y,
                 //     &lookup_table,
+                //     &mut buffers.p_mat,
                 // );
 
-                // let mut q_mat = [[0.0; 9]; 9];
-                // for i in 0..9 {
-                //     for j in 0..9 {
-                //         q_mat[i][j] = quadratic_q[(i, j)];
-                //     }
-                // }
+                // let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
+                // let grad_hess =
+                //     |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
 
-                // let mut c_vec = [0.0; 9];
-                // for i in 0..9 {
-                //     c_vec[i] = c[i];
-                // }
-
-                // let (delta, _) = sqp::solve_qp_active_set(
-                //     &q_mat,
-                //     &c_vec,
-                //     &delta,
-                //     true,
-                //     true,
-                //     &Tuneables::new(),
-                // );
-
-                calculate_mixture_component_matrix2(
-                    &all_joint_genotypes,
-                    &stacked_m_t,
-                    *genotypes_x,
-                    *genotypes_y,
-                    &lookup_table,
-                    &mut buffers.p_mat,
-                );
-
-                let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
-                let grad_hess =
-                    |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
-
-                let (delta, _) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
+                // let (delta, _) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
 
                 // println!("{} {} {}", x, y, delta.transpose());
                 let kinship = dot(&delta, &kinship_vec);
@@ -248,42 +230,9 @@ fn calculate_coefficients_inner(
     kinship_mat
 }
 
-fn calculate_mixture_component_matrix(
+fn calculate_mixture_component_matrix<const L: usize>(
     all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
-    stacked_m_t: &Matrix9xN<f64>,
-    genotypes_x: ArrayView2<i8>,
-    genotypes_y: ArrayView2<i8>,
-    lookup_table: &Array4<usize>,
-    p_mat: &mut MatrixNx9<f64>,
-) {
-    let num_g = all_joint_genotypes.len();
-
-    let iter_x = genotypes_x.as_slice().unwrap().chunks_exact(2);
-    let iter_y = genotypes_y.as_slice().unwrap().chunks_exact(2);
-
-    // for (locus, (geno_x, geno_y)) in chunks_x.iter().copied().zip(chunks_y.iter().copied()).enumerate() {
-    for (locus, (geno_x, geno_y)) in iter_x.zip(iter_y).enumerate() {
-        // let [i, j] = geno_x;
-        // let [k, l] = geno_y;
-        let (i, j) = (geno_x[0], geno_x[1]);
-        let (k, l) = (geno_y[0], geno_y[1]);
-
-        // TODO do a check here for missing data
-        // if i < 0 || j < 0 || k < 0 || l < 0 {
-        //     continue;
-        // }
-
-        // let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
-        let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
-
-        // TODO should we make this more cache friendly?
-        p_mat.set_row(locus, &stacked_m_t.column(locus * num_g + g).transpose());
-    }
-}
-
-fn calculate_mixture_component_matrix2<const L: usize>(
-    all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
-    stacked_m_t: &Matrix9xN<f64>,
+    stacked_m: &[Vector<9>],
     genotypes_x: ArrayView2<i8>,
     genotypes_y: ArrayView2<i8>,
     lookup_table: &Array4<usize>,
@@ -309,14 +258,9 @@ fn calculate_mixture_component_matrix2<const L: usize>(
             let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
             // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
 
-            let column =
-                unsafe { stacked_m_t.column(locus.unchecked_mul(num_g).unchecked_add(*g)) };
-            // let column = stacked_m_t.column(locus * num_g + g);
-            let mut row = [0.0; 9];
-            for i in 0..9 {
-                row[i] = column[i];
-            }
-            row
+            let row = unsafe { stacked_m.get_unchecked(locus.unchecked_mul(num_g).unchecked_add(*g)) };
+            // let row = stacked_m[locus * num_g + g];
+            *row
         });
 
     p_mat.fill_from_rows(iter);

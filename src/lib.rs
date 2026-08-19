@@ -42,5 +42,4 @@ pub mod log;
 pub mod objective;
 pub mod simd;
 pub mod sqp;
-pub mod util;
 pub mod vcf;

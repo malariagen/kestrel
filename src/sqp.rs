@@ -2,7 +2,6 @@
 use crate::{
     algebra::{Matrix, Vector, add, add_n, dot, sum_to_one, mul, mul_n, scale_mul, sub, sum_n},
     cholesky,
-    util::{Matrix9, MatrixNx9},
 };
 
 pub struct Tuneables {
@@ -34,39 +33,6 @@ impl Tuneables {
             epsilon: 1e-8,
         }
     }
-}
-
-fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
-    let rows = a_mat.nrows();
-    let scale = 1.0 / (rows as f64);
-
-    let mut h = Matrix9::<f64>::zeros();
-
-    let n: i32 = 9;
-    let k = i32::try_from(rows).unwrap();
-
-    let lda = k;
-    let ldc = n;
-
-    unsafe {
-        cblas::dsyrk(
-            cblas::Layout::ColumnMajor,
-            cblas::Part::Lower,
-            cblas::Transpose::Ordinary,
-            n,
-            k,
-            scale,
-            a_mat.as_slice(),
-            lda,
-            0.0,
-            h.as_mut_slice(),
-            ldc,
-        );
-    }
-
-    h.fill_upper_triangle_with_lower_triangle();
-
-    h
 }
 
 pub fn solve_sqp<const N: usize, Obj, GradHess>(

@@ -1,10 +1,8 @@
 use kestrel::{
     blockbuffer::BlockBuffer,
     eigenval::eigenvals_jacobi,
-    util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
-use nalgebra::{DVector, Matrix2, Matrix4};
-use ndarray::Axis;
+use nalgebra::Matrix2;
 use rand::{Rng, RngExt};
 
 fn main() {
@@ -25,18 +23,6 @@ fn main() {
 // }
 
 const N: usize = 100_0000;
-
-fn generate_mat() -> MatrixNx9<f64> {
-    let mat = MatrixNx9::<f64>::new_random(N);
-
-    mat
-}
-
-fn generate_mat_t() -> Matrix9xN<f64> {
-    let mat = Matrix9xN::<f64>::new_random(N);
-
-    mat
-}
 
 pub fn generate_random_block() -> BlockBuffer<f64, 8, 9> {
     let mut rng = rand::rng();
