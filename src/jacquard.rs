@@ -224,7 +224,7 @@ fn calculate_coefficients_inner(
                     &mut buffers.p_mat,
                 );
 
-                let obj = |x: &Vector<9>, eps| objective::compute_obj_avx(&buffers.p_mat, &x, eps);
+                let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
                 let grad_hess =
                     |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
 

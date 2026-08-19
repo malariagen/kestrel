@@ -151,28 +151,11 @@ pub fn tile_loop(
             let mut c: [__m512d; 9] =
                 std::array::from_fn(|i| unsafe { _mm512_load_pd(tile_block[i].as_ptr()) });
 
-            // Calculate d
             // This computes a dot product between x and a row of p
-            // TODO this could be manually unrolled a few times
-            // let mut d = _mm512_set1_pd(eps);
-            // for col in 0..9 {
-            //     d = _mm512_fmadd_pd(zx[col], c[col], d);
-            // }
-
-            let mut d0 = _mm512_fmadd_pd(zx[0], c[0], ze);
-            let mut d1 = _mm512_mul_pd(zx[1], c[1]);
-            let mut d2 = _mm512_mul_pd(zx[2], c[2]);
-
-            d0 = _mm512_fmadd_pd(zx[3], c[3], d0);
-            d1 = _mm512_fmadd_pd(zx[4], c[4], d1);
-            d2 = _mm512_fmadd_pd(zx[5], c[5], d2);
-
-            d0 = _mm512_fmadd_pd(zx[6], c[6], d0);
-            d1 = _mm512_fmadd_pd(zx[7], c[7], d1);
-            d2 = _mm512_fmadd_pd(zx[8], c[8], d2);
-
-            let mut d = _mm512_add_pd(d0, d1);
-            d = _mm512_add_pd(d, d2);
+            let mut d = ze;
+            for col in 0..9 {
+                d = _mm512_fmadd_pd(zx[col], c[col], d);
+            }
 
             d = _mm512_div_pd(one, d);
 

@@ -12,6 +12,7 @@ impl Log for __m512d {
     }
 }
 
+#[inline]
 #[target_feature(enable = "avx512f,avx512dq")]
 // There are 14 constants in this assembly.
 // In a loop, all of them may be broadcasted to registers...

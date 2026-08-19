@@ -14,6 +14,7 @@ impl Log for f64 {
     }
 }
 
+#[inline]
 fn log_scalar(mut d: f64) -> f64 {
     // Normalize d if subnormal
     let o = d < f64::MIN_POSITIVE;

@@ -1,5 +1,3 @@
-// Rust requires a massive song-and-dance
-
 pub type Vector<const N: usize> = [f64; N];
 pub type Matrix<const N: usize> = [[f64; N]; N];
 
@@ -22,7 +20,6 @@ pub fn outer<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Matrix<N> {
     m
 }
 
-#[inline]
 pub fn dot_n<const N: usize>(n: usize, x: &Vector<N>, y: &Vector<N>) -> f64 {
     let mut sum = 0.0;
     for i in 0..n {
@@ -84,7 +81,7 @@ pub fn sub<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Vector<N> {
 }
 
 // This already assumes the vector is non-negative
-pub fn l1_normalize<const N: usize>(x: &Vector<N>) -> Vector<N> {
+pub fn sum_to_one<const N: usize>(x: &Vector<N>) -> Vector<N> {
     let s = sum(x);
     std::array::from_fn(|i| x[i] / s)
 }

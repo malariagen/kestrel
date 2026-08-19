@@ -1,7 +1,7 @@
 use nalgebra::DVector;
 
 use crate::{
-    algebra::{Matrix, Vector, add, add_n, dot, l1_normalize, mul, mul_n, scale_mul, sub, sum_n},
+    algebra::{Matrix, Vector, add, add_n, dot, sum_to_one, mul, mul_n, scale_mul, sub, sum_n},
     cholesky,
     util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
@@ -290,38 +290,6 @@ pub fn compute_hessian(
     ata(a_mat)
 }
 
-// fn compute_hessian2(
-//     p_mat: &MatrixNx9<f64>,
-//     d: &DVector<f64>,
-// ) -> Matrix9<f64> {
-//     let num_v = p_mat.nrows();
-
-//     let h = unsafe { at_d2_a_col_major_fast_avx512(p_mat.as_slice(), d.into(), num_v) };
-
-//     let scale = 1.0 / (num_v as f64);
-//     Matrix9::from_fn(|i, j| h[i][j] * scale)
-// }
-
-// fn compute_hessian_t(
-//     p_mat_t: &Matrix9xN<f64>,
-//     d: &DVector<f64>,
-// ) -> Matrix9<f64> {
-
-//     let num_v = p_mat_t.ncols();
-
-//     let slice = unsafe {
-//         std::slice::from_raw_parts(
-//             p_mat_t.as_slice().as_ptr().cast::<[f64; 9]>(),
-//             num_v
-//         )
-//     };
-
-//     let h = unsafe { pt_d2_p_simd(num_v, d.into(), slice) };
-
-//     let scale = 1.0 / (num_v as f64);
-//     Matrix9::from_fn(|i, j| h[i][j] * scale)
-// }
-
 fn ata(a_mat: &MatrixNx9<f64>) -> Matrix9<f64> {
     let rows = a_mat.nrows();
     let scale = 1.0 / (rows as f64);
@@ -368,7 +336,7 @@ where
     let mut x = *x0;
 
     for iter in 0..tune.sqp_max_iter {
-        x = l1_normalize(&x);
+        x = sum_to_one(&x);
 
         let (g, h) = grad_hess(&x, tune.epsilon);
 
@@ -459,7 +427,7 @@ pub fn solve_qp_active_set<const N: usize>(
     let mut iter = 0;
 
     while iter < tune.qp_max_iter {
-        y = l1_normalize(&y);
+        y = sum_to_one(&y);
 
         let mut free_indices = [0; N];
         let mut free_count = 0;
