@@ -30,6 +30,7 @@ pub mod buffer;
 pub mod cholesky;
 pub mod cls;
 pub mod fused;
+pub mod lane;
 // pub mod gradient;
 // pub mod hessian;
 pub mod iis;

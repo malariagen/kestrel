@@ -1,4 +1,4 @@
-use crate::{ algebra::{Matrix, Vector}};
+use crate::algebra::{Matrix, Vector};
 
 pub fn modify_gmw_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, d: &mut Vector<N>) {
     assert!(n <= N);
@@ -123,9 +123,4 @@ pub fn solve_ldl_mut_n<const N: usize>(n: usize, l: &Matrix<N>, d: &Vector<N>, b
         // Normally we also divide by m[i][i], but here we know that is 1
         b[i] -= s;
     }
-}
-
-pub fn unmodified_9(n: usize, a: &Matrix<9>, l: &mut Matrix<9>, d: &mut Vector<9>) {
-    unmodified_n(n, a, l, d);
-    modify_gmw_n(n, a, l, d);
 }

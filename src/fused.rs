@@ -3,7 +3,7 @@ use core::arch::x86_64::*;
 use crate::{
     algebra::{Matrix, Vector, dot, scale_div_mut},
     blockbuffer::{Block, BlockBuffer},
-    buffer::Lane8,
+    lane::Lane8,
 };
 
 // h - 8*8*45 = 2880 bytes

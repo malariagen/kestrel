@@ -150,6 +150,8 @@ pub fn solve_qp_active_set<const N: usize>(
             }
         }
 
+        // Should Never Happen(TM)
+        assert!(free_count != 0);
         // Removes some bounds checks
         assert!(free_count <= N);
 
@@ -251,9 +253,6 @@ pub fn solve_qp_active_set<const N: usize>(
             // This could be slightly below 0 in some cases due to rounding, so clamp
             y = std::array::from_fn(|i| (y[i] + alpha * p[i]).max(0.0));
 
-            // TODO have a thing where this only adds to the blocking set if two or more non-zero
-            // But I think our check above will catch this
-
             if let Some(index) = blocking_index {
                 // print("Adding", blocking_index, "to working set")
                 working_set[index] = true;
@@ -307,7 +306,8 @@ where
     for iter in 0..tune.bls_max_iter {
         // Numerically this is always feasible (>= 0) for floats
         let xnew = add(x, &scale_mul(alpha, &p));
-        // TODO this can be made more efficient a la N&W
+        // In theory we could store an intermediate array that makes
+        // this more efficient, a la N&W
         let fnew = obj(&xnew, tune.epsilon);
         if fnew <= f + alpha * t {
             return (xnew, iter);

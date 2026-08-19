@@ -55,32 +55,3 @@ impl<T: Copy> DerefMut for AlignedBuffer<T> {
         unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 }
-
-use core::arch::x86_64::*;
-
-// TODO could make this f64x8
-#[repr(align(64))]
-#[derive(Clone, Copy)]
-pub struct Lane8(pub [f64; 8]);
-
-impl Lane8 {
-    pub fn zero() -> Self {
-        Lane8([0.0; 8])
-    }
-
-    pub fn as_ptr(&self) -> *const f64 {
-        self.0.as_ptr()
-    }
-
-    pub fn as_mut_ptr(&mut self) -> *mut f64 {
-        self.0.as_mut_ptr()
-    }
-
-    pub fn load(&self) -> __m512d {
-        unsafe { _mm512_load_pd(self.0.as_ptr()) }
-    }
-
-    pub fn store(&mut self, reg: __m512d) {
-        unsafe { _mm512_store_pd(self.0.as_mut_ptr(), reg) }
-    }
-}

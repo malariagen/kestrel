@@ -7,13 +7,11 @@ pub fn calculate_stacked_m(
     allele_frequencies: &ArrayRef2<f64>,
 ) -> Vec<Vector<9>> {
     let num_v = allele_frequencies.shape()[0];
+    // TODO make this locus-specific
     let num_g = all_joint_genotypes.len();
 
     let mut stacked_m = Vec::with_capacity(num_v * num_g);
 
-    // nalgebra stores its matrices in column-major format, so one might think that
-    // calculating the transpose of the matrix is faster since the writes would
-    // be adjacent in memory. Turns out it is not.
     for v in 0..num_v {
         for g in 0..num_g {
             let ((i, j), (k, l), iis_mode) = all_joint_genotypes[g];
@@ -63,6 +61,7 @@ fn ata(a_mat: &[Vector<9>], scale: f64) -> Matrix<9> {
         );
     }
 
+    // Make symmetric
     for i in 0..9 {
         for j in (i+1)..9 {
             h[i][j] = h[j][i];
