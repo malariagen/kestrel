@@ -2,17 +2,13 @@ use nalgebra::DVector;
 
 use crate::{
     algebra::{Matrix, Vector, add, add_n, dot, l1_normalize, mul, mul_n, scale_mul, sub, sum_n},
-    blockbuffer::BlockBuffer,
     cholesky,
-    eigenval::eigenvals_jacobi,
-    fused, objective,
     util::{Matrix9, Matrix9xN, MatrixNx9, Vector9},
 };
 
 pub struct Tuneables {
     sqp_max_iter: u64,
     sqp_conv_tol: f64,
-    sqp_zero_threshold: f64,
 
     qp_max_iter: u64,
     qp_conv_tol: f64,
@@ -36,9 +32,7 @@ impl Tuneables {
             bls_max_iter: 10,
             bls_sufficient_decrease: 1e-4,
             bls_step_size_reduce: 0.9,
-            // epsilon: f64::EPSILON,
             epsilon: 1e-8,
-            sqp_zero_threshold: 1e-8,
         }
     }
 }
@@ -374,18 +368,8 @@ where
     let mut x = *x0;
 
     for iter in 0..tune.sqp_max_iter {
-        // We manually truncate some values to zero, which will put them in the active set
-        // If we guessed wrong this will be corrected later
-        // x.iter_mut().for_each(|val| {
-        //     if *val <= tune.sqp_zero_threshold {
-        //         *val = 0.0;
-        //     }
-        // });
-
         x = l1_normalize(&x);
 
-        // let (f, g) = compute_obj_grad_d(p_mat, p_mat_t, &x, d, tune.epsilon);
-        // let g = compute_grad_d(p_mat, &x, d, tune.epsilon);
         let (g, h) = grad_hess(&x, tune.epsilon);
 
         // let eigs = eigenvals_jacobi(&h, 50).unwrap();
@@ -404,28 +388,14 @@ where
         // and also check when adding constraints that we have at least one to add
         // or ensure that an error gets thrown or whatever
 
-        // let gmin = g
-        //     .iter()
-        //     .enumerate()
-        //     .filter(|(row, _)| x[*row] > 0.0)
-        //     .map(|(_, gx)| *gx)
-        //     .min_by(|i, j| i.total_cmp(j))
-        //     .expect("Working set is full!");
-
-        // if gmin >= -tune.sqp_conv_tol {
-        //     return (x, iter);
-        // }
-
         if check_convergence(&x, &g, tune.sqp_conv_tol) {
             return (x, iter);
         }
 
-        // let h = hessian::compute_hess(p_mat_t, &x, tune.epsilon);
-
         // c = g - H x
         let c = sub(&g, &mul(&h, &x));
 
-        let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, true, true, tune);
+        let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, true, tune);
 
         let (xnew, bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
@@ -440,9 +410,6 @@ where
     (x, tune.sqp_max_iter)
 }
 
-// TODO: x^T L_i x could only be zero for positive x if some entries of L_i are zero
-// So check that this will never happen when reading the data!
-// Also check this for Jacquard coefficients
 // TODO also print a warning when the algorithm doesn't converge within the iterations
 
 fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> bool {
@@ -476,7 +443,6 @@ pub fn solve_qp_active_set<const N: usize>(
     q_mat: &Matrix<N>,
     c: &Vector<N>,
     y0: &Vector<N>,
-    sum_to_one: bool,
     modify: bool,
     tune: &Tuneables,
 ) -> (Vector<N>, u64) {
@@ -493,9 +459,7 @@ pub fn solve_qp_active_set<const N: usize>(
     let mut iter = 0;
 
     while iter < tune.qp_max_iter {
-        if sum_to_one {
-            y = l1_normalize(&y);
-        }
+        y = l1_normalize(&y);
 
         let mut free_indices = [0; N];
         let mut free_count = 0;
@@ -541,25 +505,18 @@ pub fn solve_qp_active_set<const N: usize>(
         // We now want to solve L D L^T q = g
         cholesky::solve_ldl_mut_n(free_count, &sub_l, &sub_d, &mut g_free);
 
-        let lambda = if sum_to_one {
-            let mut ones_free = [0.0; N];
-            for i in 0..free_count {
-                ones_free[i] = 1.0;
-            }
+        let mut ones_free = [0.0; N];
+        for i in 0..free_count {
+            ones_free[i] = 1.0;
+        }
 
-            cholesky::solve_ldl_mut_n(free_count, &sub_l, &sub_d, &mut ones_free);
+        cholesky::solve_ldl_mut_n(free_count, &sub_l, &sub_d, &mut ones_free);
 
-            let lambda = sum_n(free_count, &g_free) / sum_n(free_count, &ones_free);
+        let lambda = sum_n(free_count, &g_free) / sum_n(free_count, &ones_free);
 
-            // g_free = lambda * ones - g_free
-            // TODO check
-            g_free = sub(&scale_mul(lambda, &ones_free), &g_free);
-            lambda
-        } else {
-            // TODO check
-            g_free = std::array::from_fn(|i| -g_free[i]);
-            0.0
-        };
+        // g_free = lambda * ones - g_free
+        // TODO check
+        g_free = sub(&scale_mul(lambda, &ones_free), &g_free);
 
         // TODO check
         let m = g_free

@@ -220,7 +220,6 @@ pub fn tile_loop(
         let mut z15 = _mm512_setzero_pd();
         let mut z16 = _mm512_setzero_pd();
 
-        // for block in scaled_column_buf.iter() {
         for i in 0..blocks {
             let block = unsafe { scaled_column_buf.get_unchecked(i) };
 
@@ -318,7 +317,6 @@ pub fn tile_loop(
         let mut z37 = _mm512_setzero_pd();
         let mut z38 = _mm512_setzero_pd();
 
-        // for block in scaled_column_buf.iter() {
         for i in 0..blocks {
             let block = unsafe { scaled_column_buf.get_unchecked(i) };
 
@@ -420,7 +418,6 @@ pub fn tile_loop(
         // Row 8
         let mut z88 = _mm512_setzero_pd();
 
-        // for block in scaled_column_buf.iter() {
         for i in 0..blocks {
             let block = unsafe { scaled_column_buf.get_unchecked(i) };
 

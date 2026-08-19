@@ -47,7 +47,6 @@ pub fn calculate_quadratic_c_old(
     stacked_m: &MatrixNx9<f64>,
     genotypes_x: ArrayView2<i8>,
     genotypes_y: ArrayView2<i8>,
-    allele_frequencies: &ArrayRef2<f64>,
 ) -> Vector9<f64> {
     let num_g = all_joint_genotypes.len();
     let num_v = genotypes_x.shape()[0];
