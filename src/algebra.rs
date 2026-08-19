@@ -80,7 +80,6 @@ pub fn sub<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Vector<N> {
     std::array::from_fn(|i| x[i] - y[i])
 }
 
-// This already assumes the vector is non-negative
 pub fn sum_to_one<const N: usize>(x: &Vector<N>) -> Vector<N> {
     let s = sum(x);
     std::array::from_fn(|i| x[i] / s)
