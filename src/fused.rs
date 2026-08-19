@@ -11,11 +11,7 @@ use crate::{
 
 const BLOCKS: usize = 32;
 
-pub fn compute_grad_hess(
-    p_mat: &BlockBuffer<f64, 8, 9>,
-    x: &Vector<9>,
-    eps: f64,
-) -> (Vector<9>, Matrix<9>) {
+pub fn compute_grad_hess(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
     let (g, mut h) = unsafe { compute_g_h_fused_avx512(p_mat, x, eps) };
 
     let n = p_mat.num_rows() as f64;
@@ -28,13 +24,7 @@ pub fn compute_grad_hess(
     (grad, h)
 }
 
-fn compute_g_h_fused_scalar(
-    p_mat: &[[f64; 9]],
-    x: &[f64; 9],
-    eps: f64,
-    g: &mut [f64; 9],
-    h: &mut [[f64; 9]; 9],
-) {
+fn compute_g_h_fused_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut [f64; 9], h: &mut [[f64; 9]; 9]) {
     for row in p_mat.iter() {
         let prod = dot(row, x);
 
@@ -63,11 +53,7 @@ fn compute_g_h_fused_scalar(
 }
 
 #[target_feature(enable = "avx512f")]
-pub fn compute_g_h_fused_avx512(
-    p_mat: &BlockBuffer<f64, 8, 9>,
-    x: &[f64; 9],
-    eps: f64,
-) -> ([f64; 9], [[f64; 9]; 9]) {
+pub fn compute_g_h_fused_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], eps: f64) -> ([f64; 9], [[f64; 9]; 9]) {
     let mut g = [Lane8::zero(); 9];
 
     // Upper triangular Hessian accumulators stored in row-major order:
@@ -148,8 +134,7 @@ pub fn tile_loop(
             let tile_block = unsafe { tile.get_unchecked(i) };
             let buffer_block = unsafe { scaled_column_buf.get_unchecked_mut(i) };
 
-            let mut c: [__m512d; 9] =
-                std::array::from_fn(|i| unsafe { _mm512_load_pd(tile_block[i].as_ptr()) });
+            let mut c: [__m512d; 9] = std::array::from_fn(|i| unsafe { _mm512_load_pd(tile_block[i].as_ptr()) });
 
             // This computes a dot product between x and a row of p
             let mut d = ze;

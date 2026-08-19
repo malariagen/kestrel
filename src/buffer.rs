@@ -14,12 +14,8 @@ impl<T: Copy> AlignedBuffer<T> {
         assert!(std::mem::size_of::<T>() != 0, "Cannot use zero-sized type");
         assert!(len > 0, "Length must be nonzero");
 
-        let size = len
-            .checked_mul(std::mem::size_of::<T>())
-            .expect("Size overflow");
-        let align = multiple
-            .checked_mul(std::mem::size_of::<T>())
-            .expect("Align overflow");
+        let size = len.checked_mul(std::mem::size_of::<T>()).expect("Size overflow");
+        let align = multiple.checked_mul(std::mem::size_of::<T>()).expect("Align overflow");
 
         let layout = Layout::from_size_align(size, align).expect("Invalid layout");
 

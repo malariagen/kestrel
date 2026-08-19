@@ -121,18 +121,7 @@ fn div_sd(s: f64, o: (f64, f64)) -> (f64, f64) {
 }
 
 #[inline]
-fn poly7(
-    x: f64,
-    x2: f64,
-    x4: f64,
-    c6: f64,
-    c5: f64,
-    c4: f64,
-    c3: f64,
-    c2: f64,
-    c1: f64,
-    c0: f64,
-) -> f64 {
+fn poly7(x: f64, x2: f64, x4: f64, c6: f64, c5: f64, c4: f64, c3: f64, c2: f64, c1: f64, c0: f64) -> f64 {
     x4.mul_add(poly3(x, x2, c6, c5, c4), poly4(x, x2, c3, c2, c1, c0))
 }
 

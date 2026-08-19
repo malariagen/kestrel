@@ -1,13 +1,11 @@
 use crate::{
-    algebra::{Vector, dot}, blockbuffer::{Block, BlockBuffer}, log::Log,
+    algebra::{Vector, dot},
+    blockbuffer::{Block, BlockBuffer},
+    log::Log,
 };
 use core::arch::x86_64::*;
 
-pub fn compute_obj(
-    p_mat: &BlockBuffer<f64, 8, 9>,
-    x: &Vector<9>,
-    eps: f64,
-) -> f64 {
+pub fn compute_obj(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f64 {
     let (blocks, remainder) = p_mat.as_blocks();
 
     let b = compute_obj_blocks(blocks, x, eps);
@@ -16,15 +14,10 @@ pub fn compute_obj(
 
     let n = p_mat.num_rows();
 
-    return - (b + r) / (n as f64);
+    return -(b + r) / (n as f64);
 }
 
-fn compute_obj_blocks(
-    blocks: &[Block<f64, 8, 9>],
-    x: &Vector<9>,
-    eps: f64,
-) -> f64 {
-
+fn compute_obj_blocks(blocks: &[Block<f64, 8, 9>], x: &Vector<9>, eps: f64) -> f64 {
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512dq") {
         return unsafe { compute_blocks_avx512(blocks, x, eps) };
@@ -43,12 +36,7 @@ fn compute_obj_remainder(remainder: &[Vector<9>], x: &Vector<9>, eps: f64) -> f6
     s
 }
 
-fn compute_blocks_scalar<const L: usize>(
-    blocks: &[Block<f64, L, 9>],
-    x: &[f64; 9],
-    eps: f64,
-) -> f64 {
-
+fn compute_blocks_scalar<const L: usize>(blocks: &[Block<f64, L, 9>], x: &[f64; 9], eps: f64) -> f64 {
     let mut s = 0.0;
     for block in blocks.iter() {
         for i in 0..L {
@@ -68,7 +56,6 @@ fn compute_blocks_scalar<const L: usize>(
 
 #[target_feature(enable = "avx512f,avx512dq")]
 pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64) -> f64 {
-
     // 9
     let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
 
@@ -108,12 +95,7 @@ pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64
 // Making a function call requires spilling registers so they can be restored after.
 
 #[target_feature(enable = "avx512f,avx512dq")]
-pub fn compute_obj_2avx512(
-    p_mat: &BlockBuffer<f64, 8, 9>,
-    x: &[f64; 9],
-    y: &[f64; 9],
-    eps: f64,
-) -> (f64, f64) {
+pub fn compute_obj_2avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], y: &[f64; 9], eps: f64) -> (f64, f64) {
     // 18
     // let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
     // let zy: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(y[i]));

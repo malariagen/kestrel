@@ -1,7 +1,4 @@
-use kestrel::{
-    blockbuffer::BlockBuffer,
-    eigenval::eigenvals_jacobi,
-};
+use kestrel::{blockbuffer::BlockBuffer, eigenval::eigenvals_jacobi};
 use nalgebra::Matrix2;
 use rand::{Rng, RngExt};
 

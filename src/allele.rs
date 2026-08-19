@@ -52,11 +52,7 @@ pub fn calculate_objective(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -
 // In fact we could just have a vector of length 10 to store the
 // elements, and yeah, nice
 
-pub fn calculate_grad_hess(
-    likelihoods: &[Matrix<4>],
-    x: &Vector<4>,
-    eps: f64,
-) -> (Vector<4>, Matrix<4>) {
+pub fn calculate_grad_hess(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     let mut g = [0.0; 4];
     let mut h = [[0.0; 4]; 4];
 

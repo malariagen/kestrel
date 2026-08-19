@@ -4,8 +4,8 @@ use itertools::Itertools;
 use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3};
 use paralight::{
     iter::{
-        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource,
-        ParallelIteratorExt, ZipableSource,
+        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
+        ZipableSource,
     },
     threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder},
 };
@@ -13,13 +13,13 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, sqp::{self, Tuneables}
+    algebra::{Vector, dot},
+    blockbuffer::BlockBuffer,
+    cls,
+    sqp::{self, Tuneables},
 };
 
-pub fn calculate_relatedness_coefficients(
-    genotypes: &Array3<i8>,
-    allele_frequencies: &Array2<f64>,
-) -> Array2<f64> {
+pub fn calculate_relatedness_coefficients(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
     let num_v = genotypes.shape()[0];
     let num_s = genotypes.shape()[1];
     let num_h = genotypes.shape()[2];
@@ -120,10 +120,7 @@ impl ThreadBuffers {
     }
 }
 
-fn calculate_coefficients_inner(
-    genotypes: &Array3<i8>,
-    allele_frequencies: &Array2<f64>,
-) -> Array2<f64> {
+fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
     let num_v = allele_frequencies.shape()[0];
 
     // TODO calculate this across each locus to figure out how many alleles there are
@@ -189,13 +186,7 @@ fn calculate_coefficients_inner(
                     &lookup_table,
                 );
 
-                let (delta, _) = sqp::solve_qp_active_set(
-                    &quadratic_q,
-                    &c,
-                    &delta,
-                    true,
-                    &Tuneables::new(),
-                );
+                let (delta, _) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &Tuneables::new());
 
                 // calculate_mixture_component_matrix2(
                 //     &all_joint_genotypes,
@@ -243,25 +234,22 @@ fn calculate_mixture_component_matrix<const L: usize>(
     let iter_x = genotypes_x.as_slice().unwrap().chunks_exact(2);
     let iter_y = genotypes_y.as_slice().unwrap().chunks_exact(2);
 
-    let iter = iter_x
-        .zip(iter_y)
-        .enumerate()
-        .map(|(locus, (geno_x, geno_y))| {
-            let (i, j) = (geno_x[0], geno_x[1]);
-            let (k, l) = (geno_y[0], geno_y[1]);
+    let iter = iter_x.zip(iter_y).enumerate().map(|(locus, (geno_x, geno_y))| {
+        let (i, j) = (geno_x[0], geno_x[1]);
+        let (k, l) = (geno_y[0], geno_y[1]);
 
-            // TODO do a check here for missing data
-            // if i < 0 || j < 0 || k < 0 || l < 0 {
-            //     continue;
-            // }
+        // TODO do a check here for missing data
+        // if i < 0 || j < 0 || k < 0 || l < 0 {
+        //     continue;
+        // }
 
-            let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
-            // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
+        let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
+        // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
 
-            let row = unsafe { stacked_m.get_unchecked(locus.unchecked_mul(num_g).unchecked_add(*g)) };
-            // let row = stacked_m[locus * num_g + g];
-            *row
-        });
+        let row = unsafe { stacked_m.get_unchecked(locus.unchecked_mul(num_g).unchecked_add(*g)) };
+        // let row = stacked_m[locus * num_g + g];
+        *row
+    });
 
     p_mat.fill_from_rows(iter);
 }

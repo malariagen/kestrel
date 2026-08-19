@@ -20,7 +20,8 @@ pub fn calculate_stacked_m(
             let pk = allele_frequencies[[v, k]];
             let pl = allele_frequencies[[v, l]];
 
-            let row = std::array::from_fn(|ibd_mode| iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd_mode + 1));
+            let row =
+                std::array::from_fn(|ibd_mode| iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd_mode + 1));
 
             stacked_m.push(row);
         }
@@ -63,7 +64,7 @@ fn ata(a_mat: &[Vector<9>], scale: f64) -> Matrix<9> {
 
     // Make symmetric
     for i in 0..9 {
-        for j in (i+1)..9 {
+        for j in (i + 1)..9 {
             h[i][j] = h[j][i];
         }
     }

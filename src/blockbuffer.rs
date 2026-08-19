@@ -26,8 +26,7 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
         let remainder_rows = remainder / R;
 
         let block_ptr = self.buf.as_ptr() as *const Block<T, L, R>;
-        let remainder_ptr =
-            unsafe { self.buf.as_ptr().add(num_blocks.unchecked_mul(block_len)) } as *const [T; R];
+        let remainder_ptr = unsafe { self.buf.as_ptr().add(num_blocks.unchecked_mul(block_len)) } as *const [T; R];
 
         let block_slice = unsafe { std::slice::from_raw_parts(block_ptr, num_blocks) };
         let remainder_slice = unsafe { std::slice::from_raw_parts(remainder_ptr, remainder_rows) };
@@ -43,15 +42,10 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
         let remainder_rows = remainder / R;
 
         let block_ptr = self.buf.as_mut_ptr() as *mut Block<T, L, R>;
-        let remainder_ptr = unsafe {
-            self.buf
-                .as_mut_ptr()
-                .add(num_blocks.unchecked_mul(block_len))
-        } as *mut [T; R];
+        let remainder_ptr = unsafe { self.buf.as_mut_ptr().add(num_blocks.unchecked_mul(block_len)) } as *mut [T; R];
 
         let block_slice = unsafe { std::slice::from_raw_parts_mut(block_ptr, num_blocks) };
-        let remainder_slice =
-            unsafe { std::slice::from_raw_parts_mut(remainder_ptr, remainder_rows) };
+        let remainder_slice = unsafe { std::slice::from_raw_parts_mut(remainder_ptr, remainder_rows) };
 
         (block_slice, remainder_slice)
     }
