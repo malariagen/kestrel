@@ -15,23 +15,23 @@ impl Log for __m512d {
 #[inline]
 #[target_feature(enable = "avx512f")]
 // There are 12 constants in this assembly.
-// In a loop, all of them may be broadcasted to registers...
+// In a loop, all of them may be broadcast to registers...
 fn log_avx512(d: __m512d) -> __m512d {
     let one = _mm512_set1_pd(1.0);
 
     let e = _mm512_getexp_pd(d);
-    // Sign zero always makes m positive. If d is negative, the fixup
+    // SIGN_ZERO always makes m positive. If d is negative, the fixup
     // at the end will return NaN instead.
     let m = _mm512_getmant_pd(d, _MM_MANT_NORM_P75_1P5, _MM_MANT_SIGN_ZERO);
 
-    // A (normalized) float is of the form m * 2^e, where m is in [1, 2)
+    // A normalized float is of the form m * 2^e, where m is in [1, 2).
     // getexp and getmant will always return e and m in the above form
     // (normalizing subnormals as appropriate).
-    // We want the mantissa to be scaled to be within [0.75, 1.5) as follows:
+    // P75_1P5 scales the mantissa to be within [0.75, 1.5) as follows:
     //   If 1 <= m < 1.5, then return m
-    //   If 1.5 <= m < 2, then return m' = m / 2, where 0.75 <= m / 2 < 1
-    // In the second scenario, we rewrite as (m/2) * 2^(e+1), so we need
-    // to add one to the exponent when m' < 1
+    //   If 1.5 <= m < 2, then return m' = m / 2, where 0.75 <= m' < 1
+    // The second scenario rewrites the float as (m/2) * 2^(e+1),
+    // so we need to add one to the exponent when m' < 1 to compensate.
 
     // https://stackoverflow.com/questions/16988199/how-to-choose-avx-compare-predicate-variants
     let mask = _mm512_cmp_pd_mask(m, one, _CMP_LT_OQ);
@@ -48,6 +48,7 @@ fn log_avx512(d: __m512d) -> __m512d {
 
     let x = div_sd(u, l);
     let x2 = _mm512_mul_pd(x.0, x.0);
+    let x3 = _mm512_mul_pd(x2, x.0);
     let x4 = _mm512_mul_pd(x2, x2);
     let x8 = _mm512_mul_pd(x4, x4);
 
@@ -70,7 +71,7 @@ fn log_avx512(d: __m512d) -> __m512d {
 
     // For IEEE floats, 2*x = x + x
     s = fast_two_sum_dd(s, (_mm512_add_pd(x.0, x.0), _mm512_add_pd(x.1, x.1)));
-    s = fast_two_sum_ds(s, _mm512_mul_pd(_mm512_mul_pd(x2, x.0), t));
+    s = fast_two_sum_ds(s, _mm512_mul_pd(x3, t));
 
     let r = _mm512_add_pd(s.0, s.1);
 
@@ -85,7 +86,6 @@ fn log_avx512(d: __m512d) -> __m512d {
 #[target_feature(enable = "avx512f")]
 fn fast_two_sum_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
     let s = _mm512_add_pd(a, b);
-    // Difference
     let z = _mm512_sub_pd(s, a);
     let t = _mm512_sub_pd(b, z);
     (s, t)
@@ -103,9 +103,10 @@ fn fast_two_sum_ds(a: (__m512d, __m512d), b: __m512d) -> (__m512d, __m512d) {
 #[target_feature(enable = "avx512f")]
 fn fast_two_sum_dd(a: (__m512d, __m512d), b: (__m512d, __m512d)) -> (__m512d, __m512d) {
     let (s, t) = fast_two_sum_ss(a.0, b.0);
-    // Difference
-    // let e = _mm512_add_pd(t, a.1);
-    // let e = _mm512_add_pd(e, b.1);
+    // The sleef code calculates (t + a.1) + b.1
+    // We calculate t + (a.1 + b.1), which should be just as accurate
+    // but also faster, since the addition can be done independent of
+    // calculating t.
     let e = _mm512_add_pd(a.1, b.1);
     let e = _mm512_add_pd(t, e);
     (s, e)
