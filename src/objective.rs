@@ -19,7 +19,7 @@ pub fn compute_obj(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f
 
 fn compute_obj_blocks(blocks: &[Block<f64, 8, 9>], x: &Vector<9>, eps: f64) -> f64 {
     #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512dq") {
+    if is_x86_feature_detected!("avx512f") {
         return unsafe { compute_blocks_avx512(blocks, x, eps) };
     }
 
@@ -54,7 +54,7 @@ fn compute_blocks_scalar<const L: usize>(blocks: &[Block<f64, L, 9>], x: &[f64; 
     s
 }
 
-#[target_feature(enable = "avx512f,avx512dq")]
+#[target_feature(enable = "avx512f")]
 pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64) -> f64 {
     // 9
     let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
@@ -64,7 +64,7 @@ pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64
     let mut zc = _mm512_setzero_pd();
     let ze = _mm512_set1_pd(eps);
 
-    // This still loads 3 constants using 1to8...
+    // This still loads one constant using 1to8...
     for block in blocks.iter() {
         // This computes a dot product between x and a row of p
         // In theory this could be manually unrolled a few times
@@ -73,6 +73,7 @@ pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64
         // 13
         let mut d = ze;
         for col in 0..9 {
+            // This memory access gets put directly in the fmadd instruction
             let c = unsafe { _mm512_load_pd(block[col].as_ptr()) };
             d = _mm512_fmadd_pd(zx[col], c, d);
         }

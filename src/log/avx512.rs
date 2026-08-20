@@ -13,29 +13,56 @@ impl Log for __m512d {
 }
 
 #[inline]
-#[target_feature(enable = "avx512f,avx512dq")]
-// There are 14 constants in this assembly.
+#[target_feature(enable = "avx512f")]
+// There are 12 constants in this assembly.
 // In a loop, all of them may be broadcasted to registers...
 fn log_avx512(d: __m512d) -> __m512d {
-    let p = _mm512_mul_pd(d, _mm512_set1_pd(1.0 / 0.75));
-    let not_inf = !_mm512_fpclass_pd_mask(p, 0x08);
-    // The above multiplication could overflow, so we overwrite the exponent to 1024
-    let e = _mm512_mask_getexp_pd(_mm512_set1_pd(1024.0), not_inf, p);
-
-    let m = _mm512_getmant_pd(d, _MM_MANT_NORM_P75_1P5, _MM_MANT_SIGN_NAN);
-
     let one = _mm512_set1_pd(1.0);
+
+    let e = _mm512_getexp_pd(d);
+    // Sign zero always makes m positive. If d is negative, the fixup
+    // at the end will return NaN instead.
+    let m = _mm512_getmant_pd(d, _MM_MANT_NORM_P75_1P5, _MM_MANT_SIGN_ZERO);
+
+    // A (normalized) float is of the form m * 2^e, where m is in [1, 2)
+    // getexp and getmant will always return e and m in the above form
+    // (normalizing subnormals as appropriate).
+    // We want the mantissa to be scaled to be within [0.75, 1.5) as follows:
+    //   If 1 <= m < 1.5, then return m
+    //   If 1.5 <= m < 2, then return m' = m / 2, where 0.75 <= m / 2 < 1
+    // In the second scenario, we rewrite as (m/2) * 2^(e+1), so we need
+    // to add one to the exponent when m' < 1
+
+    // https://stackoverflow.com/questions/16988199/how-to-choose-avx-compare-predicate-variants
+    let mask = _mm512_cmp_pd_mask(m, one, _CMP_LT_OQ);
+    let e = _mm512_mask_add_pd(e, mask, e, one);
+
     // m is strictly within [0.75, 1.5)
     // For x = m and y = 1.0, via Sterbenz lemma u = m - 1 is computed exactly
     let u = _mm512_sub_pd(m, one);
-    let l = add_as_doubled(m, one);
+    // Furthermore, e_one = 0, and
+    //   If 1 <= m < 1.5, then e_m = 0
+    //   If 0.75 <= m < 1, then e_m = -1
+    // So we can use Fast2Sum
+    let l = fast_two_sum_ss(one, m);
 
     let x = div_sd(u, l);
     let x2 = _mm512_mul_pd(x.0, x.0);
     let x4 = _mm512_mul_pd(x2, x2);
     let x8 = _mm512_mul_pd(x4, x4);
 
-    let t = poly7(x2, x4, x8, _mm512_set1_pd(C_6), _mm512_set1_pd(C_5), _mm512_set1_pd(C_4), _mm512_set1_pd(C_3), _mm512_set1_pd(C_2), _mm512_set1_pd(C_1), _mm512_set1_pd(C_0));
+    let t = poly7(
+        x2,
+        x4,
+        x8,
+        _mm512_set1_pd(C_6),
+        _mm512_set1_pd(C_5),
+        _mm512_set1_pd(C_4),
+        _mm512_set1_pd(C_3),
+        _mm512_set1_pd(C_2),
+        _mm512_set1_pd(C_1),
+        _mm512_set1_pd(C_0),
+    );
 
     let log2_hi = _mm512_set1_pd(LOG_2_HI);
     let log2_lo = _mm512_set1_pd(LOG_2_LO);
@@ -49,21 +76,6 @@ fn log_avx512(d: __m512d) -> __m512d {
 
     const CONTROL: i64 = (4 << (2 * 4)) | (3 << (4 * 4)) | (5 << (5 * 4)) | (2 << (6 * 4));
     _mm512_fixupimm_pd(r, d, _mm512_set1_epi64(CONTROL), 0)
-}
-
-// TODO make my own doubled library for each SIMD type
-
-#[inline]
-#[target_feature(enable = "avx512f")]
-fn add_as_doubled(s: __m512d, o: __m512d) -> (__m512d, __m512d) {
-    let r0 = _mm512_add_pd(s, o);
-    let v = _mm512_sub_pd(r0, s);
-
-    let a = _mm512_sub_pd(r0, v);
-    let b = _mm512_sub_pd(o, v);
-    let c = _mm512_sub_pd(s, a);
-    let d = _mm512_add_pd(c, b);
-    (r0, d)
 }
 
 // https://en.wikipedia.org/wiki/2Sum
@@ -100,6 +112,17 @@ fn fast_two_sum_ds(s: (__m512d, __m512d), o: __m512d) -> (__m512d, __m512d) {
     let b = _mm512_add_pd(a, o);
     let c = _mm512_add_pd(b, s.1);
     (r0, c)
+}
+
+// Assumption: e_a >= e_b
+// https://en.wikipedia.org/wiki/2Sum
+#[inline]
+#[target_feature(enable = "avx512f")]
+fn fast_two_sum_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
+    let s = _mm512_add_pd(a, b);
+    let z = _mm512_sub_pd(s, a);
+    let t = _mm512_sub_pd(b, z);
+    (s, t)
 }
 
 #[inline]
@@ -146,11 +169,11 @@ fn poly7(
 #[inline]
 #[target_feature(enable = "avx512f")]
 fn poly3(x: __m512d, x2: __m512d, c2: __m512d, c1: __m512d, c0: __m512d) -> __m512d {
-    _mm512_fmadd_pd( x2, c2, _mm512_fmadd_pd(x, c1, c0))
+    _mm512_fmadd_pd(x2, c2, _mm512_fmadd_pd(x, c1, c0))
 }
 
 #[inline]
 #[target_feature(enable = "avx512f")]
 fn poly4(x: __m512d, x2: __m512d, c3: __m512d, c2: __m512d, c1: __m512d, c0: __m512d) -> __m512d {
-    _mm512_fmadd_pd( x2, _mm512_fmadd_pd(x, c3, c2), _mm512_fmadd_pd(x, c1, c0))
+    _mm512_fmadd_pd(x2, _mm512_fmadd_pd(x, c3, c2), _mm512_fmadd_pd(x, c1, c0))
 }
