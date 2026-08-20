@@ -31,7 +31,7 @@ fn log_scalar(mut d: f64) -> f64 {
     }
 
     let u = m - 1.0;
-    let l = two_sum_ss(m, 1.0);
+    let l = fast_two_sum_ss(1.0, m);
 
     let x = div_sd(u, l);
     let x2 = x.0 * x.0;
@@ -68,15 +68,11 @@ fn ldexp3k(d: f64, e: i32) -> f64 {
 }
 
 #[inline]
-fn two_sum_ss(s: f64, o: f64) -> (f64, f64) {
-    let r0 = s + o;
-    let v = r0 - s;
-
-    let a = r0 - v;
-    let b = o - v;
-    let c = s - a;
-    let d = c + b;
-    (r0, d)
+fn fast_two_sum_ss(a: f64, b: f64) -> (f64, f64) {
+    let s = a + b;
+    let z = s - a;
+    let t = b - z;
+    (s, t)
 }
 
 #[inline]
