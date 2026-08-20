@@ -35,7 +35,7 @@ fn log_avx512(d: __m512d) -> __m512d {
     let x4 = _mm512_mul_pd(x2, x2);
     let x8 = _mm512_mul_pd(x4, x4);
 
-    let t = poly7(x2, x4, x8, C_6, C_5, C_4, C_3, C_2, C_1, C_0);
+    let t = poly7(x2, x4, x8, _mm512_set1_pd(C_6), _mm512_set1_pd(C_5), _mm512_set1_pd(C_4), _mm512_set1_pd(C_3), _mm512_set1_pd(C_2), _mm512_set1_pd(C_1), _mm512_set1_pd(C_0));
 
     let log2_hi = _mm512_set1_pd(LOG_2_HI);
     let log2_lo = _mm512_set1_pd(LOG_2_LO);
@@ -132,33 +132,25 @@ fn poly7(
     x: __m512d,
     x2: __m512d,
     x4: __m512d,
-    c6: f64,
-    c5: f64,
-    c4: f64,
-    c3: f64,
-    c2: f64,
-    c1: f64,
-    c0: f64,
+    c6: __m512d,
+    c5: __m512d,
+    c4: __m512d,
+    c3: __m512d,
+    c2: __m512d,
+    c1: __m512d,
+    c0: __m512d,
 ) -> __m512d {
     _mm512_fmadd_pd(x4, poly3(x, x2, c6, c5, c4), poly4(x, x2, c3, c2, c1, c0))
 }
 
 #[inline]
 #[target_feature(enable = "avx512f")]
-fn poly3(x: __m512d, x2: __m512d, c2: f64, c1: f64, c0: f64) -> __m512d {
-    _mm512_fmadd_pd(
-        x2,
-        _mm512_set1_pd(c2),
-        _mm512_fmadd_pd(x, _mm512_set1_pd(c1), _mm512_set1_pd(c0)),
-    )
+fn poly3(x: __m512d, x2: __m512d, c2: __m512d, c1: __m512d, c0: __m512d) -> __m512d {
+    _mm512_fmadd_pd( x2, c2, _mm512_fmadd_pd(x, c1, c0))
 }
 
 #[inline]
 #[target_feature(enable = "avx512f")]
-fn poly4(x: __m512d, x2: __m512d, c3: f64, c2: f64, c1: f64, c0: f64) -> __m512d {
-    _mm512_fmadd_pd(
-        x2,
-        _mm512_fmadd_pd(x, _mm512_set1_pd(c3), _mm512_set1_pd(c2)),
-        _mm512_fmadd_pd(x, _mm512_set1_pd(c1), _mm512_set1_pd(c0)),
-    )
+fn poly4(x: __m512d, x2: __m512d, c3: __m512d, c2: __m512d, c1: __m512d, c0: __m512d) -> __m512d {
+    _mm512_fmadd_pd( x2, _mm512_fmadd_pd(x, c3, c2), _mm512_fmadd_pd(x, c1, c0))
 }
