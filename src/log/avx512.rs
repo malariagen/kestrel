@@ -85,6 +85,7 @@ fn log_avx512(d: __m512d) -> __m512d {
 #[target_feature(enable = "avx512f")]
 fn fast_two_sum_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
     let s = _mm512_add_pd(a, b);
+    // Difference
     let z = _mm512_sub_pd(s, a);
     let t = _mm512_sub_pd(b, z);
     (s, t)
@@ -102,8 +103,11 @@ fn fast_two_sum_ds(a: (__m512d, __m512d), b: __m512d) -> (__m512d, __m512d) {
 #[target_feature(enable = "avx512f")]
 fn fast_two_sum_dd(a: (__m512d, __m512d), b: (__m512d, __m512d)) -> (__m512d, __m512d) {
     let (s, t) = fast_two_sum_ss(a.0, b.0);
-    let e = _mm512_add_pd(t, a.1);
-    let e = _mm512_add_pd(e, b.1);
+    // Difference
+    // let e = _mm512_add_pd(t, a.1);
+    // let e = _mm512_add_pd(e, b.1);
+    let e = _mm512_add_pd(a.1, b.1);
+    let e = _mm512_add_pd(t, e);
     (s, e)
 }
 
