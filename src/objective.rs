@@ -60,7 +60,7 @@ pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64
 
     // 12
     let mut zs = _mm512_setzero_pd();
-    let mut zc = _mm512_setzero_pd();
+    // let mut zc = _mm512_setzero_pd();
     let ze = _mm512_set1_pd(eps);
 
     // This still loads one constant using 1to8...
@@ -79,12 +79,14 @@ pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64
 
         let l = Log::log(d);
 
+        zs = _mm512_add_pd(zs, l);
+
         // Kahan summation
-        let y = _mm512_sub_pd(l, zc);
-        let t = _mm512_add_pd(zs, y);
-        let b = _mm512_sub_pd(t, zs);
-        zc = _mm512_sub_pd(b, y);
-        zs = t;
+        // let y = _mm512_sub_pd(l, zc);
+        // let t = _mm512_add_pd(zs, y);
+        // let b = _mm512_sub_pd(t, zs);
+        // zc = _mm512_sub_pd(b, y);
+        // zs = t;
     }
 
     // Perhaps do something with zc too...
