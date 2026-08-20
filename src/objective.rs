@@ -46,7 +46,6 @@ fn compute_blocks_scalar<const L: usize>(blocks: &[Block<f64, L, 9>], x: &[f64; 
             }
             let prod = dot(&row, x);
             let t = Log::log(prod + eps);
-            // TODO kahan?
             s += t;
         }
     }
@@ -107,11 +106,8 @@ pub fn compute_obj_2avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], y: &[f6
     let (blocks, remainder) = p_mat.as_blocks();
 
     for block in blocks.iter() {
-        // let c: [__m512d; 9] =
-        // std::array::from_fn(|i| unsafe { _mm512_load_pd(block[i].as_ptr()) });
         // Calculate d
         // This computes a dot product between x and a row of p
-        // TODO this could be manually unrolled a few times
         let mut dx = _mm512_set1_pd(eps);
         let mut dy = _mm512_set1_pd(eps);
         for col in 0..9 {
@@ -120,24 +116,17 @@ pub fn compute_obj_2avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], y: &[f6
             let c = unsafe { _mm512_load_pd(block[col].as_ptr()) };
             dx = _mm512_fmadd_pd(zx, c, dx);
             dy = _mm512_fmadd_pd(zy, c, dy);
-
-            // dx = _mm512_fmadd_pd(zx[col], c, dx);
-            // dy = _mm512_fmadd_pd(zy[col], c, dy);
         }
 
         let lx = dx.log();
         let ly = dy.log();
 
-        // TODO kahan
         zxs = _mm512_add_pd(lx, zxs);
         zys = _mm512_add_pd(ly, zys);
     }
 
-    let mut xs = _mm512_reduce_add_pd(zxs);
-    let mut ys = _mm512_reduce_add_pd(zys);
-
-    xs += compute_obj_remainder(remainder, x, eps);
-    ys += compute_obj_remainder(remainder, y, eps);
+    let xs = _mm512_reduce_add_pd(zxs);
+    let ys = _mm512_reduce_add_pd(zys);
 
     (xs, ys)
 }
