@@ -78,44 +78,9 @@ fn log_avx512(d: __m512d) -> __m512d {
     _mm512_fixupimm_pd(r, d, _mm512_set1_epi64(CONTROL), 0)
 }
 
-// https://en.wikipedia.org/wiki/2Sum
-#[inline]
-#[target_feature(enable = "avx512f")]
-fn two_sum_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
-    let s = _mm512_add_pd(a, b);
-    let ap = _mm512_sub_pd(s, b);
-    let bp = _mm512_sub_pd(s, ap);
-    let d_a = _mm512_sub_pd(a, ap);
-    let d_b = _mm512_sub_pd(b, bp);
-    let t = _mm512_add_pd(d_a, d_b);
-    (s, t)
-}
-
-#[inline]
-#[target_feature(enable = "avx512f")]
-fn fast_two_sum_dd(s: (__m512d, __m512d), o: (__m512d, __m512d)) -> (__m512d, __m512d) {
-    let r0 = _mm512_add_pd(s.0, o.0);
-
-    let a = _mm512_sub_pd(s.0, r0);
-    let b = _mm512_add_pd(a, o.0);
-    let c = _mm512_add_pd(b, s.1);
-    let d = _mm512_add_pd(c, o.1);
-    (r0, d)
-}
-
-#[inline]
-#[target_feature(enable = "avx512f")]
-fn fast_two_sum_ds(s: (__m512d, __m512d), o: __m512d) -> (__m512d, __m512d) {
-    let r0 = _mm512_add_pd(s.0, o);
-
-    let a = _mm512_sub_pd(s.0, r0);
-    let b = _mm512_add_pd(a, o);
-    let c = _mm512_add_pd(b, s.1);
-    (r0, c)
-}
-
 // Assumption: e_a >= e_b
 // https://en.wikipedia.org/wiki/2Sum
+// (a + b, (b - ((a + b) - a)))
 #[inline]
 #[target_feature(enable = "avx512f")]
 fn fast_two_sum_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
@@ -127,24 +92,49 @@ fn fast_two_sum_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
 
 #[inline]
 #[target_feature(enable = "avx512f")]
-fn mul_ds(s: (__m512d, __m512d), o: __m512d) -> (__m512d, __m512d) {
-    let r0 = _mm512_mul_pd(s.0, o);
-    let a = _mm512_fmadd_pd(s.1, o, _mm512_fmsub_pd(s.0, o, r0));
-    (r0, a)
+fn fast_two_sum_ds(a: (__m512d, __m512d), b: __m512d) -> (__m512d, __m512d) {
+    let (s, t) = fast_two_sum_ss(a.0, b);
+    let e = _mm512_add_pd(t, a.1);
+    (s, e)
 }
 
 #[inline]
 #[target_feature(enable = "avx512f")]
-fn div_sd(s: __m512d, o: (__m512d, __m512d)) -> (__m512d, __m512d) {
+fn fast_two_sum_dd(a: (__m512d, __m512d), b: (__m512d, __m512d)) -> (__m512d, __m512d) {
+    let (s, t) = fast_two_sum_ss(a.0, b.0);
+    let e = _mm512_add_pd(t, a.1);
+    let e = _mm512_add_pd(e, b.1);
+    (s, e)
+}
+
+#[inline]
+#[target_feature(enable = "avx512f")]
+fn fast_two_mult_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
+    let p = _mm512_mul_pd(a, b);
+    let r = _mm512_fmsub_pd(a, b, p);
+    (p ,r)
+}
+
+#[inline]
+#[target_feature(enable = "avx512f")]
+fn mul_ds(a: (__m512d, __m512d), b: __m512d) -> (__m512d, __m512d) {
+    let (p, r) = fast_two_mult_ss(a.0, b);
+    let e = _mm512_fmadd_pd(a.1, b, r);
+    (p, e)
+}
+
+#[inline]
+#[target_feature(enable = "avx512f")]
+fn div_sd(a: __m512d, b: (__m512d, __m512d)) -> (__m512d, __m512d) {
     let one = _mm512_set1_pd(1.0);
 
-    let t = _mm512_div_pd(one, o.0);
+    let r = _mm512_div_pd(one, b.0);
 
-    let q0 = _mm512_mul_pd(s, t);
-    let u = _mm512_fmsub_pd(t, s, q0);
+    let (q0, u) = fast_two_mult_ss(a, r);
 
-    let mut q1 = _mm512_fnmadd_pd(o.1, t, _mm512_fnmadd_pd(o.0, t, one));
-    q1 = _mm512_fmadd_pd(q0, q1, u);
+    let e = _mm512_fnmadd_pd(b.0, r, one);
+    let q1 = _mm512_fnmadd_pd(b.1, r, e);
+    let q1 = _mm512_fmadd_pd(q0, q1, u);
 
     (q0, q1)
 }
