@@ -48,7 +48,6 @@ fn log_avx512(d: __m512d) -> __m512d {
 
     let x = div_sd(u, l);
     let x2 = _mm512_mul_pd(x.0, x.0);
-    let x3 = _mm512_mul_pd(x2, x.0);
     let x4 = _mm512_mul_pd(x2, x2);
     let x8 = _mm512_mul_pd(x4, x4);
 
@@ -71,7 +70,7 @@ fn log_avx512(d: __m512d) -> __m512d {
 
     // For IEEE floats, 2*x = x + x
     s = fast_two_sum_dd(s, (_mm512_add_pd(x.0, x.0), _mm512_add_pd(x.1, x.1)));
-    s = fast_two_sum_ds(s, _mm512_mul_pd(x3, t));
+    s = fast_two_sum_ds(s, _mm512_mul_pd(_mm512_mul_pd(x2, x.0), t));
 
     let r = _mm512_add_pd(s.0, s.1);
 
