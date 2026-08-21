@@ -16,7 +16,7 @@ fn main() -> Result<()> {
     // kestrel::allele::calculate_allele_probabilities(&gl);
     // return Ok(());
 
-    let (gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
+    let (samples, gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
 
     // let gt = concatenate(Axis(0), &[gt.view(), gt.view(), gt.view()]).unwrap();
     // let af = concatenate(Axis(0), &[af.view(), af.view(), af.view()]).unwrap();
@@ -28,12 +28,12 @@ fn main() -> Result<()> {
     let out_file = File::create(&args[2])?;
 
     let mut writer = BufWriter::new(out_file);
-    writeln!(writer, "ID1 ID2 kinship")?;
+    writeln!(writer, "sample1 sample2 kinship")?;
     let s = kinship.shape()[0] / 2;
     for i in 0..s {
         let a = 2 * i;
         let b = a + 1;
-        writeln!(writer, "{} {} {}", a, b, kinship[(a, b)])?;
+        writeln!(writer, "{} {} {}", samples[a], samples[b], kinship[(a, b)])?;
     }
 
     writer.flush()?;

@@ -11,11 +11,13 @@ use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
 
 use crate::algebra::Matrix;
 
-pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
+pub fn parse_vcf(file: &Path) -> Result<(Vec<String>, Array3<i8>, Array2<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
 
-    let num_samples = header.sample_names().len();
+    let samples = header.sample_names().iter().map(|s| s.to_owned()).collect::<Vec<_>>();
+
+    let num_samples = samples.len();
 
     // println!("{:?}", header);
 
@@ -107,7 +109,7 @@ pub fn parse_vcf(file: &Path) -> Result<(Array3<i8>, Array2<f64>)> {
         af[[v, 1]] = f1;
     }
 
-    Ok((gt, af))
+    Ok((samples, gt, af))
 }
 
 // pub fn parse_vcf_gl(file: &Path) -> Result<Array4<f64>> {

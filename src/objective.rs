@@ -20,7 +20,7 @@ pub fn compute_obj(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f
 fn compute_obj_blocks(blocks: &[Block<f64, 8, 9>], x: &Vector<9>, eps: f64) -> f64 {
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") {
-        return unsafe { compute_blocks_avx512(blocks, x, eps) };
+        return unsafe { compute_obj_avx512(blocks, x, eps) };
     }
 
     compute_blocks_scalar(blocks, x, eps)
@@ -54,16 +54,14 @@ fn compute_blocks_scalar<const L: usize>(blocks: &[Block<f64, L, 9>], x: &[f64; 
 }
 
 #[target_feature(enable = "avx512f")]
-pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64) -> f64 {
+pub fn compute_obj_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64) -> f64 {
     // 9
     let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
 
     // 12
     let mut zs = _mm512_setzero_pd();
-    // let mut zc = _mm512_setzero_pd();
     let ze = _mm512_set1_pd(eps);
 
-    // This still loads one constant using 1to8...
     for block in blocks.iter() {
         // This computes a dot product between x and a row of p
         // In theory this could be manually unrolled a few times
@@ -80,13 +78,6 @@ pub fn compute_blocks_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64
         let l = Log::log(d);
 
         zs = _mm512_add_pd(zs, l);
-
-        // Kahan summation
-        // let y = _mm512_sub_pd(l, zc);
-        // let t = _mm512_add_pd(zs, y);
-        // let b = _mm512_sub_pd(t, zs);
-        // zc = _mm512_sub_pd(b, y);
-        // zs = t;
     }
 
     // Perhaps do something with zc too...

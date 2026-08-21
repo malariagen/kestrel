@@ -1,9 +1,7 @@
 use core::arch::x86_64::*;
 
 use crate::{
-    algebra::{Matrix, Vector, dot, scale_div_mut},
-    blockbuffer::{Block, BlockBuffer},
-    lane::Lane8,
+    algebra::{Matrix, Vector, dot, scale_div, scale_div_mut}, blockbuffer::{Block, BlockBuffer}, lane::Lane8,
 };
 
 // h - 8*8*45 = 2880 bytes
@@ -12,20 +10,32 @@ use crate::{
 const BLOCKS: usize = 32;
 
 pub fn compute_grad_hess(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-    let (g, mut h) = unsafe { compute_g_h_fused_avx512(p_mat, x, eps) };
+    let (blocks, remainder) = p_mat.as_blocks();
+
+    let (mut grad, mut hess) = compute_grad_hess_blocks(blocks, x, eps);
+
+    compute_grad_hess_remainder(remainder, x, eps, &mut grad, &mut hess);
 
     let n = p_mat.num_rows() as f64;
 
-    // let grad: Vector<9> = std::array::from_fn(|i| 1.0 - g[i] / n);
-    let grad: Vector<9> = std::array::from_fn(|i| -g[i] / n);
+    let grad = scale_div(-n, &grad);
 
-    scale_div_mut(&mut h, n);
+    scale_div_mut(&mut hess, n);
 
-    (grad, h)
+    return (grad, hess)
 }
 
-fn compute_g_h_fused_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut [f64; 9], h: &mut [[f64; 9]; 9]) {
-    for row in p_mat.iter() {
+fn compute_grad_hess_blocks(blocks: &[Block<f64, 8, 9>], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    #[cfg(target_arch = "x86_64")]
+    if is_x86_feature_detected!("avx512f") {
+        return unsafe { compute_grad_hess_avx512(blocks, x, eps) };
+    }
+
+    unimplemented!("SIMD intrinsics haven't been written for your platform yet")
+}
+
+fn compute_grad_hess_remainder(remainder: &[Vector<9>], x: &Vector<9>, eps: f64, g: &mut Vector<9>, h: &mut Matrix<9>) {
+    for row in remainder.iter() {
         let prod = dot(row, x);
 
         // d = 1 / (P x + eps)
@@ -53,7 +63,7 @@ fn compute_g_h_fused_scalar(p_mat: &[[f64; 9]], x: &[f64; 9], eps: f64, g: &mut 
 }
 
 #[target_feature(enable = "avx512f")]
-pub fn compute_g_h_fused_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], eps: f64) -> ([f64; 9], [[f64; 9]; 9]) {
+pub fn compute_grad_hess_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64) -> ([f64; 9], [[f64; 9]; 9]) {
     let mut g = [Lane8::zero(); 9];
 
     // Upper triangular Hessian accumulators stored in row-major order:
@@ -79,7 +89,6 @@ pub fn compute_g_h_fused_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], ep
     // This is one tile
     let mut scaled_column_buf = [[Lane8::zero(); 9]; BLOCKS];
 
-    let (blocks, remainder) = p_mat.as_blocks();
     let (tiles, partial_tile) = blocks.as_chunks::<BLOCKS>();
 
     for tile in tiles.iter() {
@@ -105,13 +114,11 @@ pub fn compute_g_h_fused_avx512(p_mat: &BlockBuffer<f64, 8, 9>, x: &[f64; 9], ep
         }
     }
 
-    compute_g_h_fused_scalar(remainder, x, eps, &mut grad, &mut hess);
-
     (grad, hess)
 }
 
 #[target_feature(enable = "avx512f")]
-pub fn tile_loop(
+fn tile_loop(
     tile: &[Block<f64, 8, 9>],
     x: &[f64; 9],
     eps: f64,

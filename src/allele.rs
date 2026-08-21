@@ -1,7 +1,7 @@
 use ndarray::{Array2, Array4};
 
 use crate::{
-    algebra::{Matrix, Vector, add, dot, mul, outer, scale_div, scale_mul, sum},
+    algebra::{Matrix, Vector, dot, mul, outer, scale_div, },
     sqp::{self, Tuneables},
 };
 
@@ -38,7 +38,6 @@ pub fn calculate_objective(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -
 
     let n = likelihoods.len();
 
-    // 2.0 * sum(x) - s / (n as f64) - 2.0
     -s / (n as f64)
 }
 
@@ -77,7 +76,6 @@ pub fn calculate_grad_hess(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -
 
     let n = likelihoods.len();
 
-    // let grad = std::array::from_fn(|i| 2.0 * (1.0 - g[i] / (n as f64)));
     let grad = std::array::from_fn(|i| -2.0 * g[i] / (n as f64));
 
     let mut hess = [[0.0; 4]; 4];
