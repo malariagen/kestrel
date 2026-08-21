@@ -1,7 +1,9 @@
 use core::arch::x86_64::*;
 
 use crate::{
-    algebra::{Matrix, Vector, dot, scale_div, scale_div_mut}, blockbuffer::{Block, BlockBuffer}, lane::Lane8,
+    algebra::{Matrix, Vector, dot, scale_div, scale_div_mut},
+    blockbuffer::{Block, BlockBuffer},
+    lane::Lane8,
 };
 
 // h - 8*8*45 = 2880 bytes
@@ -22,7 +24,7 @@ pub fn compute_grad_hess(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64
 
     scale_div_mut(&mut hess, n);
 
-    return (grad, hess)
+    return (grad, hess);
 }
 
 fn compute_grad_hess_blocks(blocks: &[Block<f64, 8, 9>], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {

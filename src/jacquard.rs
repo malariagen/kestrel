@@ -13,7 +13,10 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, fused, objective, sqp::{self, Tuneables},
+    algebra::{Vector, dot},
+    blockbuffer::BlockBuffer,
+    cls, fused, objective,
+    sqp::{self, Tuneables},
 };
 
 pub fn calculate_relatedness_coefficients(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
@@ -195,8 +198,7 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
                 );
 
                 let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
-                let grad_hess =
-                    |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
+                let grad_hess = |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
 
                 let (delta, _) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
 

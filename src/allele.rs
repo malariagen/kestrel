@@ -1,7 +1,7 @@
 use ndarray::{Array2, Array4};
 
 use crate::{
-    algebra::{Matrix, Vector, dot, mul, outer, scale_div, },
+    algebra::{Matrix, Vector, dot, mul, outer, scale_div},
     sqp::{self, Tuneables},
 };
 

@@ -116,7 +116,7 @@ fn fast_two_sum_dd(a: (__m512d, __m512d), b: (__m512d, __m512d)) -> (__m512d, __
 fn fast_two_mult_ss(a: __m512d, b: __m512d) -> (__m512d, __m512d) {
     let p = _mm512_mul_pd(a, b);
     let r = _mm512_fmsub_pd(a, b, p);
-    (p ,r)
+    (p, r)
 }
 
 #[inline]

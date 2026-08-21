@@ -23,17 +23,17 @@ mod kestrel {
 
 extern crate openblas_src;
 
+pub mod algebra;
 pub mod allele;
+pub mod blockbuffer;
 pub mod buffer;
 pub mod cholesky;
 pub mod cls;
+pub mod eigenval;
 pub mod fused;
-pub mod lane;
 pub mod iis;
 pub mod jacquard;
-pub mod algebra;
-pub mod blockbuffer;
-pub mod eigenval;
+pub mod lane;
 pub mod log;
 pub mod objective;
 pub mod sqp;
