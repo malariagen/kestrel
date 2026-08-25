@@ -108,6 +108,10 @@ pub fn calculate_obj_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> 
 // TODO expand arrays for h and g in other func to variables
 // TODO make generic versions of these algorithms? For scalars, etc?
 
+// For big functions you need to manually re-order instructions to
+// get the compiler to generate different code (e.g. avoid spillage)
+// even though in theory they're the equivalent.
+
 #[target_feature(enable = "avx512f")]
 pub fn calculate_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
     // 4
@@ -179,47 +183,46 @@ pub fn calculate_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f6
 
         let inv_d = _mm512_div_pd(one, d);
 
-        zg0 = _mm512_fmadd_pd(lx0, inv_d, zg0);
-        zg1 = _mm512_fmadd_pd(lx1, inv_d, zg1);
-        zg2 = _mm512_fmadd_pd(lx2, inv_d, zg2);
-        zg3 = _mm512_fmadd_pd(lx3, inv_d, zg3);
-
         let lxd0 = _mm512_mul_pd(lx0, inv_d);
         let lxd1 = _mm512_mul_pd(lx1, inv_d);
         let lxd2 = _mm512_mul_pd(lx2, inv_d);
         let lxd3 = _mm512_mul_pd(lx3, inv_d);
 
         let lxd00 = _mm512_mul_pd(lxd0, lxd0);
-        let lxd01 = _mm512_mul_pd(lxd0, lxd1);
-        let lxd11 = _mm512_mul_pd(lxd1, lxd1);
-        let lxd02 = _mm512_mul_pd(lxd0, lxd2);
-        let lxd12 = _mm512_mul_pd(lxd1, lxd2);
-        let lxd22 = _mm512_mul_pd(lxd2, lxd2);
-        let lxd03 = _mm512_mul_pd(lxd0, lxd3);
-        let lxd13 = _mm512_mul_pd(lxd1, lxd3);
-        let lxd23 = _mm512_mul_pd(lxd2, lxd3);
-        let lxd33 = _mm512_mul_pd(lxd3, lxd3);
-
         zh0 = _mm512_fmadd_pd(two, lxd00, zh0);
+        zh0 = _mm512_fnmadd_pd(l00, inv_d, zh0);
+        let lxd01 = _mm512_mul_pd(lxd0, lxd1);
         zh1 = _mm512_fmadd_pd(two, lxd01, zh1);
-        zh2 = _mm512_fmadd_pd(two, lxd11, zh2);
-        zh3 = _mm512_fmadd_pd(two, lxd02, zh3);
-        zh4 = _mm512_fmadd_pd(two, lxd12, zh4);
-        zh5 = _mm512_fmadd_pd(two, lxd22, zh5);
-        zh6 = _mm512_fmadd_pd(two, lxd03, zh6);
-        zh7 = _mm512_fmadd_pd(two, lxd13, zh7);
-        zh8 = _mm512_fmadd_pd(two, lxd23, zh8);
-        zh9 = _mm512_fmadd_pd(two, lxd33, zh9);
-
         zh1 = _mm512_fnmadd_pd(l01, inv_d, zh1);
+        let lxd11 = _mm512_mul_pd(lxd1, lxd1);
+        zh2 = _mm512_fmadd_pd(two, lxd11, zh2);
         zh2 = _mm512_fnmadd_pd(l11, inv_d, zh2);
+        let lxd02 = _mm512_mul_pd(lxd0, lxd2);
+        zh3 = _mm512_fmadd_pd(two, lxd02, zh3);
         zh3 = _mm512_fnmadd_pd(l02, inv_d, zh3);
+        let lxd12 = _mm512_mul_pd(lxd1, lxd2);
+        zh4 = _mm512_fmadd_pd(two, lxd12, zh4);
         zh4 = _mm512_fnmadd_pd(l12, inv_d, zh4);
+        let lxd22 = _mm512_mul_pd(lxd2, lxd2);
+        zh5 = _mm512_fmadd_pd(two, lxd22, zh5);
         zh5 = _mm512_fnmadd_pd(l22, inv_d, zh5);
+        let lxd03 = _mm512_mul_pd(lxd0, lxd3);
+        zh6 = _mm512_fmadd_pd(two, lxd03, zh6);
         zh6 = _mm512_fnmadd_pd(l03, inv_d, zh6);
+        let lxd13 = _mm512_mul_pd(lxd1, lxd3);
+        zh7 = _mm512_fmadd_pd(two, lxd13, zh7);
         zh7 = _mm512_fnmadd_pd(l13, inv_d, zh7);
+        let lxd23 = _mm512_mul_pd(lxd2, lxd3);
+        zh8 = _mm512_fmadd_pd(two, lxd23, zh8);
         zh8 = _mm512_fnmadd_pd(l23, inv_d, zh8);
+        let lxd33 = _mm512_mul_pd(lxd3, lxd3);
+        zh9 = _mm512_fmadd_pd(two, lxd33, zh9);
         zh9 = _mm512_fnmadd_pd(l33, inv_d, zh9);
+
+        zg0 = _mm512_fmadd_pd(lx0, inv_d, zg0);
+        zg1 = _mm512_fmadd_pd(lx1, inv_d, zg1);
+        zg2 = _mm512_fmadd_pd(lx2, inv_d, zg2);
+        zg3 = _mm512_fmadd_pd(lx3, inv_d, zg3);
     }
 
     let g = [
