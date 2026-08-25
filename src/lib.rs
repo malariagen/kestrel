@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 
 #[pymodule]
 mod kestrel {
-    use crate::jacquard;
+    use crate::coefficients;
     use numpy::{IntoPyArray, PyArray2, PyReadonlyArray3};
     use pyo3::prelude::*;
 
@@ -15,7 +15,7 @@ mod kestrel {
     ) -> Bound<'py, PyArray2<f64>> {
         let genotypes_view = genotypes.as_array();
 
-        let kinship = jacquard::calculate_relatedness_coefficients_no_freq(genotypes_view);
+        let kinship = coefficients::calculate_relatedness_coefficients_no_freq(genotypes_view);
 
         kinship.into_pyarray(py)
     }
@@ -24,17 +24,17 @@ mod kestrel {
 extern crate openblas_src;
 
 pub mod algebra;
+// pub mod lanebuffer;
 pub mod allele;
 pub mod blockbuffer;
 pub mod buffer;
 pub mod cholesky;
+pub mod jacquard;
 pub mod cls;
 pub mod eigenval;
-pub mod fused;
 pub mod iis;
-pub mod jacquard;
+pub mod coefficients;
 pub mod lane;
 pub mod log;
-pub mod objective;
 pub mod sqp;
 pub mod vcf;

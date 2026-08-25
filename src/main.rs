@@ -21,7 +21,7 @@ fn main() -> Result<()> {
     // let gt = concatenate(Axis(0), &[gt.view(), gt.view(), gt.view()]).unwrap();
     // let af = concatenate(Axis(0), &[af.view(), af.view(), af.view()]).unwrap();
 
-    let kinship = kestrel::jacquard::calculate_relatedness_coefficients(&gt, &af);
+    let kinship = kestrel::coefficients::calculate_relatedness_coefficients(&gt, &af);
 
     println!("sum {}", kinship.sum());
 

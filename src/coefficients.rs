@@ -15,7 +15,7 @@ use lockfree_progress_bar::ProgressBar;
 use crate::{
     algebra::{Vector, dot},
     blockbuffer::BlockBuffer,
-    cls, fused, objective,
+    cls, jacquard::grad_hess, jacquard::objective,
     sqp::{self, Tuneables},
 };
 
@@ -198,7 +198,7 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
                 );
 
                 let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| fused::compute_grad_hess(&buffers.p_mat, &x, eps);
+                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
 
                 let (delta, _) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
 
@@ -255,7 +255,7 @@ fn calculate_mixture_component_matrix<const L: usize>(
 
 #[cfg(test)]
 mod test {
-    use crate::jacquard::{calculate_max_alleles, reorder_genotypes};
+    use crate::coefficients::{calculate_max_alleles, reorder_genotypes};
     use ndarray::array;
 
     #[test]
