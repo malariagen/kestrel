@@ -4,26 +4,26 @@ use crate::{
 };
 
 pub struct Tuneables {
-    sqp_max_iter: u64,
-    sqp_conv_tol: f64,
+    pub sqp_max_iter: u64,
+    pub sqp_conv_tol: f64,
 
-    qp_max_iter: u64,
-    qp_conv_tol: f64,
-    qp_zero_search_tol: f64,
+    // qp_max_iter: u64,
+    pub qp_conv_tol: f64,
+    pub qp_zero_search_tol: f64,
 
-    bls_max_iter: u64,
-    bls_sufficient_decrease: f64,
-    bls_step_size_reduce: f64,
+    pub bls_max_iter: u64,
+    pub bls_sufficient_decrease: f64,
+    pub bls_step_size_reduce: f64,
 
-    epsilon: f64,
+    pub epsilon: f64,
 }
 
 impl Tuneables {
     pub fn new() -> Tuneables {
         Tuneables {
-            sqp_max_iter: 50,
+            sqp_max_iter: 100,
             sqp_conv_tol: 1e-8,
-            qp_max_iter: 10,
+            // qp_max_iter: 10,
             qp_conv_tol: 1e-10,
             qp_zero_search_tol: 1e-14,
             bls_max_iter: 10,
@@ -60,13 +60,6 @@ where
         //     }
         // }
 
-        // For an x inside the unit simplex, we always have x^T g = 0.
-        // For a vertex like [1, 0, 0, 0], this means that g_1 = 0.
-
-        // TODO check this
-        // and also check when adding constraints that we have at least one to add
-        // or ensure that an error gets thrown or whatever
-
         if check_convergence(&x, &g, tune.sqp_conv_tol) {
             return (x, iter);
         }
@@ -74,9 +67,9 @@ where
         // c = g - H x
         let c = sub(&g, &mul(&h, &x));
 
-        let (y, qp_iter) = solve_qp_active_set(&h, &c, &x, true, tune);
+        let (y, _qp_iter) = solve_qp_active_set(&h, &c, &x, true, tune);
 
-        let (xnew, bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
+        let (xnew, _bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
         // println!("{iter} {x:?} {y:?} {g:?} {qp_iter} {bls_iter}");
         // println!("{iter} {x:?} {g:?} {qp_iter} {bls_iter}");
@@ -92,15 +85,11 @@ where
 // TODO also print a warning when the algorithm doesn't converge within the iterations
 
 fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> bool {
-    // For optimization subject to x >= 0, we have (Bertsekas Nonlinear Programming p. 238):
-    //   If x == 0 then the partial derivative is >= 0
-    //   If x > 0.0, then the partial derivative is equal to zero.
-
     // This is the Lagrange multiplier
     let lambda = dot(x, g);
 
-    // What we actually have is if x == 0 then >= lambda
-    // And if x > 0.0 then x == lambda
+    // If x == 0 then gx >= lambda
+    // And if x > 0.0 then gx == lambda
 
     x.iter().zip(g.iter()).all(|(&xi, &gi)| {
         if xi == 0.0 {
@@ -124,7 +113,7 @@ pub fn solve_qp_active_set<const N: usize>(
     y0: &Vector<N>,
     modify: bool,
     tune: &Tuneables,
-) -> (Vector<N>, u64) {
+) -> (Vector<N>, usize) {
     let mut y = y0.clone();
 
     let mut working_set = [false; N];
@@ -137,7 +126,7 @@ pub fn solve_qp_active_set<const N: usize>(
 
     let mut iter = 0;
 
-    while iter < tune.qp_max_iter {
+    while iter < N + 1 {
         y = sum_to_one(&y);
 
         let mut free_indices = [0; N];
@@ -233,7 +222,6 @@ pub fn solve_qp_active_set<const N: usize>(
                     free_count += 1;
                 }
             }
-            // println!("QP {iter} {p:?}");
             // In theory we should use y[free_set] and q[free_set] to calculate this.
             // However, we know that q[working_set] == 0.0, so this will be equivalent
             // as long as there is at least one element in the free set. The current
@@ -245,7 +233,6 @@ pub fn solve_qp_active_set<const N: usize>(
             y = std::array::from_fn(|i| (y[i] + alpha * p[i]).max(0.0));
 
             if let Some(index) = blocking_index {
-                // print("Adding", blocking_index, "to working set")
                 working_set[index] = true;
                 y[index] = 0.0;
             }

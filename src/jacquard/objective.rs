@@ -1,9 +1,19 @@
 use crate::{
-    algebra::{Vector, dot},
-    blockbuffer::{Block, BlockBuffer},
-    log::Log,
+    algebra::{Vector, dot, sum}, blockbuffer::{Block, BlockBuffer}, log::Log,
 };
 use core::arch::x86_64::*;
+
+pub fn compute_obj_barrier(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f64 {
+    let (blocks, remainder) = p_mat.as_blocks();
+
+    let b = compute_obj_blocks(blocks, x, eps);
+
+    let r = compute_obj_remainder(remainder, x, eps);
+
+    let n = p_mat.num_rows() as f64;
+
+    return -(b + r) + n * (sum(x) - 1.0);
+}
 
 pub fn compute_obj(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f64 {
     let (blocks, remainder) = p_mat.as_blocks();

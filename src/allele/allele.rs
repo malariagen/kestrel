@@ -11,7 +11,7 @@ pub fn calculate_allele_probabilities(likelihoods: &[Vec<Matrix<4>>]) {
         let x0 = [0.25; 4];
 
         let obj = |x: &Vector<4>, eps| calculate_objective(&likel, &x, eps);
-        let grad_hess = |x: &Vector<4>, eps| calculate_grad_hess(&likel, &x, eps);
+        let grad_hess = |x: &Vector<4>, eps| calculate_grad_hess2(&likel, &x, eps);
 
         let (x, _) = sqp::solve_sqp(obj, grad_hess, &x0, &Tuneables::new());
 
@@ -132,7 +132,7 @@ pub fn calculate_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f6
     let mut zh8 = _mm512_setzero_pd();
     let mut zh9 = _mm512_setzero_pd();
 
-    // 2
+    // 3
     let one = _mm512_set1_pd(1.0);
     let two = _mm512_set1_pd(2.0);
     let ze = _mm512_set1_pd(eps);
@@ -249,7 +249,7 @@ pub fn calculate_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f6
 }
 
 
-pub fn calculate_grad_hess(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+pub fn calculate_grad_hess2(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     let mut g = [0.0; 4];
     let mut h = [[0.0; 4]; 4];
 
@@ -263,11 +263,9 @@ pub fn calculate_grad_hess(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -
             g[i] += lxd[i];
         }
 
-        let o = outer(&lxd, &lxd);
-
         for i in 0..4 {
             for j in 0..4 {
-                h[i][j] += 2.0 * o[i][j] - l[i][j] / d;
+                h[i][j] += 2.0 * lxd[i] * lxd[j] - l[i][j] / d;
             }
         }
     }

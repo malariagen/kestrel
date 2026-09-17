@@ -11,6 +11,20 @@ use crate::{
 
 const BLOCKS: usize = 32;
 
+pub fn compute_grad_hess_barrier(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    let (blocks, remainder) = p_mat.as_blocks();
+
+    let (mut grad, mut hess) = compute_grad_hess_blocks(blocks, x, eps);
+
+    compute_grad_hess_remainder(remainder, x, eps, &mut grad, &mut hess);
+
+    let n = p_mat.num_rows() as f64;
+
+    let grad = std::array::from_fn(|i| -grad[i] + n);
+
+    return (grad, hess);
+}
+
 pub fn compute_grad_hess(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
     let (blocks, remainder) = p_mat.as_blocks();
 

@@ -25,6 +25,7 @@ extern crate openblas_src;
 
 pub mod algebra;
 // pub mod lanebuffer;
+pub mod barrier;
 pub mod allele;
 pub mod blockbuffer;
 pub mod buffer;

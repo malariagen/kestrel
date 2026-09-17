@@ -13,10 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot},
-    blockbuffer::BlockBuffer,
-    cls, jacquard::grad_hess, jacquard::objective,
-    sqp::{self, Tuneables},
+    algebra::{Vector, dot}, barrier, blockbuffer::BlockBuffer, cls, jacquard::{grad_hess, objective}, sqp::{self, Tuneables},
 };
 
 pub fn calculate_relatedness_coefficients(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
@@ -144,7 +141,7 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
     let num_s = genotypes.shape()[0];
 
     let mut thread_pool = ThreadPoolBuilder {
-        num_threads: ThreadCount::Count(NonZeroUsize::new(12).unwrap()),
+        num_threads: ThreadCount::Count(NonZeroUsize::new(1).unwrap()),
         range_strategy: RangeStrategy::Fixed,
         cpu_pinning: CpuPinningPolicy::No,
     }
@@ -155,7 +152,7 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
         .enumerate()
         .array_combinations_with_replacement()
         .collect();
-    let mut kinship = vec![(0, 0, 0.0f64); pairs.len()];
+    let mut output = vec![(0, 0, 0.0f64, 0); pairs.len()];
 
     let bar = ProgressBar::new(pairs.len().try_into().unwrap())
         .with_eta()
@@ -167,7 +164,7 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
 
     let handle = bar.clone_handle();
 
-    (kinship.par_iter_mut(), pairs.par_iter())
+    (output.par_iter_mut(), pairs.par_iter())
         .zip_eq()
         .with_thread_pool(&mut thread_pool)
         .for_each_init(
@@ -197,14 +194,18 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
                     &mut buffers.p_mat,
                 );
 
-                let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
+                // let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
+                // let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
+                // let (delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
 
-                let (delta, _) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
+                let obj = |x: &Vector<9>, eps| objective::compute_obj_barrier(&buffers.p_mat, &x, eps);
+                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess_barrier(&buffers.p_mat, &x, eps);
+
+                let (delta, iters) = barrier::solve_ipm(obj, grad_hess, &delta, &Tuneables::new());
 
                 // println!("{} {} {}", x, y, delta.transpose());
                 let kinship = dot(&delta, &kinship_vec);
-                *out = (*x, *y, kinship);
+                *out = (*x, *y, kinship, iters);
                 handle.inc();
             },
         );
@@ -213,9 +214,13 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
 
     let mut kinship_mat = Array2::<f64>::zeros((num_s, num_s));
 
-    for (x, y, kinship) in kinship.iter() {
+    let mut total_iters = 0;
+    for (x, y, kinship, iter) in output.iter() {
+        total_iters += iter;
         kinship_mat[(*x, *y)] = *kinship;
     }
+
+    println!("Total iters {total_iters}");
 
     kinship_mat
 }

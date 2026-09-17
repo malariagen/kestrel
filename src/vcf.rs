@@ -30,32 +30,36 @@ pub fn parse_vcf(file: &Path) -> Result<(Vec<String>, Array3<i8>, Array2<f64>)> 
     for result in reader.records() {
         let record = result?;
 
-        let info = record.info();
-        let af_info = info
-            .get(&header, "AF")
-            .context("No AF data found")??
-            .context("No AF data found")?;
+        // parse af
+        if false {
+            let info = record.info();
+            let af_info = info
+                .get(&header, "AF")
+                .context("No AF data found")??
+                .context("No AF data found")?;
 
-        if let InfoValue::Array(af_array) = af_info {
-            if let InfoArray::Float(af_float) = af_array {
-                if let Some((af,)) = af_float.iter().collect_tuple() {
-                    let af: f64 = af?.context("No AF data found")?.into();
-                    if af < maf || 1.0 - af < maf {
+            if let InfoValue::Array(af_array) = af_info {
+                if let InfoArray::Float(af_float) = af_array {
+                    if let Some((af,)) = af_float.iter().collect_tuple() {
+                        let af: f64 = af?.context("No AF data found")?.into();
+                        if af < maf || 1.0 - af < maf {
+                            continue;
+                        }
+                        allele_frequencies.push((1.0 - af, af));
+                    } else {
+                        // Not diallelic
                         continue;
                     }
-                    allele_frequencies.push((1.0 - af, af));
                 } else {
-                    // Not bi-allelic
-                    continue;
+                    bail!("Value {:?} is not an array", af_array);
                 }
             } else {
-                bail!("Value {:?} is not an array", af_array);
+                bail!("Value {:?} is not an array", af_info);
             }
-        } else {
-            bail!("Value {:?} is not an array", af_info);
         }
 
         let samples = record.samples();
+        // println!("{:?}", samples.keys());
         let gt_series = samples.select("GT").context("No GT data found")?;
 
         let mut variants = Vec::with_capacity(num_samples);
@@ -103,11 +107,11 @@ pub fn parse_vcf(file: &Path) -> Result<(Vec<String>, Array3<i8>, Array2<f64>)> 
     }
 
     let mut af = Array2::<f64>::zeros((num_variants, 2));
-    for v in 0..num_variants {
-        let (f0, f1) = allele_frequencies[v];
-        af[[v, 0]] = f0;
-        af[[v, 1]] = f1;
-    }
+    // for v in 0..num_variants {
+    //     let (f0, f1) = allele_frequencies[v];
+    //     af[[v, 0]] = f0;
+    //     af[[v, 1]] = f1;
+    // }
 
     Ok((samples, gt, af))
 }
