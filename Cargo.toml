@@ -23,6 +23,7 @@ noodles = { version = "0.111.0", features = ["vcf"] }
 numpy = "0.29.0"
 openblas-src = { version = "0.10.16", features = ["system"] }
 paralight = "0.0.12"
+polars = { version = "0.55.2", features = ["csv"] }
 pyo3 = "0.29.0"
 
 [profile.release]

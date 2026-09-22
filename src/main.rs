@@ -30,11 +30,11 @@ fn main() -> Result<()> {
 
     let mut writer = BufWriter::new(out_file);
     writeln!(writer, "sample1 sample2 kinship")?;
-    let s = kinship.shape()[0] / 2;
+    let s = kinship.shape()[0];
     for i in 0..s {
-        let a = 2 * i;
-        let b = a + 1;
-        writeln!(writer, "{} {} {}", samples[a], samples[b], kinship[(a, b)])?;
+        for j in i..s {
+            writeln!(writer, "{} {} {}", samples[i], samples[j], kinship[(i, j)])?;
+        }
     }
 
     writer.flush()?;

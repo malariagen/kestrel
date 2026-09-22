@@ -17,6 +17,7 @@ dependencies = [
     "malariagen-data @ git+https://github.com/malariagen/malariagen-data-python.git",
     "matplotlib>=3.11.1",
     "nbformat>=5.10.4",
+    "stdpopsim>=0.3.0",
 ]
 
 [tool.uv.workspace]
