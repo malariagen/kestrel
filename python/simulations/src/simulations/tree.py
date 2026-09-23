@@ -3,7 +3,10 @@ import pandas as pd
 import stdpopsim
 import tskit
 import numpy as np
+import io
 from pathlib import Path
+
+import ibd
 
 species = stdpopsim.get_species("AnoGam")
 # model = species.get_demographic_model("GabonAg1000G_1A17")
@@ -140,104 +143,22 @@ def create_pedigree(unrelated):
 
     return pairs, base, pd.finalise()
 
-def generate_ibd_lookup_table() -> np.ndarray:
-    # For 4 items, there are 4 choose 2 = 6 different equality combinations
-    # between items. Each combination has 2 outcomes, so there are 2^6 = 64
-    # possible outcomes. However, only 15 of the possibilities define valid
-    # equivalence relations.
-    table = np.zeros((2, 2, 2, 2, 2, 2), dtype=np.int8)
+def export_multi_vcf(output_path, ts_map, individuals, individual_names):
+    with open(output_path, "w") as vcf:
+        first_contig = True
 
-    # 1
-    # all equal
-    # ii-ii
-    table[1, 1, 1, 1, 1, 1] = 1
+        for contig, ts in ts_map.items():
+            buf = io.StringIO()
+            ts.write_vcf(vcf, contig_id=contig, individuals=individuals, individual_names=individual_names)
+            buf.seek(0)
 
-    # 2
-    # i == j, k == l
-    # ii-kk
-    table[1, 0, 0, 0, 0, 1] = 2
+            for line in buf:
+                if not first_contig and not line.startswith("#"):
+                    vcf.write(line)
+                else:
+                    vcf.write(line)
 
-    # 3
-    # i == j, i == k, j == k
-    # ii-il
-    table[1, 1, 0, 1, 0, 0] = 3
-    # i == j, i == l, j == l
-    # ii-ki
-    table[1, 0, 1, 0, 1, 0] = 3
-
-    # 4
-    # i == j
-    # ii-kl
-    table[1, 0, 0, 0, 0, 0] = 4
-
-    # 5
-    # i == k, i == l, k == l
-    # ij-ii
-    table[0, 1, 1, 0, 0, 1] = 5
-    # j == k, j == l, k == l
-    # ij-jj
-    table[0, 0, 0, 1, 1, 1] = 5
-
-    # 6
-    # k == l
-    # ij-kk
-    table[0, 0, 0, 0, 0, 1] = 6
-
-    # 7
-    # i == k, j == l
-    # ij-ij
-    table[0, 1, 0, 0, 1, 0] = 7
-    # i == l, j == k
-    # ij-ji
-    table[0, 0, 1, 1, 0, 0] = 7
-
-    # 8
-    # i == k, ij-il
-    table[0, 1, 0, 0, 0, 0] = 8
-    # i == l, ij-ki
-    table[0, 0, 1, 0, 0, 0] = 8
-    # j == k, ij-jl
-    table[0, 0, 0, 1, 0, 0] = 8
-    # j == l, ij-kj
-    table[0, 0, 0, 0, 1, 0] = 8
-
-    # 9
-    # none equal, ij-kl
-    table[0, 0, 0, 0, 0, 0] = 9
-
-    return table
-
-
-ibd_table = generate_ibd_lookup_table()
-
-
-def calc_ibd_mode(tree, a1, a2, b1, b2) -> int:
-    c1 = int(tree.mrca(a1, a2) != tskit.NULL)
-    c2 = int(tree.mrca(a1, b1) != tskit.NULL)
-    c3 = int(tree.mrca(a1, b2) != tskit.NULL)
-    c4 = int(tree.mrca(a2, b1) != tskit.NULL)
-    c5 = int(tree.mrca(a2, b2) != tskit.NULL)
-    c6 = int(tree.mrca(b1, b2) != tskit.NULL)
-
-    a = ibd_table[c1, c2, c3, c4, c5, c6]
-    assert a != 0
-    return a
-
-
-def count_ibd_modes(ts_ped, a, b):
-
-    # These are the two chromosomes
-    a1, a2 = ts_ped.individual(a).nodes
-    b1, b2 = ts_ped.individual(b).nodes
-
-    delta = np.zeros(9, dtype=np.float64)
-
-    for tree in ts_ped.trees():
-        mode = calc_ibd_mode(tree, a1, a2, b1, b2)
-
-        delta[mode - 1] += tree.span
-
-    return delta
+            first_contig = False
 
 # Would be great, but too slow
 # Ne = int(species.population_size)
@@ -245,11 +166,27 @@ Ne = 10000
 
 pairs, base, pedigree = create_pedigree(500)
 
+individuals = []
+individual_names = []
+for (rel, pair) in pairs.items():
+    individuals.append(pair[0])
+    individuals.append(pair[1])
+    individual_names.append(f"{rel}0")
+    individual_names.append(f"{rel}1")
+
+for i, ind in enumerate(base):
+    individuals.append(ind)
+    individual_names.append(f"base{i}")
+
+assert len(individuals) == len(individual_names)
+
 ne_name = f"Ne_{Ne}"
 Path(ne_name).mkdir(exist_ok=True)
 
-# for i, arm in enumerate(("2L", "2R", "3L", "3R")):
-for i, arm in enumerate(("2L",)):
+total_deltas = dict()
+ts_map = dict()
+for i, arm in enumerate(("2L", "2R", "3L", "3R")):
+# for i, arm in enumerate(("2L",)):
     # TODO num_replicates, also run in parallel, better RNG
 
     print("Simulating", arm)
@@ -268,9 +205,12 @@ for i, arm in enumerate(("2L",)):
     )
 
     # Next count the number of IBD modes across the arm
-    deltas = dict()
     for (rel, pair) in pairs.items():
-        deltas[rel] = count_ibd_modes(ts_ped, pair[0], pair[1])
+        deltas = ibd.count_ibd_modes(ts_ped, pair[0], pair[1])
+        if rel not in total_deltas:
+            total_deltas[rel] = deltas
+        else:
+            total_deltas[rel] += deltas
 
     # Then simulate to coalescence using two models:
     # DTWF for 20 generations, and then Hudson after.
@@ -299,28 +239,21 @@ for i, arm in enumerate(("2L",)):
         random_seed=3*i+3,
     )
 
-    individuals = []
-    individual_names = []
-    for (rel, pair) in pairs.items():
-        individuals.append(pair[0])
-        individuals.append(pair[1])
-        individual_names.append(f"{rel}0")
-        individual_names.append(f"{rel}1")
-
-    for i, ind in enumerate(base):
-        individuals.append(ind)
-        individual_names.append(f"base{i}")
-
-    assert len(individuals) == len(individual_names)
-
     with open(f"{ne_name}/AnoGam-{arm}.vcf", "w") as vcf:
         ts_mut.write_vcf(vcf, contig_id=arm, individuals=individuals, individual_names=individual_names)
 
-    columns = np.array([f"IBD{i}" for i in range(1, 10)])
-    df = pd.DataFrame.from_dict(deltas, orient="index", columns=columns)
-    df.index.name = "rel"
-    df.reset_index(inplace=True)
+for (rel, deltas) in total_deltas.items():
+    total_deltas[rel] = deltas / np.sum(deltas)
 
-    df.to_csv(f"{ne_name}/AnoGam-{arm}.tsv", sep="\t", index=False)
+columns = np.array([f"ibd{i}" for i in range(1, 10)])
+df = pd.DataFrame.from_dict(total_deltas, orient="index", columns=columns)
+df.index.name = "rel"
+df.reset_index(inplace=True)
+
+df.to_csv(f"{ne_name}/AnoGam.tsv", sep="\t", index=False)
 
     # bgzip, then bcftools concat
+
+    # vcfgl for each arm
+    # then thin?
+    # then process in ngsrelate and kestrel

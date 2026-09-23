@@ -7,6 +7,7 @@ use crate::{
 };
 
 pub fn calculate_allele_probabilities(likelihoods: &[Vec<Matrix<4>>]) {
+    let mut multi = 0;
     for likel in likelihoods.iter() {
         let x0 = [0.25; 4];
 
@@ -16,11 +17,14 @@ pub fn calculate_allele_probabilities(likelihoods: &[Vec<Matrix<4>>]) {
         let (x, _) = sqp::solve_sqp(obj, grad_hess, &x0, &Tuneables::new());
 
         if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
-            println!("MULTI");
+            multi += 1;
+            // println!("MULTI");
         }
 
-        println!("{:?}", x);
+        // println!("{:?}", x);
     }
+    println!("Multi {multi}");
+
 }
 
 // pub fn calculate_allele_prob(

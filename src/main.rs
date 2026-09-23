@@ -12,9 +12,14 @@ fn main() -> Result<()> {
 
     let vcf_file = Path::new(&args[1]);
 
-    // let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
-    // kestrel::allele::calculate_allele_probabilities(&gl);
-    // return Ok(());
+    println!("Parsing VCF {:?}", vcf_file);
+
+    let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
+    let af = kestrel::allele::allele::calculate_allele_probabilities(&gl);
+
+    // TODO filter out non-segregating site somehow
+    // We get many more multi ones with errors than not
+    return Ok(());
 
     let (samples, gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
 

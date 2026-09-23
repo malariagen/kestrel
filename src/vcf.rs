@@ -3,6 +3,8 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use itertools::Itertools;
 use ndarray::{Array2, Array3, Array4};
+use noodles::vcf::Record;
+use noodles::vcf::variant::record::AlternateBases;
 use noodles::vcf::variant::record::info::field::Value as InfoValue;
 use noodles::vcf::variant::record::info::field::value::Array as InfoArray;
 use noodles::vcf::variant::record::samples::Series;
@@ -123,47 +125,62 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
 
     let num_samples = header.sample_names().len();
 
-    let mut skipped = 0;
+    let mut skipped_missing = 0;
+    let mut total_variants = 0;
+    let mut skipped_more_than_four = 0;
+    let mut skipped_non_snp = 0;
 
     let mut likelihoods = Vec::<Vec<[f64; 10]>>::new(); // V x S x 10
 
+    let mut gl_buf = Vec::with_capacity(10);
+
     'variant: for result in reader.records() {
         let record = result?;
+
+        total_variants += 1;
+
+        if !is_segregating_snp(&record)? {
+            continue;
+        }
 
         let samples = record.samples();
         let gl_series = samples.select("GL").context("No GL data found")?;
 
         let mut variant_gls = Vec::with_capacity(num_samples);
 
-        // TODO remove unknown data, and deal with MNPs and in/dels
+        // TODO deal with MNPs and in/dels
 
         for result in gl_series.iter(&header) {
             let value = result?.context("No genotype likelihood for sample found")?;
             if let SeriesValue::Array(gl_array) = value {
                 if let SeriesArray::Float(gl_float) = gl_array {
-                    if let Some(option_gl) = gl_float.iter().collect_array::<10>() {
-                        let mut gl = [0.0; 10];
-                        for (out, item) in gl.iter_mut().zip(option_gl) {
-                            // let val = item?.context("Error reading genotype likelihood");
-                            let val = item.unwrap();
-                            // vcfgl produced 0:.,.,.,.,.,.,.,.,.,. at a site for one sample
-                            // so just skip that site
-                            match val {
-                                Some(v) => *out = v.into(),
-                                None => {
-                                    skipped += 1;
-                                    continue 'variant;
-                                }
+                    gl_buf.clear();
+
+                    for result_gl in gl_float.iter() {
+                        let option_gl = result_gl.context("Error reading genotype likelihood")?;
+                        // This is where we could have a missing GL
+                        // e.g. vcfgl produced 0:.,.,.,.,.,.,.,.,.,. at a site for one sample
+                        // Just skip the site/variant if that happens
+                        match option_gl {
+                            Some(gl) => gl_buf.push(gl),
+                            None => {
+                                skipped_missing += 1;
+                                continue 'variant;
                             }
                         }
-                        // println!("{} {:?}", record.variant_start().unwrap().unwrap(), gl);
-                        // // TODO error handling
-                        // let gl: [f64; 10] = option_gl.map(|item| item.transpose());
-                        variant_gls.push(gl)
-                    } else {
-                        // Not 4-allelic
+                    }
+
+                    let mut gls = [0.0f64; 10];
+
+                    if gl_buf.len() > 10 {
                         continue 'variant;
                     }
+
+                    for (out_gl, in_gl) in gls.iter_mut().zip(gl_buf.iter().copied()) {
+                        *out_gl = in_gl.into();
+                    }
+
+                    variant_gls.push(gls);
                 } else {
                     bail!("Array {:?} does not contain floats", gl_array);
                 }
@@ -177,7 +194,9 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
 
     let num_variants = likelihoods.len();
 
-    println!("Parsed {} variants, skipped {}", num_variants, skipped);
+    println!("Parsed {} total variants", total_variants);
+    println!("Skipped {} variants with missing data", skipped_missing);
+    println!("Kept {} variants with segregating SNPs", num_variants);
 
     // let mut gls = Array4::<f64>::zeros((num_variants, num_samples, 4, 4));
     // for v in 0..num_variants {
@@ -227,6 +246,7 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
         for mat in v.iter() {
             for i in 0..4 {
                 for j in 0..4 {
+                    // TODO check the eigenvalues here
                     if mat[i][j] * mat[i][j] < mat[i][i] * mat[j][j] {
                         println!("Check did not work for {:?}", mat);
                     }
@@ -236,4 +256,34 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
     }
 
     Ok(gls)
+}
+
+// Some files have different things for this: 0, 1, a, c etc.
+// Maybe check the VCF spec to see what's up
+fn is_segregating_snp(record: &Record) -> Result<bool> {
+
+    let ref_bases = record.reference_bases();
+
+    if !matches!(ref_bases, "A" | "C" | "T" | "G") {
+        return Ok(false);
+    }
+
+    let mut at_least_one_alt = false;
+
+    for result_alt in record.alternate_bases().iter() {
+        let alt = result_alt.context("Error reading alternate bases")?;
+
+        if !matches!(alt, "A" | "C" | "T" | "G") {
+            return Ok(false);
+        }
+
+        // An ALT cannot match the REF
+        if alt == ref_bases {
+            return Ok(false);
+        }
+
+        at_least_one_alt = true;
+    }
+
+    Ok(at_least_one_alt)
 }
