@@ -1,4 +1,18 @@
-use crate::arith::Arith;
+use crate::arith::{Arith, Lane};
+
+impl Lane for f64 {
+    const N: usize = 1;
+
+    #[inline]
+    fn set(&mut self, _i: usize, val: f64) {
+        *self = val;
+    }
+
+    #[inline]
+    fn zero() -> Self {
+        0.0
+    }
+}
 
 impl Arith<f64> for f64 {
 

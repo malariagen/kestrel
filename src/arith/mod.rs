@@ -1,10 +1,10 @@
 mod avx512;
 mod scalar;
 
-pub trait Arith<Lane> {
+pub trait Arith<L : Lane> {
     fn zero() -> Self;
-    fn load(val: &Lane) -> Self;
-    fn store(self, val: &mut Lane);
+    fn load(val: &L) -> Self;
+    fn store(self, val: &mut L);
     fn set(val: f64) -> Self;
     fn add(self, other: Self) -> Self;
     fn sub(self, other: Self) -> Self;
@@ -15,6 +15,14 @@ pub trait Arith<Lane> {
     fn fnma(self, a: Self, b: Self) -> Self;
     fn fnms(self, a: Self, b: Self) -> Self;
     fn radd(self) -> f64;
+}
+
+pub trait Lane {
+    const N: usize;
+
+    fn set(&mut self, i: usize, val: f64);
+
+    fn zero() -> Self;
 }
 
 #[repr(align(16))]

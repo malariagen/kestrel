@@ -1,6 +1,20 @@
 use core::arch::x86_64::*;
 
-use crate::arith::{Arith, Lane8};
+use crate::arith::{Arith, Lane, Lane8};
+
+impl Lane for Lane8 {
+    const N: usize = 8;
+
+    #[inline]
+    fn set(&mut self, i: usize, val: f64) {
+        self.0[i] = val;
+    }
+
+    #[inline]
+    fn zero() -> Self {
+       Lane8([0.0; Self::N])
+    }
+}
 
 impl Arith<Lane8> for __m512d {
 
