@@ -16,8 +16,8 @@ pub fn compute_grad_hess(likelihood_mats: &LaneBuffer<Lane8, 10>, x: &Vector<4>,
         g[i] = -2.0 * (bg[i] + rg[i]) / n;
     }
 
-    for i in 0..4 {
-        for j in 0..4 {
+    for j in 0..4 {
+        for i in 0..=j {
             // The index of (i, j) where i <= j (see the VCF spec)
             let index = j*(j+1)/2 + i;
             let val = 2.0 * (bh[index] + rh[index]) / n;
