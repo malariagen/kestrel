@@ -3,7 +3,7 @@ use std::arch::x86_64::*;
 use ndarray::{Array2, Array3, Array4};
 
 use crate::{
-    algebra::{Matrix, Vector, dot, mul, outer, scale_div}, blockbuffer::Block, lane::Lane8, log::Log, sqp::{self, Tuneables},
+    algebra::{Matrix, Vector, dot, mul, outer, scale_div}, allele::objective, blockbuffer::Block, lane::Lane8, log::Log, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
@@ -16,7 +16,7 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
     for (variant, likelihood) in likelihoods.iter().enumerate() {
         let x0 = [0.25; 4];
 
-        let obj = |x: &Vector<4>, eps| calculate_objective(&likelihood, &x, eps);
+        let obj = |x: &Vector<4>, eps| objective::compute_objective(&likelihood, &x, eps);
         let grad_hess = |x: &Vector<4>, eps| calculate_grad_hess2(&likelihood, &x, eps);
 
         let (x, _) = sqp::solve_sqp(obj, grad_hess, &x0, &Tuneables::new());
@@ -200,8 +200,6 @@ pub fn compute_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64)
         _mm512_reduce_add_pd(zh8),
         _mm512_reduce_add_pd(zh9),
     ];
-
-    // TODO make this a matrix M
 
     (g, h)
 }
