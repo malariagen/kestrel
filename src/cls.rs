@@ -1,6 +1,42 @@
 use crate::algebra::{Matrix, Vector, scale_div, sub};
-use crate::iis;
-use ndarray::{Array4, ArrayRef2, ArrayView2};
+use crate::{cls, iis};
+use ndarray::{Array4, ArrayRef2, ArrayRef3, ArrayView2};
+
+// This calculates a vector of matrices Vec<M>
+// We could possibly hard-code it to a 100x9 matrix, idk
+pub fn calculate_m_matrices(
+    allele_frequencies: &ArrayRef2<f64>,
+) -> Vec<Vec<Vector<9>>> {
+    let num_v = allele_frequencies.shape()[0];
+    // Usually 4 I think
+    let num_a = allele_frequencies.shape()[1];
+
+    let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a);
+
+    // Should be 100
+    let num_g = all_joint_genotypes.len();
+
+    let mut matrices = Vec::with_capacity(num_v);
+
+    for v in 0..num_v {
+        let mut m = Vec::with_capacity(num_g);
+        for g in 0..num_g {
+            let ((i, j), (k, l), iis_mode) = all_joint_genotypes[g];
+            let pi = allele_frequencies[[v, i]];
+            let pj = allele_frequencies[[v, j]];
+            let pk = allele_frequencies[[v, k]];
+            let pl = allele_frequencies[[v, l]];
+
+            let row =
+                std::array::from_fn(|ibd_mode| iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd_mode + 1));
+
+            m.push(row);
+        }
+        matrices.push(m)
+    }
+
+    matrices
+}
 
 pub fn calculate_stacked_m(
     all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
@@ -114,10 +150,14 @@ pub fn calculate_all_joint_genotypes(num_a: usize) -> Vec<((usize, usize), (usiz
     let num_joint_genotypes = num_single_genotypes * num_single_genotypes;
     let mut joint_genotypes = Vec::with_capacity(num_joint_genotypes);
 
-    for i in 0..num_a {
-        for j in i..num_a {
-            for k in 0..num_a {
-                for l in k..num_a {
+    // This is the order of genotypes in the VCF spec (triangular order)
+    // (0, 0), (0, 1), (1, 1), etc.
+    // Individual x
+    for j in 0..num_a {
+        for i in 0..=j {
+            // Individual y
+            for l in 0..num_a {
+                for k in 0..=l {
                     let iis_mode = iis::calc_iis_mode(i, j, k, l);
                     joint_genotypes.push(((i, j), (k, l), iis_mode));
                 }

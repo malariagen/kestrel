@@ -1,18 +1,23 @@
 use std::arch::x86_64::*;
 
-use ndarray::{Array2, Array4};
+use ndarray::{Array2, Array3, Array4};
 
 use crate::{
     algebra::{Matrix, Vector, dot, mul, outer, scale_div}, blockbuffer::Block, lane::Lane8, log::Log, sqp::{self, Tuneables},
 };
 
-pub fn calculate_allele_probabilities(likelihoods: &[Vec<Matrix<4>>]) {
+pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
+    let num_variants = likelihoods.shape()[0];
+    let num_samples = likelihoods.shape()[1];
+
+    let mut af = Array2::zeros((num_variants, 4));
+
     let mut multi = 0;
-    for likel in likelihoods.iter() {
+    for (variant, likelihood) in likelihoods.iter().enumerate() {
         let x0 = [0.25; 4];
 
-        let obj = |x: &Vector<4>, eps| calculate_objective(&likel, &x, eps);
-        let grad_hess = |x: &Vector<4>, eps| calculate_grad_hess2(&likel, &x, eps);
+        let obj = |x: &Vector<4>, eps| calculate_objective(&likelihood, &x, eps);
+        let grad_hess = |x: &Vector<4>, eps| calculate_grad_hess2(&likelihood, &x, eps);
 
         let (x, _) = sqp::solve_sqp(obj, grad_hess, &x0, &Tuneables::new());
 
@@ -21,10 +26,15 @@ pub fn calculate_allele_probabilities(likelihoods: &[Vec<Matrix<4>>]) {
             // println!("MULTI");
         }
 
+        for i in 0..4 {
+            af[[variant, i]] = x[i];
+        }
+
         // println!("{:?}", x);
     }
     println!("Multi {multi}");
 
+    af
 }
 
 // pub fn calculate_allele_prob(
@@ -33,71 +43,13 @@ pub fn calculate_allele_probabilities(likelihoods: &[Vec<Matrix<4>>]) {
 
 // }
 
-pub fn calculate_objective(likelihoods: &[Matrix<4>], x: &Vector<4>, eps: f64) -> f64 {
-    let mut s = 0.0;
-
-    for mat in likelihoods.iter() {
-        let p = dot(x, &mul(mat, x));
-        s += Log::log(p + eps);
+fn compute_grad_hess_blocks(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    #[cfg(target_arch = "x86_64")]
+    if is_x86_feature_detected!("avx512f") {
+        return unsafe { compute_grad_hess_avx512(blocks, x, eps) };
     }
 
-    let n = likelihoods.len();
-
-    -s / (n as f64)
-}
-
-#[target_feature(enable = "avx512f")]
-pub fn calculate_obj_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> f64 {
-    // 2
-    let mut zs = _mm512_setzero_pd();
-    let ze = _mm512_set1_pd(eps);
-
-    let x0 = _mm512_set1_pd(x[0]);
-    let x1 = _mm512_set1_pd(x[1]);
-    let x2 = _mm512_set1_pd(x[2]);
-    let x3 = _mm512_set1_pd(x[3]);
-
-    // 10
-    let x00 = _mm512_mul_pd(x0, x0);
-    let x11 = _mm512_mul_pd(x1, x1);
-    let x22 = _mm512_mul_pd(x2, x2);
-    let x33 = _mm512_mul_pd(x3, x3);
-
-    let x01 = _mm512_mul_pd(x0, x1);
-    let x02 = _mm512_mul_pd(x0, x2);
-    let x03 = _mm512_mul_pd(x0, x3);
-    let x12 = _mm512_mul_pd(x1, x2);
-    let x13 = _mm512_mul_pd(x1, x3);
-    let x23 = _mm512_mul_pd(x2, x3);
-
-    let tx01 = _mm512_add_pd(x01, x01);
-    let tx02 = _mm512_add_pd(x02, x02);
-    let tx03 = _mm512_add_pd(x03, x03);
-    let tx12 = _mm512_add_pd(x12, x12);
-    let tx13 = _mm512_add_pd(x13, x13);
-    let tx23 = _mm512_add_pd(x23, x23);
-
-    // No stack spillage, very good
-    for block in blocks.iter() {
-        let mut p = ze;
-
-        p = _mm512_fmadd_pd(x00, block[0].load(), p);
-        p = _mm512_fmadd_pd(tx01, block[1].load(), p);
-        p = _mm512_fmadd_pd(x11, block[2].load(), p);
-        p = _mm512_fmadd_pd(tx02, block[3].load(), p);
-        p = _mm512_fmadd_pd(tx12, block[4].load(), p);
-        p = _mm512_fmadd_pd(x22, block[5].load(), p);
-        p = _mm512_fmadd_pd(tx03, block[6].load(), p);
-        p = _mm512_fmadd_pd(tx13, block[7].load(), p);
-        p = _mm512_fmadd_pd(tx23, block[8].load(), p);
-        p = _mm512_fmadd_pd(x33, block[9].load(), p);
-
-        let l = Log::log(p);
-
-        zs = _mm512_add_pd(l, zs);
-    }
-
-    _mm512_reduce_add_pd(zs)
+    unimplemented!("SIMD intrinsics haven't been written for your platform yet")
 }
 
 // Instead of a matrix with 1 elem in each spot
@@ -117,7 +69,7 @@ pub fn calculate_obj_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> 
 // even though in theory they're the equivalent.
 
 #[target_feature(enable = "avx512f")]
-pub fn calculate_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
+pub fn compute_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
     // 4
     let mut zg0 = _mm512_setzero_pd();
     let mut zg1 = _mm512_setzero_pd();
@@ -248,6 +200,8 @@ pub fn calculate_grad_hess_avx512(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f6
         _mm512_reduce_add_pd(zh8),
         _mm512_reduce_add_pd(zh9),
     ];
+
+    // TODO make this a matrix M
 
     (g, h)
 }

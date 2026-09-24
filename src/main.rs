@@ -15,19 +15,19 @@ fn main() -> Result<()> {
     println!("Parsing VCF {:?}", vcf_file);
 
     let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
-    let af = kestrel::allele::allele::calculate_allele_probabilities(&gl);
+    let af = kestrel::allele::allele::calculate_allele_frequencies(&gl);
 
-    // TODO filter out non-segregating site somehow
-    // We get many more multi ones with errors than not
-    return Ok(());
+    let kinship = kestrel::coefficients::calculate_relatedness_coefficients_gl(gl, &af);
 
-    let (samples, gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
+    // return Ok(());
+
+    // let (samples, gt, af) = kestrel::vcf::parse_vcf(vcf_file)?;
 
     // let gt = concatenate(Axis(0), &[gt.view(), gt.view(), gt.view()]).unwrap();
     // let af = concatenate(Axis(0), &[af.view(), af.view(), af.view()]).unwrap();
 
     // let kinship = kestrel::coefficients::calculate_relatedness_coefficients(&gt, &af);
-    let kinship = kestrel::coefficients::calculate_relatedness_coefficients_no_freq(gt.view().into());
+    // let kinship = kestrel::coefficients::calculate_relatedness_coefficients_no_freq(gt.view().into());
 
     println!("sum {}", kinship.sum());
 

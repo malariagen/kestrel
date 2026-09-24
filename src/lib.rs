@@ -23,6 +23,7 @@ mod kestrel {
 
 extern crate openblas_src;
 
+pub mod arith;
 pub mod algebra;
 // pub mod lanebuffer;
 // pub mod barrier;

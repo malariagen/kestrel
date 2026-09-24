@@ -118,8 +118,7 @@ pub fn parse_vcf(file: &Path) -> Result<(Vec<String>, Array3<i8>, Array2<f64>)> 
     Ok((samples, gt, af))
 }
 
-// pub fn parse_vcf_gl(file: &Path) -> Result<Array4<f64>> {
-pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
+pub fn parse_vcf_gl(file: &Path) -> Result<Array3<f64>> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
 
@@ -127,19 +126,17 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
 
     let mut skipped_missing = 0;
     let mut total_variants = 0;
-    let mut skipped_more_than_four = 0;
-    let mut skipped_non_snp = 0;
 
     let mut likelihoods = Vec::<Vec<[f64; 10]>>::new(); // V x S x 10
 
     let mut gl_buf = Vec::with_capacity(10);
 
     'variant: for result in reader.records() {
-        let record = result?;
+        let record = result.context("Error reading record")?;
 
         total_variants += 1;
 
-        if !is_segregating_snp(&record)? {
+        if !is_snp(&record)? {
             continue;
         }
 
@@ -147,8 +144,6 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
         let gl_series = samples.select("GL").context("No GL data found")?;
 
         let mut variant_gls = Vec::with_capacity(num_samples);
-
-        // TODO deal with MNPs and in/dels
 
         for result in gl_series.iter(&header) {
             let value = result?.context("No genotype likelihood for sample found")?;
@@ -196,7 +191,7 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
 
     println!("Parsed {} total variants", total_variants);
     println!("Skipped {} variants with missing data", skipped_missing);
-    println!("Kept {} variants with segregating SNPs", num_variants);
+    println!("Kept {} variants with SNPs", num_variants);
 
     // let mut gls = Array4::<f64>::zeros((num_variants, num_samples, 4, 4));
     // for v in 0..num_variants {
@@ -218,72 +213,86 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Vec<Vec<Matrix<4>>>> {
     //     }
     // }
 
-    let mut gls = Vec::with_capacity(num_variants);
+    let mut gls = Array3::zeros((num_variants, num_samples, 10));
+
+    // TODO probably faster way to do this with zip or some such
     for v in 0..num_variants {
-        let mut a = Vec::with_capacity(num_samples);
         for s in 0..num_samples {
             let sample_gls = likelihoods[v][s];
             // Normalize by the maximum GL to avoid possible underflow
             // (This matches what PL does)
             let max_gl = sample_gls.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
-            let mut m = [[0.0; 4]; 4];
-            for i in 0..4 {
-                for j in i..4 {
-                    // The index of (i, j) where i <= j (see the VCF spec)
-                    let index = j * (j + 1) / 2 + i;
-                    let gl = sample_gls[index];
-                    let prob = 10.0f64.powf(gl - max_gl);
-                    m[i][j] = prob;
-                    m[j][i] = prob;
-                }
+
+            for i in 0..10 {
+                let gl = sample_gls[i];
+                let prob = 10.0f64.powf(gl - max_gl);
+                gls[[v, s, i]] = prob;
             }
-            a.push(m);
         }
-        gls.push(a);
     }
 
-    for v in gls.iter() {
-        for mat in v.iter() {
-            for i in 0..4 {
-                for j in 0..4 {
-                    // TODO check the eigenvalues here
-                    if mat[i][j] * mat[i][j] < mat[i][i] * mat[j][j] {
-                        println!("Check did not work for {:?}", mat);
-                    }
-                }
-            }
-        }
-    }
+    // let mut gls = Vec::with_capacity(num_variants);
+    // for v in 0..num_variants {
+    //     let mut a = Vec::with_capacity(num_samples);
+    //     for s in 0..num_samples {
+    //         let sample_gls = likelihoods[v][s];
+    //         // Normalize by the maximum GL to avoid possible underflow
+    //         // (This matches what PL does)
+    //         let max_gl = sample_gls.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+    //         let mut m = [[0.0; 4]; 4];
+    //         for i in 0..4 {
+    //             for j in i..4 {
+    //                 // The index of (i, j) where i <= j (see the VCF spec)
+    //                 let index = j * (j + 1) / 2 + i;
+    //                 let gl = sample_gls[index];
+    //                 let prob = 10.0f64.powf(gl - max_gl);
+    //                 m[i][j] = prob;
+    //                 m[j][i] = prob;
+    //             }
+    //         }
+    //         a.push(m);
+    //     }
+    //     gls.push(a);
+    // }
+
+    // for v in gls.iter() {
+    //     for mat in v.iter() {
+    //         for i in 0..4 {
+    //             for j in 0..4 {
+    //                 // TODO check the eigenvalues here
+    //                 if mat[i][j] * mat[i][j] < mat[i][i] * mat[j][j] {
+    //                     println!("Check did not work for {:?}", mat);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     Ok(gls)
 }
 
-// Some files have different things for this: 0, 1, a, c etc.
-// Maybe check the VCF spec to see what's up
-fn is_segregating_snp(record: &Record) -> Result<bool> {
+// VCF spec says this must be A, C, G, T, or N (case insensitive)
+fn is_snp(record: &Record) -> Result<bool> {
 
     let ref_bases = record.reference_bases();
 
-    if !matches!(ref_bases, "A" | "C" | "T" | "G") {
+    if !matches!(ref_bases, "A" | "C" | "G" | "T" | "a" | "c" | "g" | "t") {
         return Ok(false);
     }
 
-    let mut at_least_one_alt = false;
+    let num_alts = record.alternate_bases().len();
+
+    if num_alts < 1 || num_alts > 3 {
+        return Ok(false);
+    }
 
     for result_alt in record.alternate_bases().iter() {
         let alt = result_alt.context("Error reading alternate bases")?;
 
-        if !matches!(alt, "A" | "C" | "T" | "G") {
+        if !matches!(alt, "A" | "C" | "G" | "T" | "a" | "c" | "g" | "t" ) {
             return Ok(false);
         }
-
-        // An ALT cannot match the REF
-        if alt == ref_bases {
-            return Ok(false);
-        }
-
-        at_least_one_alt = true;
     }
 
-    Ok(at_least_one_alt)
+    Ok(true)
 }
