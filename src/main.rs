@@ -14,8 +14,8 @@ fn main() -> Result<()> {
 
     println!("Parsing VCF {:?}", vcf_file);
 
-    let gl = kestrel::vcf::parse_vcf_gl(vcf_file)?;
-    let af = kestrel::allele::allele::calculate_allele_frequencies(&gl);
+    let (samples, gl) = kestrel::vcf::parse_vcf_gl(vcf_file)?;
+    let af = kestrel::allele::calculate_allele_frequencies(&gl);
 
     let kinship = kestrel::coefficients::calculate_relatedness_coefficients_gl(gl, &af);
 

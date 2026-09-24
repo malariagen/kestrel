@@ -116,13 +116,16 @@ pub fn parse_vcf(file: &Path) -> Result<(Vec<String>, Array3<i8>, Array2<f64>)> 
     Ok((samples, gt, af))
 }
 
-pub fn parse_vcf_gl(file: &Path) -> Result<Array3<f64>> {
+pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
 
-    let num_samples = header.sample_names().len();
+    let samples = header.sample_names().iter().map(|s| s.to_owned()).collect::<Vec<_>>();
+
+    let num_samples = samples.len();
 
     let mut skipped_missing = 0;
+    let mut not_snp = 0;
     let mut total_variants = 0;
 
     let mut likelihoods = Vec::<Vec<[f64; 10]>>::new(); // V x S x 10
@@ -135,6 +138,7 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Array3<f64>> {
         total_variants += 1;
 
         if !is_snp(&record)? {
+            not_snp += 1;
             continue;
         }
 
@@ -189,27 +193,8 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Array3<f64>> {
 
     println!("Parsed {} total variants", total_variants);
     println!("Skipped {} variants with missing data", skipped_missing);
-    println!("Kept {} variants with SNPs", num_variants);
-
-    // let mut gls = Array4::<f64>::zeros((num_variants, num_samples, 4, 4));
-    // for v in 0..num_variants {
-    //     for s in 0..num_samples {
-    //         let sample_gls = likelihoods[v][s];
-    //         // Normalize by the maximum GL to avoid possible underflow
-    //         // (This matches what PL does)
-    //         let max_gl = sample_gls.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
-    //         for i in 0..4 {
-    //             for j in i..4 {
-    //                 // The index of (i, j) where i <= j (see the VCF spec)
-    //                 let index = j*(j+1)/2 + i;
-    //                 let gl = sample_gls[index];
-    //                 let prob = 10.0f64.powf(gl - max_gl);
-    //                 gls[[v, s, i, j]] = prob;
-    //                 gls[[v, s, j, i]] = prob;
-    //             }
-    //         }
-    //     }
-    // }
+    println!("Skipped {} variants that were not SNPs", not_snp);
+    println!("Kept {} final variants", num_variants);
 
     let mut gls = Array3::zeros((num_variants, num_samples, 10));
 
@@ -266,7 +251,7 @@ pub fn parse_vcf_gl(file: &Path) -> Result<Array3<f64>> {
     //     }
     // }
 
-    Ok(gls)
+    Ok((samples, gls))
 }
 
 // VCF spec says this must be A, C, G, T, or N (case insensitive)

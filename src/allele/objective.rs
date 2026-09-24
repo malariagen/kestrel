@@ -5,7 +5,6 @@ pub fn compute_objective(likelihood_mats: &LaneBuffer<Lane8, 10>, x: &Vector<4>,
     let (blocks, remainder) = likelihood_mats.as_lanes();
 
     let b = compute_obj_blocks(blocks, x, eps);
-
     let r = compute_obj_lane::<f64, f64>(remainder, x, eps);
 
     let n = likelihood_mats.len() as f64;
@@ -38,7 +37,7 @@ fn compute_obj_blocks(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> f64 {
 // }
 
 #[target_feature(enable = "avx512f")]
-pub fn compute_obj_avx512(blocks: &[Block<f64, 10, 8>], x: &Vector<4>, eps: f64) -> f64 {
+pub fn compute_obj_avx512(blocks: &[Block<f64, 8, 10>], x: &Vector<4>, eps: f64) -> f64 {
     // 2
     let mut zs = _mm512_setzero_pd();
     let ze = _mm512_set1_pd(eps);

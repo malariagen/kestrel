@@ -71,8 +71,8 @@ where
 
         let (xnew, _bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
-        // println!("{iter} {x:?} {y:?} {g:?} {qp_iter} {bls_iter}");
-        // println!("{iter} {x:?} {g:?} {qp_iter} {bls_iter}");
+        // println!("{iter} {x:?} {y:?} {g:?} {_qp_iter} {_bls_iter}");
+        println!("{iter} {x:?} {g:?} {_qp_iter} {_bls_iter}");
 
         x = xnew;
 
