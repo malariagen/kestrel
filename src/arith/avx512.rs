@@ -6,6 +6,11 @@ impl Lane for Lane8 {
     const N: usize = 8;
 
     #[inline]
+    fn get(&self, i: usize) -> f64 {
+        self.0[i]
+    }
+
+    #[inline]
     fn set(&mut self, i: usize, val: f64) {
         self.0[i] = val;
     }

@@ -1,5 +1,5 @@
 use std::arch::x86_64::*;
-use crate::{algebra::Vector, arith::{Arith, Lane, Lane8}, blockbuffer::{Block}, lanebuffer::LaneBuffer, log::Log};
+use crate::{algebra::Vector, arith::{Arith, Lane, Lane8}, blockbuffer::Block, lanebuffer::LaneBuffer, log::Log};
 
 pub fn compute_objective(likelihood_mats: &LaneBuffer<Lane8, 10>, x: &Vector<4>, eps: f64) -> f64 {
     let (blocks, remainder) = likelihood_mats.as_lanes();

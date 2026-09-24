@@ -3,7 +3,7 @@ use std::arch::x86_64::*;
 use ndarray::{Array2, Array3, Array4};
 
 use crate::{
-    algebra::{Matrix, Vector, dot, mul, outer, scale_div}, allele::objective, blockbuffer::Block, lane::Lane8, log::Log, sqp::{self, Tuneables},
+    algebra::{Matrix, Vector, dot, mul, outer, scale_div}, allele::{grad_hess, objective}, lane::Lane8, lanebuffer::LaneBuffer, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
@@ -13,11 +13,16 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
     let mut af = Array2::zeros((num_variants, 4));
 
     let mut multi = 0;
-    for (variant, likelihood) in likelihoods.iter().enumerate() {
+    let mut buffer = LaneBuffer::new(num_samples);
+    for (variant, variant_likelihood) in likelihoods.outer_iter().enumerate() {
+
+        let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
+        buffer.fill_from_iter(sample_likelihoods.0.iter().copied());
+
         let x0 = [0.25; 4];
 
-        let obj = |x: &Vector<4>, eps| objective::compute_objective(&likelihood, &x, eps);
-        let grad_hess = |x: &Vector<4>, eps| calculate_grad_hess2(&likelihood, &x, eps);
+        let obj = |x: &Vector<4>, eps| objective::compute_objective(&buffer, &x, eps);
+        let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(&buffer, &x, eps);
 
         let (x, _) = sqp::solve_sqp(obj, grad_hess, &x0, &Tuneables::new());
 
@@ -43,14 +48,14 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
 
 // }
 
-fn compute_grad_hess_blocks(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
-    #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx512f") {
-        return unsafe { compute_grad_hess_avx512(blocks, x, eps) };
-    }
+// fn compute_grad_hess_blocks(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+//     #[cfg(target_arch = "x86_64")]
+//     if is_x86_feature_detected!("avx512f") {
+//         return unsafe { compute_grad_hess_avx512(blocks, x, eps) };
+//     }
 
-    unimplemented!("SIMD intrinsics haven't been written for your platform yet")
-}
+//     unimplemented!("SIMD intrinsics haven't been written for your platform yet")
+// }
 
 // Instead of a matrix with 1 elem in each spot
 // You have a matrix with 4 elems in each spot

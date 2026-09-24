@@ -11,8 +11,6 @@ use noodles::vcf::variant::record::samples::Series;
 use noodles::vcf::variant::record::samples::series::value::Array as SeriesArray;
 use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
 
-use crate::algebra::Matrix;
-
 pub fn parse_vcf(file: &Path) -> Result<(Vec<String>, Array3<i8>, Array2<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
