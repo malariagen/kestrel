@@ -1,6 +1,5 @@
 use crate::{
-    algebra::{Matrix, Vector, add, add_n, dot, mul, mul_n, scale_mul, sub, sum_n, sum_to_one},
-    cholesky,
+    algebra::{Matrix, Vector, add, add_n, dot, mul, mul_n, scale_mul, sub, sum_n, sum_to_one}, cholesky, eigenval::eigenvals_jacobi,
 };
 
 pub struct Tuneables {
@@ -46,19 +45,24 @@ where
 {
     let mut x = *x0;
 
+    let mut qp = 0;
+    let mut bl = 0;
+
     for iter in 0..tune.sqp_max_iter {
         x = sum_to_one(&x);
 
         let (g, h) = grad_hess(&x, tune.epsilon);
 
-        // let eigs = eigenvals_jacobi(&h, 50).unwrap();
-        // for e in eigs.iter() {
-        //     // let tol = -1e-5;
-        //     let tol = 0.0;
-        //     if *e < tol {
-        //         println!("Not PSD: {:?} {}", x, e);
-        //     }
-        // }
+        let eigs = eigenvals_jacobi(&h, 50).unwrap();
+        for e in eigs.iter() {
+            let tol = -1e-5;
+            // let tol = 0.0;
+            if *e < tol {
+                println!("Not PSD: {:?} {}", x, e);
+            }
+        }
+
+        // println!("{iter} {x:?} {g:?} {qp} {bl}");
 
         if check_convergence(&x, &g, tune.sqp_conv_tol) {
             return (x, iter);
@@ -71,8 +75,11 @@ where
 
         let (xnew, _bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
+        qp = _qp_iter;
+        bl = _bls_iter;
+
         // println!("{iter} {x:?} {y:?} {g:?} {_qp_iter} {_bls_iter}");
-        println!("{iter} {x:?} {g:?} {_qp_iter} {_bls_iter}");
+        // println!("{iter} {x:?} {g:?} {_qp_iter} {_bls_iter}");
 
         x = xnew;
 

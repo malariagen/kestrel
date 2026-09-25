@@ -29,7 +29,7 @@ pyo3 = "0.29.0"
 [profile.release]
 panic = "abort"
 codegen-units = 1
-overflow-checks = true
+#overflow-checks = true
 lto = true
 
 #debug = true

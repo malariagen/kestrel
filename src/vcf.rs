@@ -11,6 +11,8 @@ use noodles::vcf::variant::record::samples::Series;
 use noodles::vcf::variant::record::samples::series::value::Array as SeriesArray;
 use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
 
+use crate::eigenval::eigenvals_jacobi;
+
 pub fn parse_vcf(file: &Path) -> Result<(Vec<String>, Array3<i8>, Array2<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
@@ -167,9 +169,14 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
                         }
                     }
 
-                    let mut gls = [0.0f64; 10];
+                    // Alleles that are not present have a likelihood of 0, which
+                    // is negative infinity in log space
+                    // TODO: padding a Lorentzian matrix with zeros will make it non-L
+                    // No longer invertible, hence some zero eigenvalues
+                    // So need to record the arity of each site
+                    let mut gls = [-f64::INFINITY; 10];
 
-                    if gl_buf.len() > 10 {
+                    if gl_buf.len() != 10 {
                         continue 'variant;
                     }
 
@@ -211,45 +218,25 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
                 let prob = 10.0f64.powf(gl - max_gl);
                 gls[[v, s, i]] = prob;
             }
+
+            let mut mat = [[0.0; 4]; 4];
+            for j in 0..4 {
+                for i in 0..=j {
+                    // The index of (i, j) where i <= j (see the VCF spec)
+                    let index = j*(j+1)/2 + i;
+                    let val = gls[[v, s, index]];
+                    mat[i][j] = val;
+                    mat[j][i] = val;
+                }
+            }
+
+            let eigs = eigenvals_jacobi(&mat, 50).unwrap();
+            let count = eigs.iter().filter(|e| **e > 1e-5).count();
+            if count != 1 {
+                println!("Not Lorentzian! {:?}", eigs);
+            }
         }
     }
-
-    // let mut gls = Vec::with_capacity(num_variants);
-    // for v in 0..num_variants {
-    //     let mut a = Vec::with_capacity(num_samples);
-    //     for s in 0..num_samples {
-    //         let sample_gls = likelihoods[v][s];
-    //         // Normalize by the maximum GL to avoid possible underflow
-    //         // (This matches what PL does)
-    //         let max_gl = sample_gls.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
-    //         let mut m = [[0.0; 4]; 4];
-    //         for i in 0..4 {
-    //             for j in i..4 {
-    //                 // The index of (i, j) where i <= j (see the VCF spec)
-    //                 let index = j * (j + 1) / 2 + i;
-    //                 let gl = sample_gls[index];
-    //                 let prob = 10.0f64.powf(gl - max_gl);
-    //                 m[i][j] = prob;
-    //                 m[j][i] = prob;
-    //             }
-    //         }
-    //         a.push(m);
-    //     }
-    //     gls.push(a);
-    // }
-
-    // for v in gls.iter() {
-    //     for mat in v.iter() {
-    //         for i in 0..4 {
-    //             for j in 0..4 {
-    //                 // TODO check the eigenvalues here
-    //                 if mat[i][j] * mat[i][j] < mat[i][i] * mat[j][j] {
-    //                     println!("Check did not work for {:?}", mat);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 
     Ok((samples, gls))
 }

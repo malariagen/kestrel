@@ -10,12 +10,13 @@ use crate::{
 };
 
 pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
-    println!("Calculating allele frequencies");
 
     let num_variants = likelihoods.shape()[0];
     let num_samples = likelihoods.shape()[1];
 
     let mut af = Array2::zeros((num_variants, 4));
+
+    println!("Calculating allele frequencies for {} variants {} samples", num_variants, num_samples);
 
     let bar = ProgressBar::new(num_variants.try_into().unwrap())
         .with_eta()
@@ -43,8 +44,8 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
         let tune = Tuneables::new();
         let (x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
-        if iter == tune.sqp_max_iter {
-            println!("Warning no convergence");
+        if iter >= tune.sqp_max_iter {
+            println!("WARNING: no convergence for allele frequencies, max iterations {} exceeded", tune.sqp_max_iter);
         }
 
         if x.iter().filter(|&i| *i > 0.0).count() >= 3 {

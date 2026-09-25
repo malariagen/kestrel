@@ -2,7 +2,6 @@ use std::num::NonZeroUsize;
 
 use itertools::Itertools;
 use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3};
-use noodles::vcf::variant::record::samples::keys::key::GENOTYPE_LIKELIHOODS;
 use paralight::{
     iter::{
         ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
@@ -14,7 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, jacquard::{grad_hess, objective}, sqp::{self, Tuneables},
+    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, sqp::{self, Tuneables},
 };
 
 pub fn calculate_relatedness_coefficients_gt(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
@@ -122,10 +121,10 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
     let num_v = allele_frequencies.shape()[0];
 
     // TODO calculate this across each locus to figure out how many alleles there are
-    // Then we can condense the stacked matrix to make it smaller?
+    // Then we can condense the stacked matrix to make it smaller? Idk, complicated...
     let num_a = allele_frequencies.shape()[1];
 
-    let m_matrices = cls::calculate_m_matrices(allele_frequencies);
+    let m_matrices = conditional::calculate_m_matrices(allele_frequencies);
 
     let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
@@ -150,6 +149,8 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
         .collect();
     let mut output = vec![(0, 0, [0.0f64; 9], 0.0f64, 0); pairs.len()];
 
+    println!("Calculating Jacquard coefficients for {} pairs using {} variants", pairs.len(), num_v);
+
     let bar = ProgressBar::new(pairs.len().try_into().unwrap())
         .with_eta()
         // .disable_color()
@@ -164,21 +165,26 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
         .zip_eq()
         .with_thread_pool(&mut thread_pool)
         .for_each_init(
-            || ThreadBuffers::new(num_v),
-            |buffers, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
+            || BlockBuffer::new(num_v),
+            |mut p_mat, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
                 let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
                 } else {
                     [1.0 / 9.0; 9]
                 };
 
-                calculate_mixture_component_matrix_gl(&m_matrices, likelihoods_x, likelihoods_y, &mut buffers.p_mat);
+                calculate_mixture_component_matrix_gl(&m_matrices, likelihoods_x, likelihoods_y, &mut p_mat);
 
-                let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
-                let (delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
+                let tune = Tuneables::new();
 
-                // println!("{} {} {}", x, y, delta.transpose());
+                let obj = |x: &Vector<9>, eps| objective::compute_obj(&p_mat, &x, eps);
+                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&p_mat, &x, eps);
+                let (delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+
+                if iters >= tune.sqp_max_iter {
+                    println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
+                }
+
                 let kinship = dot(&delta, &kinship_vec);
                 *out = (*x, *y, delta, kinship, iters);
                 handle.inc();
@@ -238,6 +244,8 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
         .collect();
     let mut output = vec![(0, 0, [0.0f64; 9], 0.0f64, 0); pairs.len()];
 
+    println!("Calculating Jacquard coefficients for {} pairs using {} variants", pairs.len(), num_v);
+
     let bar = ProgressBar::new(pairs.len().try_into().unwrap())
         .with_eta()
         // .disable_color()
@@ -278,15 +286,16 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
                     &mut buffers.p_mat,
                 );
 
+                let tune = Tuneables::new();
+
                 let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
                 let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
-                let (delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &Tuneables::new());
+                let (delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
-                // let obj = |x: &Vector<9>, eps| objective::compute_obj_barrier(&buffers.p_mat, &x, eps);
-                // let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess_barrier(&buffers.p_mat, &x, eps);
-                // let (delta, iters) = barrier::solve_ipm(obj, grad_hess, &delta, &Tuneables::new());
+                if iters >= tune.sqp_max_iter {
+                    println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
+                }
 
-                // println!("{} {} {}", x, y, delta.transpose());
                 let kinship = dot(&delta, &kinship_vec);
                 *out = (*x, *y, delta, kinship, iters);
                 handle.inc();
@@ -308,37 +317,38 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
     kinship_mat
 }
 
-fn calculate_mixture_component_matrix_gl<const L: usize>(
-    m_matrices: &[Vec<Vector<9>>],
+pub fn calculate_mixture_component_matrix_gl(
+    m_matrices: &[M],
     likelihoods_x: &ArrayView2<f64>,
     likelihoods_y: &ArrayView2<f64>,
-    p_mat: &mut BlockBuffer<f64, L, 9>,
+    p_mat: &mut BlockBuffer<f64, 8, 9>,
 ) {
-    let iter_x = likelihoods_x.as_slice().unwrap().chunks_exact(10);
-    let iter_y = likelihoods_y.as_slice().unwrap().chunks_exact(10);
+    let (chunks_x, rem_x) = likelihoods_x.as_slice().unwrap().as_chunks::<10>();
+    let (chunks_y, rem_y) = likelihoods_y.as_slice().unwrap().as_chunks::<10>();
 
-    let iter = iter_x.zip(iter_y).enumerate().map(|(site, (like_x, like_y))| {
-        let m = &m_matrices[site];
+    assert!(rem_x.is_empty());
+    assert!(rem_y.is_empty());
 
-        let mut g = [0.0f64; 100];
+    assert_eq!(m_matrices.len(), chunks_x.len());
+    assert_eq!(m_matrices.len(), chunks_y.len());
 
-        // This needs to match the order of the rows of the M matrix
-        for i in 0..10 {
-            for j in 0..10 {
-                g[10 * i + j] = like_x[i] * like_y[j];
-            }
-        }
-
+    let iter = chunks_x.iter().zip(chunks_y.iter()).zip(m_matrices.iter()).map(|((like_x, like_y), m)| {
         // g^T M
         let mut p = [0.0f64; 9];
-        for i in 0..9 {
-            for j in 0..100 {
-                p[i] = g[j].mul_add(m[j][i], p[i]);
+        for i in 0..10 {
+            for j in 0..10 {
+                // This needs to match the order of the rows of the M matrix
+                // In calculate_all_joint_genotypes, we iterate over the second
+                // individual completely before doing the first
+                let g = like_x[i] * like_y[j];
+                for k in 0..9 {
+                    p[k] = g.mul_add(m[i][j][k], p[k]);
+                    // p[k] = g.algebraic_mul(m[i][j][k]).algebraic_add(p[k]);
+                }
             }
         }
 
         p
-
     });
 
     p_mat.fill_from_rows(iter);
