@@ -1,6 +1,6 @@
-use crate::{algebra::{Vector, Matrix}, arith::{Arith, Lane, Lane8}, lanebuffer::LaneBuffer, log::Log};
+use crate::{algebra::{Vector, Matrix}, arith::{Arith, Lane, Lane8}, lanevector::LaneVector, log::Log};
 
-pub fn compute_grad_hess(likelihood_mats: &LaneBuffer<Lane8, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+pub fn compute_grad_hess(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     let (blocks, remainder) = likelihood_mats.as_lanes();
 
     let (bg, bh) = compute_grad_hess_blocks(blocks, x, eps);

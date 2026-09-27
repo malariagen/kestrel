@@ -23,7 +23,7 @@ noodles = { version = "0.111.0", features = ["vcf"] }
 numpy = "0.29.0"
 openblas-src = { version = "0.10.16", features = ["system"] }
 paralight = "0.0.12"
-polars = { version = "0.55.2", features = ["csv"] }
+#polars = { version = "0.55.2", default-features = false, features = ["csv"] }
 pyo3 = "0.29.0"
 
 [profile.release]
@@ -32,7 +32,7 @@ codegen-units = 1
 #overflow-checks = true
 lto = true
 
-#debug = true
+debug = true
 # echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
 
 [dev-dependencies]

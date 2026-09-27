@@ -183,8 +183,6 @@ assert len(individuals) == len(individual_names)
 ne_name = f"Ne_{Ne}"
 Path(ne_name).mkdir(exist_ok=True)
 
-total_deltas = dict()
-ts_map = dict()
 for i, arm in enumerate(("2L", "2R", "3L", "3R")):
 # for i, arm in enumerate(("2L",)):
     # TODO num_replicates, also run in parallel, better RNG
@@ -205,12 +203,9 @@ for i, arm in enumerate(("2L", "2R", "3L", "3R")):
     )
 
     # Next count the number of IBD modes across the arm
+    deltas = dict()
     for (rel, pair) in pairs.items():
-        deltas = ibd.count_ibd_modes(ts_ped, pair[0], pair[1])
-        if rel not in total_deltas:
-            total_deltas[rel] = deltas
-        else:
-            total_deltas[rel] += deltas
+        deltas[rel] = ibd.count_ibd_modes(ts_ped, pair[0], pair[1])
 
     # Then simulate to coalescence using two models:
     # DTWF for 20 generations, and then Hudson after.
@@ -242,18 +237,9 @@ for i, arm in enumerate(("2L", "2R", "3L", "3R")):
     with open(f"{ne_name}/AnoGam-{arm}.vcf", "w") as vcf:
         ts_mut.write_vcf(vcf, contig_id=arm, individuals=individuals, individual_names=individual_names)
 
-for (rel, deltas) in total_deltas.items():
-    total_deltas[rel] = deltas / np.sum(deltas)
+    columns = np.array([f"ibd{i}" for i in range(1, 10)])
+    df = pd.DataFrame.from_dict(deltas, orient="index", columns=columns)
+    df.index.name = "rel"
+    df.reset_index(inplace=True)
+    df.to_csv(f"{ne_name}/AnoGam-{arm}.tsv", sep="\t", index=False)
 
-columns = np.array([f"ibd{i}" for i in range(1, 10)])
-df = pd.DataFrame.from_dict(total_deltas, orient="index", columns=columns)
-df.index.name = "rel"
-df.reset_index(inplace=True)
-
-df.to_csv(f"{ne_name}/AnoGam.tsv", sep="\t", index=False)
-
-    # bgzip, then bcftools concat
-
-    # vcfgl for each arm
-    # then thin?
-    # then process in ngsrelate and kestrel

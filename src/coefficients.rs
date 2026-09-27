@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use itertools::Itertools;
-use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3};
+use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3, s};
 use paralight::{
     iter::{
         ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
@@ -142,19 +142,20 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
     }
     .build();
 
-    let pairs: Vec<[(usize, ArrayView2<f64>); 2]> = swapped
+    // Only to analyze the data, before I make it faster...
+    let tmp = swapped.slice(s![0..16, .., ..]);
+
+    let pairs: Vec<[(usize, ArrayView2<f64>); 2]> = tmp
         .outer_iter()
         .enumerate()
         .array_combinations_with_replacement()
         .collect();
     let mut output = vec![(0, 0, [0.0f64; 9], 0.0f64, 0); pairs.len()];
 
-    println!("Calculating Jacquard coefficients for {} pairs using {} variants", pairs.len(), num_v);
+    println!("Calculating Jacquard coefficients for {} pairs using {} sites", pairs.len(), num_v);
 
     let bar = ProgressBar::new(pairs.len().try_into().unwrap())
         .with_eta()
-        // .disable_color()
-        // .with_cpu_usage()
         .with_bar_width(50)
         .with_update_interval(100)
         .start();
@@ -197,6 +198,7 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
 
     let mut total_iters = 0;
     for (x, y, jacquard, kinship, iter) in output.iter() {
+        println!("{x} {y} {jacquard:?}");
         total_iters += iter;
         kinship_mat[(*x, *y)] = *kinship;
     }
@@ -332,6 +334,11 @@ pub fn calculate_mixture_component_matrix_gl(
     assert_eq!(m_matrices.len(), chunks_x.len());
     assert_eq!(m_matrices.len(), chunks_y.len());
 
+    // TODO may have to lanebuffer all of this stuff...
+    // Have a Buffer<Vec<>> and Buffer<Mat>>
+    // For each pair (x, y), need to calculate 900 elements x number of sites
+    // Oof that's a lot. For hard-called you just look up a row of M, no calculation needed
+
     let iter = chunks_x.iter().zip(chunks_y.iter()).zip(m_matrices.iter()).map(|((like_x, like_y), m)| {
         // g^T M
         let mut p = [0.0f64; 9];
@@ -343,7 +350,6 @@ pub fn calculate_mixture_component_matrix_gl(
                 let g = like_x[i] * like_y[j];
                 for k in 0..9 {
                     p[k] = g.mul_add(m[i][j][k], p[k]);
-                    // p[k] = g.algebraic_mul(m[i][j][k]).algebraic_add(p[k]);
                 }
             }
         }

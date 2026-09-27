@@ -50,6 +50,7 @@ impl<T: Copy, const L: usize, const R: usize> BlockBuffer<T, L, R> {
         (block_slice, remainder_slice)
     }
 
+    #[inline(always)]
     pub fn fill_from_rows(&mut self, mut iter: impl Iterator<Item = [T; R]>) {
         let (blocks, remainder) = self.as_blocks_mut();
 

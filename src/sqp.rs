@@ -53,14 +53,13 @@ where
 
         let (g, h) = grad_hess(&x, tune.epsilon);
 
-        let eigs = eigenvals_jacobi(&h, 50).unwrap();
-        for e in eigs.iter() {
-            let tol = -1e-5;
-            // let tol = 0.0;
-            if *e < tol {
-                println!("Not PSD: {:?} {}", x, e);
-            }
-        }
+        // let eigs = eigenvals_jacobi(&h, 50).unwrap();
+        // for e in eigs.iter() {
+        //     let tol = -1e-5;
+        //     if *e < tol {
+        //         println!("Not PSD: {:?} {}", x, e);
+        //     }
+        // }
 
         // println!("{iter} {x:?} {g:?} {qp} {bl}");
 

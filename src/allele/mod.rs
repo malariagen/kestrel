@@ -6,7 +6,7 @@ use lockfree_progress_bar::ProgressBar;
 use ndarray::{Array2, Array3, Array4};
 
 use crate::{
-    algebra::{Matrix, Vector, dot, mul, outer, scale_div}, lane::Lane8, lanebuffer::LaneBuffer, sqp::{self, Tuneables},
+    algebra::{Matrix, Vector, dot, mul, outer, scale_div}, lane::Lane8, lanevector::LaneVector, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
@@ -16,7 +16,7 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
 
     let mut af = Array2::zeros((num_variants, 4));
 
-    println!("Calculating allele frequencies for {} variants {} samples", num_variants, num_samples);
+    println!("Calculating allele frequencies for {} sites using {} samples", num_variants, num_samples);
 
     let bar = ProgressBar::new(num_variants.try_into().unwrap())
         .with_eta()
@@ -29,7 +29,7 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
     let handle = bar.clone_handle();
 
     let mut multi = 0;
-    let mut buffer = LaneBuffer::new(num_samples);
+    let mut buffer = LaneVector::new(num_samples);
     for (variant, variant_likelihood) in likelihoods.outer_iter().enumerate() {
 
         let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
@@ -50,7 +50,6 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
 
         if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
             multi += 1;
-            // println!("MULTI");
         }
 
         for i in 0..4 {
@@ -58,12 +57,11 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
         }
 
         handle.inc();
-
-        // println!("{:?}", x);
     }
-    println!("Multi {multi}");
 
     bar.done();
+
+    println!("Multi-allelic sites {multi}");
 
     af
 }

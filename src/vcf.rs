@@ -176,7 +176,7 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
                     // So need to record the arity of each site
                     let mut gls = [-f64::INFINITY; 10];
 
-                    if gl_buf.len() != 10 {
+                    if gl_buf.len() > 10 {
                         continue 'variant;
                     }
 
