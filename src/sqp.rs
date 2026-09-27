@@ -38,7 +38,7 @@ pub fn solve_sqp<const N: usize, Obj, GradHess>(
     grad_hess: GradHess,
     x0: &Vector<N>,
     tune: &Tuneables,
-) -> (Vector<N>, u64)
+) -> (f64, Vector<N>, u64)
 where
     Obj: Fn(&Vector<N>, f64) -> f64,
     GradHess: Fn(&Vector<N>, f64) -> (Vector<N>, Matrix<N>),
@@ -47,6 +47,8 @@ where
 
     let mut qp = 0;
     let mut bl = 0;
+
+    let mut f = 0.0;
 
     for iter in 0..tune.sqp_max_iter {
         x = sum_to_one(&x);
@@ -64,7 +66,7 @@ where
         // println!("{iter} {x:?} {g:?} {qp} {bl}");
 
         if check_convergence(&x, &g, tune.sqp_conv_tol) {
-            return (x, iter);
+            return (f, x, iter);
         }
 
         // c = g - H x
@@ -72,7 +74,7 @@ where
 
         let (y, _qp_iter) = solve_qp_active_set(&h, &c, &x, true, tune);
 
-        let (xnew, _bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
+        let (fnew, xnew, _bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
         qp = _qp_iter;
         bl = _bls_iter;
@@ -81,11 +83,12 @@ where
         // println!("{iter} {x:?} {g:?} {_qp_iter} {_bls_iter}");
 
         x = xnew;
+        f = fnew;
 
         // println!("{iter} {x:?} {g:?} {qp_iter} {bls_iter}");
     }
 
-    (x, tune.sqp_max_iter)
+    (f, x, tune.sqp_max_iter)
 }
 
 // TODO also print a warning when the algorithm doesn't converge within the iterations
@@ -276,7 +279,7 @@ fn backtracking_line_search<const N: usize, Obj>(
     y: &Vector<N>,
     g: &Vector<N>,
     tune: &Tuneables,
-) -> (Vector<N>, u64)
+) -> (f64, Vector<N>, u64)
 where
     Obj: Fn(&Vector<N>, f64) -> f64,
 {
@@ -294,15 +297,19 @@ where
         // this more efficient, a la N&W
         let fnew = obj(&xnew, tune.epsilon);
         if fnew <= f + alpha * t {
-            return (xnew, iter);
+            return (fnew, xnew, iter);
         }
 
         alpha *= tune.bls_step_size_reduce;
     }
 
+
     // If we exceed the maximum number of backtracks, then just
     // return the last one. This could happen because of floating
     // point problems, and it's better to be robust instead of
     // throwing errors (let the main loop handle it).
-    return (add(x, &scale_mul(alpha, &p)), tune.bls_max_iter);
+    // TODO make more efficient
+    let xnew = add(x, &scale_mul(alpha, &p));
+    let fnew = obj(&xnew, tune.epsilon);
+    return (fnew, xnew, tune.bls_max_iter);
 }

@@ -16,6 +16,8 @@ categories = ["mathematics", "science"]
 [dependencies]
 anyhow = "1.0.103"
 cblas = "0.5.0"
+csv = "1.4.0"
+# TODO remove?
 itertools = "0.15.0"
 lockfree_progress_bar = "0.1.0"
 ndarray = "0.17.2"
@@ -23,7 +25,6 @@ noodles = { version = "0.111.0", features = ["vcf"] }
 numpy = "0.29.0"
 openblas-src = { version = "0.10.16", features = ["system"] }
 paralight = "0.0.12"
-#polars = { version = "0.55.2", default-features = false, features = ["csv"] }
 pyo3 = "0.29.0"
 
 [profile.release]

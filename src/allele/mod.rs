@@ -42,7 +42,7 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
         let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(&buffer, &x, eps);
 
         let tune = Tuneables::new();
-        let (x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
+        let (_, x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
         if iter >= tune.sqp_max_iter {
             println!("WARNING: no convergence for allele frequencies, max iterations {} exceeded", tune.sqp_max_iter);

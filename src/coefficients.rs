@@ -117,7 +117,7 @@ impl ThreadBuffers {
     }
 }
 
-pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
+pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allele_frequencies: &Array2<f64>) -> Vec<Output> {
     let num_v = allele_frequencies.shape()[0];
 
     // TODO calculate this across each locus to figure out how many alleles there are
@@ -125,8 +125,6 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
     let num_a = allele_frequencies.shape()[1];
 
     let m_matrices = conditional::calculate_m_matrices(allele_frequencies);
-
-    let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
     likelihoods.swap_axes(0, 1);
     let swapped = likelihoods.as_standard_layout();
@@ -150,7 +148,7 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
         .enumerate()
         .array_combinations_with_replacement()
         .collect();
-    let mut output = vec![(0, 0, [0.0f64; 9], 0.0f64, 0); pairs.len()];
+    let mut outputs = vec![Output::default(); pairs.len()];
 
     println!("Calculating Jacquard coefficients for {} pairs using {} sites", pairs.len(), num_v);
 
@@ -162,7 +160,7 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
 
     let handle = bar.clone_handle();
 
-    (output.par_iter_mut(), pairs.par_iter())
+    (outputs.par_iter_mut(), pairs.par_iter())
         .zip_eq()
         .with_thread_pool(&mut thread_pool)
         .for_each_init(
@@ -180,32 +178,35 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
 
                 let obj = |x: &Vector<9>, eps| objective::compute_obj(&p_mat, &x, eps);
                 let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&p_mat, &x, eps);
-                let (delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+                let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                 if iters >= tune.sqp_max_iter {
                     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
                 }
 
-                let kinship = dot(&delta, &kinship_vec);
-                *out = (*x, *y, delta, kinship, iters);
+                *out = Output {x: *x, y: *y, jacquard: delta, iters, obj: f };
                 handle.inc();
             },
         );
 
     bar.done();
 
-    let mut kinship_mat = Array2::<f64>::zeros((num_s, num_s));
+    outputs
+}
 
-    let mut total_iters = 0;
-    for (x, y, jacquard, kinship, iter) in output.iter() {
-        println!("{x} {y} {jacquard:?}");
-        total_iters += iter;
-        kinship_mat[(*x, *y)] = *kinship;
+#[derive(Clone, Copy)]
+pub struct Output {
+    pub x: usize,
+    pub y: usize,
+    pub jacquard: [f64; 9],
+    pub obj: f64,
+    pub iters: u64,
+}
+
+impl Default for Output {
+    fn default() -> Self {
+        Output { x: 0, y: 0, jacquard : [0.0; 9], iters: 0, obj: 0.0}
     }
-
-    println!("Total iters {total_iters}");
-
-    kinship_mat
 }
 
 fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
@@ -244,7 +245,7 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
         .enumerate()
         .array_combinations_with_replacement()
         .collect();
-    let mut output = vec![(0, 0, [0.0f64; 9], 0.0f64, 0); pairs.len()];
+    let mut output = vec![Output::default(); pairs.len()];
 
     println!("Calculating Jacquard coefficients for {} pairs using {} variants", pairs.len(), num_v);
 
@@ -292,14 +293,14 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
 
                 let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
                 let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
-                let (delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+                let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                 if iters >= tune.sqp_max_iter {
                     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
                 }
 
                 let kinship = dot(&delta, &kinship_vec);
-                *out = (*x, *y, delta, kinship, iters);
+                *out = Output { x: *x, y: *y, jacquard: delta, iters, obj : f };
                 handle.inc();
             },
         );
@@ -309,9 +310,9 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
     let mut kinship_mat = Array2::<f64>::zeros((num_s, num_s));
 
     let mut total_iters = 0;
-    for (x, y, jacquard, kinship, iter) in output.iter() {
-        total_iters += iter;
-        kinship_mat[(*x, *y)] = *kinship;
+    for out in output.iter() {
+        total_iters += out.iters;
+        // kinship_mat[(*x, *y)] = *kinship;
     }
 
     println!("Total iters {total_iters}");

@@ -219,22 +219,22 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
                 gls[[v, s, i]] = prob;
             }
 
-            let mut mat = [[0.0; 4]; 4];
-            for j in 0..4 {
-                for i in 0..=j {
-                    // The index of (i, j) where i <= j (see the VCF spec)
-                    let index = j*(j+1)/2 + i;
-                    let val = gls[[v, s, index]];
-                    mat[i][j] = val;
-                    mat[j][i] = val;
-                }
-            }
+            // let mut mat = [[0.0; 4]; 4];
+            // for j in 0..4 {
+            //     for i in 0..=j {
+            //         // The index of (i, j) where i <= j (see the VCF spec)
+            //         let index = j*(j+1)/2 + i;
+            //         let val = gls[[v, s, index]];
+            //         mat[i][j] = val;
+            //         mat[j][i] = val;
+            //     }
+            // }
 
-            let eigs = eigenvals_jacobi(&mat, 50).unwrap();
-            let count = eigs.iter().filter(|e| **e > 1e-5).count();
-            if count != 1 {
-                println!("Not Lorentzian! {:?}", eigs);
-            }
+            // let eigs = eigenvals_jacobi(&mat, 50).unwrap();
+            // let count = eigs.iter().filter(|e| **e > 1e-5).count();
+            // if count != 1 {
+            //     println!("Not Lorentzian! {:?}", eigs);
+            // }
         }
     }
 

@@ -41,9 +41,10 @@ def simulate(rep, seed):
 
     print("Simulating rep", rep)
 
+    kinship_vec = np.array([1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0])
+
     for i, arm in enumerate(("2L", "2R", "3L", "3R")):
 
-        print("Simulating", arm)
         contig = species.get_contig(arm)
 
         # Based on the following
@@ -117,7 +118,6 @@ if __name__ == "__main__":
 
     reps = 5
 
-    # Very random
     # https://numpy.org/doc/stable/reference/random/parallel.html#seedsequence-spawning
     random_seed = 0xcbc8bf613dc84639e312d7bca02a98cc
     seed_seq = np.random.SeedSequence(random_seed)
