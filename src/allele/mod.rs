@@ -6,7 +6,7 @@ use lockfree_progress_bar::ProgressBar;
 use ndarray::{Array2, Array3, Array4};
 
 use crate::{
-    algebra::{Matrix, Vector, dot, mul, outer, scale_div}, lane::Lane8, lanevector::LaneVector, sqp::{self, Tuneables},
+    algebra::{Matrix, Vector, dot, mul, outer, scale_div, sum_to_one}, lane::Lane8, lanevector::LaneVector, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
@@ -42,11 +42,21 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {
         let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(&buffer, &x, eps);
 
         let tune = Tuneables::new();
-        let (_, x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
+        let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
         if iter >= tune.sqp_max_iter {
             println!("WARNING: no convergence for allele frequencies, max iterations {} exceeded", tune.sqp_max_iter);
         }
+
+        // More rigourous test is LRT
+        for i in 0..4 {
+            if x[i] > 0.0 && x[i] < (1.0 / (2.0 * num_samples as f64)) {
+                // println!("{}", x[i]);
+                x[i] = 0.0;
+            }
+        }
+
+        let x = sum_to_one(&x);
 
         if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
             multi += 1;

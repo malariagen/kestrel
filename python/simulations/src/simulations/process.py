@@ -33,39 +33,48 @@ def extract_samples(infile, outfile):
         while chunk := fin.read(BLOCK_TOTAL):
             fout.write(chunk[:BLOCK_KEEP])
 
+rng = np.random.default_rng(global_seed + 3)
+
+dir_name = f"Ne_{Ne}m/0"
+
 for arm in arms:
-    continue
     # TODO add multiple depths, maybe Q20
     error_rate = 0.001
     depth = 10
-    vcf = f"Ne_{Ne}/AnoGam-{arm}"
+    vcf = f"{dir_name}/AnoGam-{arm}"
+
+    seed = rng.integers(low=1, high=2**31)
 
     # vcfgl can't handle multiple chroms in one file, so we will concat them after
-    vcfgl = ["vcfgl", "-i", f"{vcf}.vcf", "--source", "1", "-o", f"{vcf}-GL", "-O", "z", "-d", str(depth), "--seed", "42", "-e", str(error_rate), "-doUnobserved", "3"]
+    vcfgl = ["vcfgl", "-i", f"{vcf}.vcf", "--source", "1", "-o", f"{vcf}-GL", "-O", "z", "-d", str(depth), "--seed", str(seed), "-e", str(error_rate), "-doUnobserved", "3"]
 
     print(" ".join(vcfgl))
 
     subprocess.run(vcfgl, check=True, text=True, capture_output=True)
 
-bcftools = ["bcftools", "concat"] + [f"Ne_{Ne}/AnoGam-{arm}-GL.vcf.gz" for arm in arms] + ["-O", "z", "-o", f"Ne_{Ne}/AnoGam-GL.vcf.gz"]
+bcftools = ["bcftools", "concat"] + [f"{dir_name}/AnoGam-{arm}-GL.vcf.gz" for arm in arms] + ["-O", "z", "-o", f"{dir_name}/AnoGam-GL.vcf.gz"]
 print(" ".join(bcftools))
-#subprocess.run(bcftools, check=True, text=True, capture_output=True)
+subprocess.run(bcftools, check=True, text=True, capture_output=True)
 
 # TODO look more at the args for this, like the p-value and stuff
-angsd = ["angsd", "-vcf-gl", f"Ne_{Ne}/AnoGam-GL.vcf.gz", "-nInd", f"{samples_total}", "-doMajorMinor", "1", "-doMaf", "1", "-doGlf", "3", "-out", f"Ne_{Ne}/AnoGam-GL-angsd"]
+# https://popgen.dk/angsd/index.php/Allele_Frequencies
+# https://popgen.dk/angsd/index.php/Major_Minor
+# https://popgen.dk/angsd/index.php/Genotype_Likelihoods
+angsd = ["angsd", "-vcf-gl", f"{dir_name}/AnoGam-GL.vcf.gz", "-nInd", f"{samples_total}", "-doMajorMinor", "1", "-doMaf", "1", "-doGlf", "3", "-out", f"{dir_name}/AnoGam-GL-angsd"]
 print(" ".join(angsd))
-#subprocess.run(angsd, check=True, text=True, capture_output=True)
-raise
+subprocess.run(angsd, check=True, text=True, capture_output=True)
 
-extract_freq(f"Ne_{Ne}/AnoGam-GL-angsd.mafs.gz", f"Ne_{Ne}/freq.txt")
-extract_samples(f"Ne_{Ne}/AnoGam-GL-angsd.glf.gz", f"Ne_{Ne}/AnoGam-GL-angsd-{samples_keep}.glf.gz")
+extract_freq(f"{dir_name}/AnoGam-GL-angsd.mafs.gz", f"{dir_name}/angsd-freq.txt")
+extract_samples(f"{dir_name}/AnoGam-GL-angsd.glf.gz", f"{dir_name}/AnoGam-GL-angsd-{samples_keep}.glf.gz")
 
-# TODO seed and threads
-ngsrelate = ["ngsRelate", "-g", f"Ne_{Ne}/AnoGam-GL-angsd-{samples_keep}.glf.gz", "-n", f"{samples_keep}", "-f", f"Ne_{Ne}/freq.txt", "-O", f"Ne_{Ne}/ngsrelate.tsv", "-l", "0.0"]
+seed = rng.integers(low=1, high=2**31)
+ngsrelate = ["ngsRelate", "-g", f"{dir_name}/AnoGam-GL-angsd-{samples_keep}.glf.gz", "-n", f"{samples_keep}", "-f", f"{dir_name}/angsd-freq.txt", "-O", f"{dir_name}/ngsrelate.tsv", "-l", "0.0", "-r", str(seed), "-p", "1"]
 print(" ".join(ngsrelate))
 subprocess.run(ngsrelate, check=True, text=True, capture_output=True)
 
-ngsrelate = ["kestrel", ]
+# TODO apply a threshold using number of individuals to zero out AF (makes sense)
+
+kestrel = ["kestrel", f"{dir_name}/AnoGam-GL.vcf.gz", f"{dir_name}/kestrel.tsv"]
 print(" ".join(kestrel))
 subprocess.run(kestrel, check=True, text=True, capture_output=True)
 

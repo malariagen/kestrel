@@ -5,9 +5,11 @@ from scipy.spatial.distance import jensenshannon
 
 ne = 10000
 
-dir_name = f"Ne_{ne}"
+dir_name = f"Ne_{ne}/3"
 
-rels = ["ifs", "ihs", "ifc", "iur", "ofs", "ohs", "ofc", "our"]
+irels = ["ifs", "ihs", "ifc", "iur"]
+orels = ["ofs", "ohs", "ofc", "our"]
+rels = irels + orels
 
 def parse_true(infile):
     df = pd.read_csv(infile, sep='\t')
@@ -46,10 +48,21 @@ def parse_kestrel(infile):
 
 def frm(p, q):
     return 2*np.arccos(np.sum(np.sqrt(p*q)))
+
+def tvd(p, q):
+    return np.sum(np.abs(p - q)) / 2.0
+
+def kinship(x):
+    vec = np.array([1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0])
+    return np.dot(vec, x)
     
 tjac = parse_true(f"{dir_name}/AnoGam.tsv")
 njac = parse_ngsrelate(f"{dir_name}/ngsrelate.tsv")
 kjac = parse_kestrel(f"{dir_name}/kestrel.tsv")
+
+tkin = np.array([kinship(tjac[rel]) for rel in rels])
+nkin = np.array([kinship(njac[rel]) for rel in rels])
+kkin = np.array([kinship(kjac[rel]) for rel in rels])
 
 nkl = [entropy(tjac[rel], njac[rel]) for rel in rels]
 kkl = [entropy(tjac[rel], kjac[rel]) for rel in rels]
@@ -60,6 +73,9 @@ kjs = [jensenshannon(tjac[rel], kjac[rel]) for rel in rels]
 nfrm = [frm(tjac[rel], njac[rel]) for rel in rels]
 kfrm = [frm(tjac[rel], kjac[rel]) for rel in rels]
 
+ntvd = [tvd(tjac[rel], njac[rel]) for rel in rels]
+ktvd = [tvd(tjac[rel], kjac[rel]) for rel in rels]
+
 # KL divergence
 # Jensen shannon distance - sqrt(JSD), metric
 # TVD - metric. Simple to understand.
@@ -67,13 +83,21 @@ kfrm = [frm(tjac[rel], kjac[rel]) for rel in rels]
 # Bhattacharyaa Coefficient = dot product between two vectors
 # Fisher Rao Metric - path length between points on the sphere
 
+print("KL")
 print(np.mean(nkl))
 print(np.mean(kkl))
 
+print("JSD")
 print(np.mean(njs))
 print(np.mean(kjs))
 
+print("FRM")
 print(np.mean(nfrm))
 print(np.mean(kfrm))
 
+print("TVD")
+print(np.mean(ntvd))
+print(np.mean(ktvd))
 
+print(np.mean(np.abs(tkin - nkin)))
+print(np.mean(np.abs(tkin - kkin)))

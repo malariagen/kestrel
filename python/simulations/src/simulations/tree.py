@@ -36,13 +36,14 @@ def simulate(rep, seed):
     # Ne = int(species.population_size)
     ne = 10000
 
-    rep_name = f"Ne_{ne}/{rep}"
+    rep_name = f"Ne_{ne}m/{rep}"
     Path(rep_name).mkdir(exist_ok=True, parents=True)
 
     print("Simulating rep", rep)
 
     kinship_vec = np.array([1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0])
 
+    deltas = dict()
     for i, arm in enumerate(("2L", "2R", "3L", "3R")):
 
         contig = species.get_contig(arm)
@@ -60,9 +61,11 @@ def simulate(rep, seed):
         )
 
         # Next count the number of IBD modes across the arm
-        deltas = dict()
         for (rel, pair) in pairs.items():
-            deltas[rel] = ibd.count_ibd_modes(ts_ped, pair[0], pair[1])
+            if rel not in deltas:
+                deltas[rel] = ibd.count_ibd_modes(ts_ped, pair[0], pair[1])
+            else:
+                deltas[rel] += ibd.count_ibd_modes(ts_ped, pair[0], pair[1])
 
         # Then simulate to coalescence using two models:
         # DTWF for 20 generations, and then Hudson after.
@@ -86,7 +89,7 @@ def simulate(rep, seed):
         ts_mut = msprime.sim_mutations(
             ts_chrom,
             model=msprime.JC69(),
-            rate=contig.mutation_rate,
+            rate=contig.mutation_rate * 100,
             random_seed=rng.integers(low=1, high=2**31),
         )
 
@@ -107,11 +110,14 @@ def simulate(rep, seed):
         with open(f"{rep_name}/AnoGam-{arm}.vcf", "w") as vcf:
             ts_mut.write_vcf(vcf, contig_id=arm, individuals=individuals, individual_names=individual_names)
 
-        columns = np.array([f"ibd{i}" for i in range(1, 10)])
-        df = pd.DataFrame.from_dict(deltas, orient="index", columns=columns)
-        df.index.name = "rel"
-        df.reset_index(inplace=True)
-        df.to_csv(f"{rep_name}/AnoGam-{arm}.tsv", sep="\t", index=False)
+    for rel in deltas:
+        deltas[rel] /= np.sum(deltas[rel])
+
+    columns = np.array([f"ibd{i}" for i in range(1, 10)])
+    df = pd.DataFrame.from_dict(deltas, orient="index", columns=columns)
+    df.index.name = "rel"
+    df.reset_index(inplace=True)
+    df.to_csv(f"{rep_name}/AnoGam.tsv", sep="\t", index=False)
 
 
 if __name__ == "__main__":
