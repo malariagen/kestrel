@@ -21,6 +21,20 @@ def init_pedigree():
     global base
     pairs, base, pedigree = ped.create_pedigree(500)
 
+# https://tskit.dev/tutorials/tables_and_editing.html#editing-tree-sequences
+def thin_tree(ts, min_distance):
+    remove = []
+    last_kept = None
+
+    for variant in ts_mut.variants():
+        if last_kept is None or variant.site.position - last_kept >= min_distance:
+            last_kept = variant.site.position
+        else:
+            remove.append(variant.site.id)
+
+    return ts_mut.delete_sites(remove)
+
+
 # Based on
 # https://tskit.dev/msprime/docs/stable/replication.html#running-in-parallel
 def simulate(rep, seed):
@@ -36,7 +50,7 @@ def simulate(rep, seed):
     # Ne = int(species.population_size)
     ne = 10000
 
-    rep_name = f"Ne_{ne}m/{rep}"
+    rep_name = f"Ne_{ne}m2/{rep}"
     Path(rep_name).mkdir(exist_ok=True, parents=True)
 
     print("Simulating rep", rep)
@@ -93,6 +107,8 @@ def simulate(rep, seed):
             random_seed=rng.integers(low=1, high=2**31),
         )
 
+        ts_new = thin_tree(ts, 1000)
+
         individuals = []
         individual_names = []
         for (rel, pair) in pairs.items():
@@ -108,7 +124,7 @@ def simulate(rep, seed):
         assert len(individuals) == len(individual_names)
 
         with open(f"{rep_name}/AnoGam-{arm}.vcf", "w") as vcf:
-            ts_mut.write_vcf(vcf, contig_id=arm, individuals=individuals, individual_names=individual_names)
+            ts_new.write_vcf(vcf, contig_id=arm, individuals=individuals, individual_names=individual_names)
 
     for rel in deltas:
         deltas[rel] /= np.sum(deltas[rel])
@@ -122,7 +138,7 @@ def simulate(rep, seed):
 
 if __name__ == "__main__":
 
-    reps = 5
+    reps = 1
 
     # https://numpy.org/doc/stable/reference/random/parallel.html#seedsequence-spawning
     random_seed = 0xcbc8bf613dc84639e312d7bca02a98cc

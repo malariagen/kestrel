@@ -5,7 +5,7 @@ from scipy.spatial.distance import jensenshannon
 
 ne = 10000
 
-dir_name = f"Ne_{ne}/3"
+dir_name = f"Ne_{ne}m2/0"
 
 irels = ["ifs", "ihs", "ifc", "iur"]
 orels = ["ofs", "ohs", "ofc", "our"]
@@ -101,3 +101,9 @@ print(np.mean(ktvd))
 
 print(np.mean(np.abs(tkin - nkin)))
 print(np.mean(np.abs(tkin - kkin)))
+
+nerr = np.array([np.abs(tjac[rel] - njac[rel]) for rel in rels])
+kerr = np.array([np.abs(tjac[rel] - kjac[rel]) for rel in rels])
+
+print(np.mean(nerr, axis=0))
+print(np.mean(kerr, axis=0))

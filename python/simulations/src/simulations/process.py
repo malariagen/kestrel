@@ -33,9 +33,9 @@ def extract_samples(infile, outfile):
         while chunk := fin.read(BLOCK_TOTAL):
             fout.write(chunk[:BLOCK_KEEP])
 
-rng = np.random.default_rng(global_seed + 3)
+rng = np.random.default_rng(global_seed)
 
-dir_name = f"Ne_{Ne}m/0"
+dir_name = f"Ne_{Ne}m2/0"
 
 for arm in arms:
     # TODO add multiple depths, maybe Q20
@@ -56,7 +56,6 @@ bcftools = ["bcftools", "concat"] + [f"{dir_name}/AnoGam-{arm}-GL.vcf.gz" for ar
 print(" ".join(bcftools))
 subprocess.run(bcftools, check=True, text=True, capture_output=True)
 
-# TODO look more at the args for this, like the p-value and stuff
 # https://popgen.dk/angsd/index.php/Allele_Frequencies
 # https://popgen.dk/angsd/index.php/Major_Minor
 # https://popgen.dk/angsd/index.php/Genotype_Likelihoods
@@ -71,8 +70,6 @@ seed = rng.integers(low=1, high=2**31)
 ngsrelate = ["ngsRelate", "-g", f"{dir_name}/AnoGam-GL-angsd-{samples_keep}.glf.gz", "-n", f"{samples_keep}", "-f", f"{dir_name}/angsd-freq.txt", "-O", f"{dir_name}/ngsrelate.tsv", "-l", "0.0", "-r", str(seed), "-p", "1"]
 print(" ".join(ngsrelate))
 subprocess.run(ngsrelate, check=True, text=True, capture_output=True)
-
-# TODO apply a threshold using number of individuals to zero out AF (makes sense)
 
 kestrel = ["kestrel", f"{dir_name}/AnoGam-GL.vcf.gz", f"{dir_name}/kestrel.tsv"]
 print(" ".join(kestrel))
