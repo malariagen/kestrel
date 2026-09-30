@@ -17,7 +17,7 @@ impl Lane for Lane8 {
 
     #[inline]
     fn zero() -> Self {
-       Lane8([0.0; Self::N])
+       Self([0.0; Self::N])
     }
 }
 

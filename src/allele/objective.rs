@@ -1,25 +1,58 @@
-use crate::{algebra::Vector, arith::{Arith, Lane, Lane8}, lanevector::LaneVector, log::Log};
+use crate::{algebra::Vector, arith::{Arith, Lane, Lane8, lane::{Lane2, Lane4}}, lanevector::{GenericLaneVector, LaneVector}, log::Log};
 
-pub fn compute_objective(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> f64 {
+pub fn compute_objective(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>, eps: f64) -> f64 {
+    match likelihood_mats {
+        GenericLaneVector::L8(lv) => compute_obj_avx512(lv, x, eps),
+        GenericLaneVector::L4(lv) => compute_obj_avx2(lv, x, eps),
+        GenericLaneVector::L2(lv) => compute_obj_neon(lv, x, eps),
+        GenericLaneVector::L1(lv) => compute_obj_scalar(lv, x, eps),
+    }
+}
+
+fn compute_obj_avx512(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> f64 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::arch::x86_64::__m512d;
+        return compute_obj::<Lane8, __m512d>(likelihood_mats, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane8!")
+}
+
+fn compute_obj_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> f64 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::arch::x86_64::__m256d;
+        unimplemented!("AHHHH")
+        // return compute_obj::<Lane4, __m256d>(likelihood_mats, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane4!")
+}
+
+fn compute_obj_neon(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> f64 {
+    #[cfg(target_arch = "aarch64")]
+    {
+        use std::arch::x86_64::__m256d;
+        return compute_obj::<Lane2, __m256d>(likelihood_mats, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane2!")
+}
+
+fn compute_obj_scalar(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps: f64) -> f64 {
+    return compute_obj::<f64, f64>(likelihood_mats, x, eps);
+}
+
+fn compute_obj<L: Lane, S: Arith<L> + Log>(likelihood_mats: &LaneVector<L, 10>, x: &Vector<4>, eps: f64) -> f64 {
     let (blocks, remainder) = likelihood_mats.as_lanes();
 
-    let b = compute_obj_blocks(blocks, x, eps);
+    let b = compute_obj_lane::<L, S>(blocks, x, eps);
     let r = compute_obj_lane::<f64, f64>(remainder, x, eps);
 
     let n = likelihood_mats.len() as f64;
 
     -(b + r) / (n as f64)
-}
-
-fn compute_obj_blocks(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> f64 {
-    #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx512f") {
-        use std::arch::x86_64::__m512d;
-
-        return compute_obj_lane::<Lane8, __m512d>(blocks, x, eps);
-    }
-
-    unreachable!("Not implemented yet")
 }
 
 fn compute_obj_lane<L: Lane, S: Arith<L> + Log>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64 {

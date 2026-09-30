@@ -2,8 +2,6 @@
 mod objective;
 mod grad_hess;
 
-use std::{env::var, num::NonZeroUsize};
-
 use lockfree_progress_bar::ProgressBar;
 use ndarray::{Array2, Array3, Array4};
 
@@ -15,10 +13,10 @@ use paralight::{
 };
 
 use crate::{
-    algebra::{Vector, sum_to_one}, lanevector::LaneVector, sqp::{self, Tuneables},
+    algebra::{Vector, sum_to_one}, arith::simd::Simd, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
 };
 
-pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>, thread_pool: &mut ThreadPool) -> Array2<f64> {
+pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Array2<f64> {
 
     let num_variants = likelihoods.shape()[0];
     let num_samples = likelihoods.shape()[1];
@@ -41,7 +39,7 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>, thread_pool: &mut
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each_init(
-            || LaneVector::new(num_samples),
+            || GenericLaneVector::new(num_samples, simd),
             |buffer, (out, variant_likelihood)| {
 
         let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();

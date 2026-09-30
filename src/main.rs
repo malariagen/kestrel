@@ -5,11 +5,13 @@ use std::{num::NonZeroUsize, path::Path};
 
 use anyhow::Result;
 use csv::WriterBuilder;
-use kestrel::algebra::dot;
+use kestrel::{algebra::dot, arith::simd::Simd};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
+
+    let simd = Simd::detect();
 
     let vcf_file = Path::new(&args[1]);
 
@@ -24,7 +26,7 @@ fn main() -> Result<()> {
     }
     .build();
 
-    let af = kestrel::allele::calculate_allele_frequencies(&gl, &mut thread_pool);
+    let af = kestrel::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd);
 
     let outputs = kestrel::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool);
 

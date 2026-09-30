@@ -37,7 +37,6 @@ pub mod cls;
 pub mod eigenval;
 pub mod iis;
 pub mod coefficients;
-pub mod lane;
 pub mod log;
 pub mod sqp;
 pub mod vcf;

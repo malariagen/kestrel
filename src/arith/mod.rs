@@ -1,5 +1,10 @@
+#[cfg(target_arch = "x86_64")]
+mod avx2;
+#[cfg(target_arch = "x86_64")]
 mod avx512;
 mod scalar;
+pub mod simd;
+pub mod lane;
 
 pub trait Arith<L : Lane> : Copy {
     fn zero() -> Self;
@@ -20,20 +25,12 @@ pub trait Arith<L : Lane> : Copy {
 pub trait Lane : Copy {
     const N: usize;
 
+    // TODO use Index + Default?
     fn get(&self, i: usize) -> f64;
     fn set(&mut self, i: usize, val: f64);
-
     fn zero() -> Self;
 }
 
-#[repr(align(16))]
-#[derive(Clone, Copy)]
-pub struct Lane2(pub [f64; 2]);
-
-#[repr(align(32))]
-#[derive(Clone, Copy)]
-pub struct Lane4(pub [f64; 4]);
-
 #[repr(align(64))]
 #[derive(Clone, Copy, Debug)]
-pub struct Lane8(pub [f64; 8]);
+pub struct Lane8([f64; 8]);
