@@ -1,39 +1,39 @@
 use crate::{
-    algebra::{Vector, dot, sum}, blockbuffer::{Block, BlockBuffer}, log::Log,
+    algebra::{Vector, dot, sum}, arith::{Arith, Lane, Lane8}, blockbuffer::{Block, BlockBuffer}, lanevector::LaneVector, log::Log,
 };
 use core::arch::x86_64::*;
 
-pub fn compute_obj_barrier(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f64 {
-    let (blocks, remainder) = p_mat.as_blocks();
+// pub fn compute_obj_barrier(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f64 {
+//     let (blocks, remainder) = p_mat.as_blocks();
+
+//     let b = compute_obj_blocks(&blocks, x, eps);
+
+//     let r = compute_obj_remainder(remainder, x, eps);
+
+//     let n = p_mat.num_rows() as f64;
+
+//     return -(b + r) + n * (sum(x) - 1.0);
+// }
+
+pub fn compute_obj(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> f64 {
+    let (blocks, remainder) = p_mat.as_lanes();
 
     let b = compute_obj_blocks(blocks, x, eps);
 
-    let r = compute_obj_remainder(remainder, x, eps);
+    let r = compute_obj_lane::<f64, f64>(remainder, x, eps);
 
-    let n = p_mat.num_rows() as f64;
-
-    return -(b + r) + n * (sum(x) - 1.0);
-}
-
-pub fn compute_obj(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> f64 {
-    let (blocks, remainder) = p_mat.as_blocks();
-
-    let b = compute_obj_blocks(blocks, x, eps);
-
-    let r = compute_obj_remainder(remainder, x, eps);
-
-    let n = p_mat.num_rows();
+    let n = p_mat.len();
 
     return -(b + r) / (n as f64);
 }
 
-fn compute_obj_blocks(blocks: &[Block<f64, 8, 9>], x: &Vector<9>, eps: f64) -> f64 {
+fn compute_obj_blocks(blocks: &[[Lane8; 9]], x: &Vector<9>, eps: f64) -> f64 {
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") {
-        return unsafe { compute_obj_avx512(blocks, x, eps) };
+        return compute_obj_lane::<Lane8, __m512d>(blocks, x, eps);
     }
 
-    compute_blocks_scalar(blocks, x, eps)
+    unreachable!("Not implemented yet")
 }
 
 fn compute_obj_remainder(remainder: &[Vector<9>], x: &Vector<9>, eps: f64) -> f64 {
@@ -63,14 +63,13 @@ fn compute_blocks_scalar<const L: usize>(blocks: &[Block<f64, L, 9>], x: &[f64; 
     s
 }
 
-#[target_feature(enable = "avx512f")]
-pub fn compute_obj_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64) -> f64 {
+pub fn compute_obj_lane<L: Lane, S: Arith<L> + Log>(blocks: &[[L; 9]], x: &[f64; 9], eps: f64) -> f64 {
     // 9
-    let zx: [__m512d; 9] = std::array::from_fn(|i| _mm512_set1_pd(x[i]));
+    let zx: [S; 9] = std::array::from_fn(|i| S::set(x[i]));
 
     // 12
-    let mut zs = _mm512_setzero_pd();
-    let ze = _mm512_set1_pd(eps);
+    let mut zs = S::zero();
+    let ze = S::set(eps);
 
     for block in blocks.iter() {
         // This computes a dot product between x and a row of p
@@ -80,18 +79,18 @@ pub fn compute_obj_avx512(blocks: &[Block<f64, 8, 9>], x: &[f64; 9], eps: f64) -
         // 13
         let mut d = ze;
         for col in 0..9 {
+            let c = S::load(&block[col]);
             // This memory access gets put directly in the fmadd instruction
-            let c = unsafe { _mm512_load_pd(block[col].as_ptr()) };
-            d = _mm512_fmadd_pd(zx[col], c, d);
+            d = zx[col].fma(c, d);
         }
 
         let l = Log::log(d);
 
-        zs = _mm512_add_pd(zs, l);
+        zs = zs.add(l);
     }
 
     // Perhaps do something with zc too...
-    _mm512_reduce_add_pd(zs)
+    zs.radd()
 }
 
 // MUST look at assembly. Essential!

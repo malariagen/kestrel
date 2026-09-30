@@ -6,7 +6,7 @@ use lockfree_progress_bar::ProgressBar;
 use ndarray::{Array2, Array3, Array4};
 
 use crate::{
-    algebra::{Matrix, Vector, dot, mul, outer, scale_div, sum_to_one}, lane::Lane8, lanevector::LaneVector, sqp::{self, Tuneables},
+    algebra::{Vector, sum_to_one}, lanevector::LaneVector, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>) -> Array2<f64> {

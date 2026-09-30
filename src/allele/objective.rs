@@ -90,7 +90,7 @@ pub fn compute_obj_avx512(blocks: &[Block<f64, 8, 10>], x: &Vector<4>, eps: f64)
     _mm512_reduce_add_pd(zs)
 }
 
-fn compute_obj_lane<L: Lane, S: Arith<L> + Log + Copy>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64 {
+fn compute_obj_lane<L: Lane, S: Arith<L> + Log>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64 {
     // 2
     let mut zs = S::zero();
     let ze = S::set(eps);

@@ -13,7 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot}, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, sqp::{self, Tuneables},
+    algebra::{Vector, dot}, arith::Lane8, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::LaneVector, sqp::{self, Tuneables},
 };
 
 pub fn calculate_relatedness_coefficients_gt(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
@@ -164,7 +164,7 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
         .zip_eq()
         .with_thread_pool(&mut thread_pool)
         .for_each_init(
-            || BlockBuffer::new(num_v),
+            || LaneVector::new(num_v),
             |mut p_mat, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
                 let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
@@ -291,17 +291,19 @@ fn calculate_coefficients_inner(genotypes: &Array3<i8>, allele_frequencies: &Arr
 
                 let tune = Tuneables::new();
 
-                let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
-                let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+                unimplemented!("No")
 
-                if iters >= tune.sqp_max_iter {
-                    println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
-                }
+                // let obj = |x: &Vector<9>, eps| objective::compute_obj(&buffers.p_mat, &x, eps);
+                // let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&buffers.p_mat, &x, eps);
+                // let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
-                let kinship = dot(&delta, &kinship_vec);
-                *out = Output { x: *x, y: *y, jacquard: delta, iters, obj : f };
-                handle.inc();
+                // if iters >= tune.sqp_max_iter {
+                //     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
+                // }
+
+                // let kinship = dot(&delta, &kinship_vec);
+                // *out = Output { x: *x, y: *y, jacquard: delta, iters, obj : f };
+                // handle.inc();
             },
         );
 
@@ -324,7 +326,7 @@ pub fn calculate_mixture_component_matrix_gl(
     m_matrices: &[M],
     likelihoods_x: &ArrayView2<f64>,
     likelihoods_y: &ArrayView2<f64>,
-    p_mat: &mut BlockBuffer<f64, 8, 9>,
+    p_mat: &mut LaneVector<Lane8, 9>,
 ) {
     let (chunks_x, rem_x) = likelihoods_x.as_slice().unwrap().as_chunks::<10>();
     let (chunks_y, rem_y) = likelihoods_y.as_slice().unwrap().as_chunks::<10>();
@@ -358,7 +360,7 @@ pub fn calculate_mixture_component_matrix_gl(
         p
     });
 
-    p_mat.fill_from_rows(iter);
+    p_mat.fill_from_iter(iter);
 }
 
 fn calculate_mixture_component_matrix<const L: usize>(

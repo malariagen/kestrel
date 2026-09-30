@@ -1,7 +1,7 @@
 mod avx512;
 mod scalar;
 
-pub trait Arith<L : Lane> {
+pub trait Arith<L : Lane> : Copy {
     fn zero() -> Self;
     fn load(val: &L) -> Self;
     fn store(self, val: &mut L);
@@ -17,7 +17,7 @@ pub trait Arith<L : Lane> {
     fn radd(self) -> f64;
 }
 
-pub trait Lane {
+pub trait Lane : Copy {
     const N: usize;
 
     fn get(&self, i: usize) -> f64;
