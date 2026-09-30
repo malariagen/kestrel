@@ -1,5 +1,8 @@
 use crate::{
-    algebra::{Vector, dot, sum}, arith::{Arith, Lane, Lane8}, lanevector::LaneVector, log::Log,
+    algebra::{Vector, dot, sum},
+    arith::{Arith, Lane, Lane8},
+    lanevector::LaneVector,
+    log::Log,
 };
 
 pub fn compute_obj(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> f64 {

@@ -17,12 +17,11 @@ impl Lane for Lane8 {
 
     #[inline]
     fn zero() -> Self {
-       Self([0.0; Self::N])
+        Self([0.0; Self::N])
     }
 }
 
 impl Arith<Lane8> for __m512d {
-
     #[inline]
     fn zero() -> Self {
         unsafe { _mm512_setzero_pd() }

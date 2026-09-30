@@ -4,7 +4,6 @@ use crate::arith::Arith;
 use crate::arith::lane::Lane4;
 
 impl Arith<Lane4> for __m256d {
-
     #[inline]
     fn zero() -> Self {
         unsafe { _mm256_setzero_pd() }

@@ -23,20 +23,20 @@ mod kestrel {
 
 extern crate openblas_src;
 
-pub mod arith;
 pub mod algebra;
-pub mod conditional;
-pub mod lanevector;
-pub mod lanematrix;
 pub mod allele;
+pub mod arith;
 pub mod blockbuffer;
 pub mod buffer;
 pub mod cholesky;
-pub mod jacquard;
 pub mod cls;
+pub mod coefficients;
+pub mod conditional;
 pub mod eigenval;
 pub mod iis;
-pub mod coefficients;
+pub mod jacquard;
+pub mod lanematrix;
+pub mod lanevector;
 pub mod log;
 pub mod sqp;
 pub mod vcf;

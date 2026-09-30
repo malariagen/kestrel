@@ -2,11 +2,11 @@
 mod avx2;
 #[cfg(target_arch = "x86_64")]
 mod avx512;
+pub mod lane;
 mod scalar;
 pub mod simd;
-pub mod lane;
 
-pub trait Arith<L : Lane> : Copy {
+pub trait Arith<L: Lane>: Copy {
     fn zero() -> Self;
     fn load(val: &L) -> Self;
     fn store(self, val: &mut L);
@@ -22,7 +22,7 @@ pub trait Arith<L : Lane> : Copy {
     fn radd(self) -> f64;
 }
 
-pub trait Lane : Copy {
+pub trait Lane: Copy {
     const N: usize;
 
     // TODO use Index + Default?

@@ -1,5 +1,7 @@
 use crate::{
-    algebra::{Matrix, Vector}, arith::{Arith, Lane, Lane8}, lanevector::LaneVector,
+    algebra::{Matrix, Vector},
+    arith::{Arith, Lane, Lane8},
+    lanevector::LaneVector,
 };
 
 // h - 8*8*45 = 2880 bytes
@@ -46,7 +48,11 @@ pub fn compute_grad_hess_blocks(blocks: &[[Lane8; 9]], x: &Vector<9>, eps: f64) 
     unimplemented!("SIMD intrinsics haven't been written for your platform yet")
 }
 
-pub fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(blocks: &[[L; 9]], x: &[f64; 9], eps: f64) -> ([f64; 9], [f64; 45]) {
+pub fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(
+    blocks: &[[L; 9]],
+    x: &[f64; 9],
+    eps: f64,
+) -> ([f64; 9], [f64; 45]) {
     // Hmm, in theory we could make individual variables for each g, h element
     let mut g = [L::zero(); 9];
 

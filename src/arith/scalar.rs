@@ -20,7 +20,6 @@ impl Lane for f64 {
 }
 
 impl Arith<f64> for f64 {
-
     #[inline]
     fn zero() -> Self {
         0.0
@@ -88,7 +87,6 @@ impl Arith<f64> for f64 {
 }
 
 impl Arith<Lane1> for f64 {
-
     #[inline]
     fn zero() -> Self {
         0.0

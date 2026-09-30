@@ -1,5 +1,7 @@
 use crate::{
-    algebra::{Matrix, Vector, add, add_n, dot, mul, mul_n, scale_mul, sub, sum_n, sum_to_one}, cholesky, eigenval::eigenvals_jacobi,
+    algebra::{Matrix, Vector, add, add_n, dot, mul, mul_n, scale_mul, sub, sum_n, sum_to_one},
+    cholesky,
+    eigenval::eigenvals_jacobi,
 };
 
 pub struct Tuneables {
@@ -302,7 +304,6 @@ where
 
         alpha *= tune.bls_step_size_reduce;
     }
-
 
     // If we exceed the maximum number of backtracks, then just
     // return the last one. This could happen because of floating

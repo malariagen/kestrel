@@ -243,7 +243,6 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
 
 // VCF spec says this must be A, C, G, T, or N (case insensitive)
 fn is_snp(record: &Record) -> Result<bool> {
-
     let ref_bases = record.reference_bases();
 
     if !matches!(ref_bases, "A" | "C" | "G" | "T" | "a" | "c" | "g" | "t") {
@@ -259,7 +258,7 @@ fn is_snp(record: &Record) -> Result<bool> {
     for result_alt in record.alternate_bases().iter() {
         let alt = result_alt.context("Error reading alternate bases")?;
 
-        if !matches!(alt, "A" | "C" | "G" | "T" | "a" | "c" | "g" | "t" ) {
+        if !matches!(alt, "A" | "C" | "G" | "T" | "a" | "c" | "g" | "t") {
             return Ok(false);
         }
     }

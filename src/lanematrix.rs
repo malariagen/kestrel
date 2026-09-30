@@ -1,13 +1,12 @@
 use crate::arith::Lane;
 
-pub struct LaneMatrix<L : Lane, const R: usize, const C: usize> {
+pub struct LaneMatrix<L: Lane, const R: usize, const C: usize> {
     lanes: Vec<[[L; C]; R]>,
     rem: Vec<[[f64; C]; R]>,
     len: usize,
 }
 
 impl<L: Lane + Copy, const R: usize, const C: usize> LaneMatrix<L, R, C> {
-
     pub fn new(len: usize) -> Self {
         let lanes = len / L::N;
         let rem = len % L::N;
@@ -15,7 +14,11 @@ impl<L: Lane + Copy, const R: usize, const C: usize> LaneMatrix<L, R, C> {
         let lane_buf = vec![[[L::zero(); C]; R]; lanes];
         let rem_buf = vec![[[0.0; C]; R]; rem];
 
-        LaneMatrix { lanes: lane_buf, rem: rem_buf, len }
+        LaneMatrix {
+            lanes: lane_buf,
+            rem: rem_buf,
+            len,
+        }
     }
 
     pub fn len(&self) -> usize {

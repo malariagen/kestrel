@@ -1,15 +1,14 @@
+use crate::arith::lane::{Lane2, Lane4};
 use crate::arith::simd::Simd;
 use crate::arith::{Lane, Lane8};
-use crate::arith::lane::{Lane2, Lane4};
 
-pub struct LaneVector<L : Lane, const R: usize> {
+pub struct LaneVector<L: Lane, const R: usize> {
     lanes: Vec<[L; R]>,
     rem: Vec<[f64; R]>,
     len: usize,
 }
 
 impl<L: Lane + Copy, const R: usize> LaneVector<L, R> {
-
     pub fn new(len: usize) -> Self {
         let lanes = len / L::N;
         let rem = len % L::N;
@@ -17,7 +16,11 @@ impl<L: Lane + Copy, const R: usize> LaneVector<L, R> {
         let lane_buf = vec![[L::zero(); R]; lanes];
         let rem_buf = vec![[0.0; R]; rem];
 
-        LaneVector { lanes: lane_buf, rem: rem_buf, len }
+        LaneVector {
+            lanes: lane_buf,
+            rem: rem_buf,
+            len,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -61,7 +64,7 @@ impl<const R: usize> GenericLaneVector<R> {
             Simd::Avx512 => Self::L8(LaneVector::new(len)),
             Simd::Avx2 => Self::L4(LaneVector::new(len)),
             Simd::Neon => Self::L2(LaneVector::new(len)),
-            Simd::Scalar => Self::L1(LaneVector::new(len))
+            Simd::Scalar => Self::L1(LaneVector::new(len)),
         }
     }
 

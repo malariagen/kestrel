@@ -1,5 +1,11 @@
-use crate::{algebra::{Matrix, Vector}, arith::{Arith, Lane, Lane8, lane::{Lane2, Lane4}}, lanevector::{GenericLaneVector, LaneVector}};
-
+use crate::{
+    algebra::{Matrix, Vector},
+    arith::{
+        Arith, Lane, Lane8,
+        lane::{Lane2, Lane4},
+    },
+    lanevector::{GenericLaneVector, LaneVector},
+};
 
 pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     match likelihood_mats {
@@ -10,7 +16,11 @@ pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>,
     }
 }
 
-fn compute_grad_hess_avx512(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+fn compute_grad_hess_avx512(
+    likelihood_mats: &LaneVector<Lane8, 10>,
+    x: &Vector<4>,
+    eps: f64,
+) -> (Vector<4>, Matrix<4>) {
     #[cfg(target_arch = "x86_64")]
     {
         use std::arch::x86_64::__m512d;
@@ -44,7 +54,11 @@ fn compute_grad_hess_scalar(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>
     return compute_grad_hess_generic::<f64, f64>(likelihood_mats, x, eps);
 }
 
-fn compute_grad_hess_generic<L: Lane, S: Arith<L>>(likelihood_mats: &LaneVector<L, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+fn compute_grad_hess_generic<L: Lane, S: Arith<L>>(
+    likelihood_mats: &LaneVector<L, 10>,
+    x: &Vector<4>,
+    eps: f64,
+) -> (Vector<4>, Matrix<4>) {
     let (blocks, remainder) = likelihood_mats.as_lanes();
 
     let (bg, bh) = compute_grad_hess_lane::<L, S>(blocks, x, eps);
@@ -62,7 +76,7 @@ fn compute_grad_hess_generic<L: Lane, S: Arith<L>>(likelihood_mats: &LaneVector<
     for j in 0..4 {
         for i in 0..=j {
             // The index of (i, j) where i <= j (see the VCF spec)
-            let index = j*(j+1)/2 + i;
+            let index = j * (j + 1) / 2 + i;
             let val = 2.0 * (bh[index] + rh[index]) / n;
             h[i][j] = val;
             h[j][i] = val;
@@ -72,7 +86,7 @@ fn compute_grad_hess_generic<L: Lane, S: Arith<L>>(likelihood_mats: &LaneVector<
     (g, h)
 }
 
-fn compute_grad_hess_lane<L : Lane, S : Arith<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
+fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
     // 4
     let mut zg0 = S::zero();
     let mut zg1 = S::zero();
@@ -184,12 +198,7 @@ fn compute_grad_hess_lane<L : Lane, S : Arith<L>>(blocks: &[[L; 10]], x: &Vector
         zg3 = lx3.fma(inv_d, zg3);
     }
 
-    let g = [
-        zg0.radd(),
-        zg1.radd(),
-        zg2.radd(),
-        zg3.radd(),
-    ];
+    let g = [zg0.radd(), zg1.radd(), zg2.radd(), zg3.radd()];
 
     let h = [
         zh0.radd(),

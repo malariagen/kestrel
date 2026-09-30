@@ -27,7 +27,7 @@ impl Lane for Lane1 {
 
     #[inline]
     fn zero() -> Self {
-       Self([0.0; Self::N])
+        Self([0.0; Self::N])
     }
 }
 
@@ -46,7 +46,7 @@ impl Lane for Lane2 {
 
     #[inline]
     fn zero() -> Self {
-       Self([0.0; Self::N])
+        Self([0.0; Self::N])
     }
 }
 
@@ -65,6 +65,6 @@ impl Lane for Lane4 {
 
     #[inline]
     fn zero() -> Self {
-       Self([0.0; Self::N])
+        Self([0.0; Self::N])
     }
 }

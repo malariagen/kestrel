@@ -1,10 +1,9 @@
-
 #[derive(Clone, Copy)]
 pub enum Simd {
     Avx2,
     Avx512,
     Neon,
-    Scalar
+    Scalar,
 }
 
 impl Simd {

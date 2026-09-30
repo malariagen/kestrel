@@ -1,6 +1,6 @@
 // pub mod allele;
-mod objective;
 mod grad_hess;
+mod objective;
 
 use lockfree_progress_bar::ProgressBar;
 use ndarray::{Array2, Array3, Array4};
@@ -9,19 +9,29 @@ use paralight::{
     iter::{
         ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
         ZipableSource,
-    }, threads::{ThreadPool},
+    },
+    threads::ThreadPool,
 };
 
 use crate::{
-    algebra::{Vector, sum_to_one}, arith::simd::Simd, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
+    algebra::{Vector, sum_to_one},
+    arith::simd::Simd,
+    lanevector::{GenericLaneVector, LaneVector},
+    sqp::{self, Tuneables},
 };
 
-pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Array2<f64> {
-
+pub fn calculate_allele_frequencies(
+    likelihoods: &Array3<f64>,
+    thread_pool: &mut ThreadPool,
+    simd: Simd,
+) -> Array2<f64> {
     let num_variants = likelihoods.shape()[0];
     let num_samples = likelihoods.shape()[1];
 
-    println!("Calculating allele frequencies for {} sites using {} samples", num_variants, num_samples);
+    println!(
+        "Calculating allele frequencies for {} sites using {} samples",
+        num_variants, num_samples
+    );
 
     let bar = ProgressBar::new(num_variants.try_into().unwrap())
         .with_eta()
@@ -41,38 +51,40 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>, thread_pool: &mut
         .for_each_init(
             || GenericLaneVector::new(num_samples, simd),
             |buffer, (out, variant_likelihood)| {
+                let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
+                assert!(sample_likelihoods.1.is_empty());
+                buffer.fill_from_iter(sample_likelihoods.0.iter().copied());
 
-        let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
-        assert!(sample_likelihoods.1.is_empty());
-        buffer.fill_from_iter(sample_likelihoods.0.iter().copied());
+                let x0 = [0.25; 4];
 
-        let x0 = [0.25; 4];
+                let obj = |x: &Vector<4>, eps| objective::compute_objective(buffer, &x, eps);
+                let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(buffer, &x, eps);
 
-        let obj = |x: &Vector<4>, eps| objective::compute_objective(buffer, &x, eps);
-        let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(buffer, &x, eps);
+                let tune = Tuneables::new();
+                let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
-        let tune = Tuneables::new();
-        let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
+                if iter >= tune.sqp_max_iter {
+                    println!(
+                        "WARNING: no convergence for allele frequencies, max iterations {} exceeded",
+                        tune.sqp_max_iter
+                    );
+                }
 
-        if iter >= tune.sqp_max_iter {
-            println!("WARNING: no convergence for allele frequencies, max iterations {} exceeded", tune.sqp_max_iter);
-        }
+                // More rigourous test is LRT
+                for i in 0..4 {
+                    if x[i] > 0.0 && x[i] < (1.0 / (2.0 * num_samples as f64)) {
+                        // println!("{}", x[i]);
+                        x[i] = 0.0;
+                    }
+                }
 
-        // More rigourous test is LRT
-        for i in 0..4 {
-            if x[i] > 0.0 && x[i] < (1.0 / (2.0 * num_samples as f64)) {
-                // println!("{}", x[i]);
-                x[i] = 0.0;
-            }
-        }
+                let x = sum_to_one(&x);
 
-        let x = sum_to_one(&x);
+                *out = x;
 
-        *out = x;
-
-        handle.inc();
-
-    });
+                handle.inc();
+            },
+        );
 
     bar.done();
 
@@ -80,7 +92,6 @@ pub fn calculate_allele_frequencies(likelihoods: &Array3<f64>, thread_pool: &mut
     let mut multi = 0;
 
     for (v, x) in outputs.iter().enumerate() {
-
         if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
             multi += 1;
         }

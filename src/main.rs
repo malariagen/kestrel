@@ -44,7 +44,24 @@ fn main() -> Result<()> {
 
     let mut writer = WriterBuilder::new().delimiter(b'\t').from_path(&args[2])?;
 
-    writer.write_record(["sample1", "sample2", "delta1", "delta2", "delta3", "delta4", "delta5", "delta6", "delta7", "delta8", "delta9", "kinship", "convergence", "iterations", "fit", "perplexity"])?;
+    writer.write_record([
+        "sample1",
+        "sample2",
+        "delta1",
+        "delta2",
+        "delta3",
+        "delta4",
+        "delta5",
+        "delta6",
+        "delta7",
+        "delta8",
+        "delta9",
+        "kinship",
+        "convergence",
+        "iterations",
+        "fit",
+        "perplexity",
+    ])?;
 
     let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
@@ -73,7 +90,24 @@ fn main() -> Result<()> {
         // TODO condition number of matrix
         let fit = if perplexity < 8.0 { "good" } else { "poor" };
 
-        writer.serialize((sample1, sample2, delta1, delta2, delta3, delta4, delta5, delta6, delta7, delta8, delta9, kinship, convergence, iterations, fit, perplexity))?;
+        writer.serialize((
+            sample1,
+            sample2,
+            delta1,
+            delta2,
+            delta3,
+            delta4,
+            delta5,
+            delta6,
+            delta7,
+            delta8,
+            delta9,
+            kinship,
+            convergence,
+            iterations,
+            fit,
+            perplexity,
+        ))?;
     }
 
     writer.flush()?;
