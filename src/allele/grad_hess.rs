@@ -38,8 +38,6 @@ pub fn compute_grad_hess_blocks(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64)
     }
 
     unreachable!("Not implemented yet")
-
-    // compute_blocks_scalar(blocks, x, eps)
 }
 
 fn compute_grad_hess_lane<L : Lane, S>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10])

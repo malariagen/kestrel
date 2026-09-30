@@ -1,27 +1,11 @@
-use core::arch::x86_64::*;
-
 use crate::{
-    algebra::{Matrix, Vector, dot}, arith::{Arith, Lane, Lane8}, lanevector::LaneVector,
+    algebra::{Matrix, Vector}, arith::{Arith, Lane, Lane8}, lanevector::LaneVector,
 };
 
 // h - 8*8*45 = 2880 bytes
 // column buffer - 8 * 8 * 9 * 32 = 18432 bytes (TODO avoid memset)
 
 const BLOCKS: usize = 32;
-
-// pub fn compute_grad_hess_barrier(p_mat: &BlockBuffer<f64, 8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-//     let (blocks, remainder) = p_mat.as_blocks();
-
-//     let (mut grad, mut hess) = compute_grad_hess_blocks(blocks, x, eps);
-
-//     compute_grad_hess_remainder(remainder, x, eps, &mut grad, &mut hess);
-
-//     let n = p_mat.num_rows() as f64;
-
-//     let grad = std::array::from_fn(|i| -grad[i] + n);
-
-//     return (grad, hess);
-// }
 
 pub fn compute_grad_hess(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
     let (blocks, remainder) = p_mat.as_lanes();
@@ -38,56 +22,32 @@ pub fn compute_grad_hess(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) 
         g[i] = -(bg[i] + rg[i]) / n;
     }
 
-    // TODO simplify this to return length 45 vector
+    let mut h_id = 0;
     for i in 0..9 {
-        for j in 0..9 {
-            let val = (bh[i][j] + rh[i][j]) / n;
+        for j in i..9 {
+            let val = (bh[h_id] + rh[h_id]) / n;
             h[i][j] = val;
             h[j][i] = val;
+            h_id += 1;
         }
     }
 
     (g, h)
 }
 
-pub fn compute_grad_hess_blocks(blocks: &[[Lane8; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+pub fn compute_grad_hess_blocks(blocks: &[[Lane8; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Vector<45>) {
     #[cfg(target_arch = "x86_64")]
     if is_x86_feature_detected!("avx512f") {
+        use std::arch::x86_64::__m512d;
+
         return compute_grad_hess_lane::<Lane8, __m512d>(blocks, x, eps);
     }
 
     unimplemented!("SIMD intrinsics haven't been written for your platform yet")
 }
 
-fn compute_grad_hess_remainder(remainder: &[Vector<9>], x: &Vector<9>, eps: f64, g: &mut Vector<9>, h: &mut Matrix<9>) {
-    for row in remainder.iter() {
-        let prod = dot(row, x);
-
-        // d = 1 / (P x + eps)
-        let d = 1.0 / (prod + eps);
-
-        // g = P^T d
-        for i in 0..9 {
-            g[i] = row[i].mul_add(d, g[i]);
-        }
-
-        let mut scaled_row = [0.0; 9];
-        for i in 0..9 {
-            scaled_row[i] = d * row[i];
-        }
-
-        // h = P^T D^D P
-        for i in 0..9 {
-            // This generates much nicer assembly by iterating from 0
-            // And in practice has the same performance as iterating from i
-            for j in 0..9 {
-                h[i][j] = scaled_row[i].mul_add(scaled_row[j], h[i][j]);
-            }
-        }
-    }
-}
-
-pub fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(blocks: &[[L; 9]], x: &[f64; 9], eps: f64) -> ([f64; 9], [[f64; 9]; 9]) {
+pub fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(blocks: &[[L; 9]], x: &[f64; 9], eps: f64) -> ([f64; 9], [f64; 45]) {
+    // Hmm, in theory we could make individual variables for each g, h element
     let mut g = [L::zero(); 9];
 
     // Upper triangular Hessian accumulators stored in row-major order:
@@ -121,22 +81,8 @@ pub fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(blocks: &[[L; 9]], x: &[f64;
 
     tile_loop::<L, S>(partial_tile, x, eps, &mut g, &mut h, &mut scaled_column_buf);
 
-    let mut grad = [0.0; 9];
-    for col in 0..9 {
-        grad[col] = S::load(&g[col]).radd();
-    }
-
-    let mut hess = [[0.0; 9]; 9];
-
-    let mut h_id = 0;
-    for i in 0..9 {
-        for j in i..9 {
-            let val = S::load(&h[h_id]).radd();
-            hess[i][j] = val;
-            hess[j][i] = val;
-            h_id += 1;
-        }
-    }
+    let grad = std::array::from_fn(|i| S::load(&g[i]).radd());
+    let hess = std::array::from_fn(|i| S::load(&h[i]).radd());
 
     (grad, hess)
 }

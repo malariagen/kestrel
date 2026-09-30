@@ -6,8 +6,7 @@ use paralight::{
     iter::{
         ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
         ZipableSource,
-    },
-    threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder},
+    }, threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder},
 };
 
 use lockfree_progress_bar::ProgressBar;
@@ -117,7 +116,7 @@ impl ThreadBuffers {
     }
 }
 
-pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allele_frequencies: &Array2<f64>) -> Vec<Output> {
+pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allele_frequencies: &Array2<f64>, thread_pool: &mut ThreadPool) -> Vec<Output> {
     let num_v = allele_frequencies.shape()[0];
 
     // TODO calculate this across each locus to figure out how many alleles there are
@@ -132,13 +131,6 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
     let num_s = swapped.shape()[0];
 
     assert_eq!(swapped.shape()[1], num_v);
-
-    let mut thread_pool = ThreadPoolBuilder {
-        num_threads: ThreadCount::Count(NonZeroUsize::new(10).unwrap()),
-        range_strategy: RangeStrategy::Fixed,
-        cpu_pinning: CpuPinningPolicy::No,
-    }
-    .build();
 
     // Only to analyze the data, before I make it faster...
     let tmp = swapped.slice(s![0..16, .., ..]);
@@ -162,22 +154,22 @@ pub fn calculate_relatedness_coefficients_gl(mut likelihoods: Array3<f64>, allel
 
     (outputs.par_iter_mut(), pairs.par_iter())
         .zip_eq()
-        .with_thread_pool(&mut thread_pool)
+        .with_thread_pool(thread_pool)
         .for_each_init(
             || LaneVector::new(num_v),
-            |mut p_mat, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
+            |p_mat, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
                 let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
                 } else {
                     [1.0 / 9.0; 9]
                 };
 
-                calculate_mixture_component_matrix_gl(&m_matrices, likelihoods_x, likelihoods_y, &mut p_mat);
+                calculate_mixture_component_matrix_gl(&m_matrices, likelihoods_x, likelihoods_y, p_mat);
 
                 let tune = Tuneables::new();
 
-                let obj = |x: &Vector<9>, eps| objective::compute_obj(&p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(&p_mat, &x, eps);
+                let obj = |x: &Vector<9>, eps| objective::compute_obj(p_mat, &x, eps);
+                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(p_mat, &x, eps);
                 let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                 if iters >= tune.sqp_max_iter {

@@ -1,11 +1,12 @@
 // mod sqp;
 // pub mod vcf;
 
-use std::path::Path;
+use std::{num::NonZeroUsize, path::Path};
 
 use anyhow::Result;
 use csv::WriterBuilder;
 use kestrel::algebra::dot;
+use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -15,9 +16,17 @@ fn main() -> Result<()> {
     println!("Parsing VCF {:?}", vcf_file);
 
     let (samples, gl) = kestrel::vcf::parse_vcf_gl(vcf_file)?;
-    let af = kestrel::allele::calculate_allele_frequencies(&gl);
 
-    let outputs = kestrel::coefficients::calculate_relatedness_coefficients_gl(gl, &af);
+    let mut thread_pool = ThreadPoolBuilder {
+        num_threads: ThreadCount::Count(NonZeroUsize::new(10).unwrap()),
+        range_strategy: RangeStrategy::Fixed,
+        cpu_pinning: CpuPinningPolicy::No,
+    }
+    .build();
+
+    let af = kestrel::allele::calculate_allele_frequencies(&gl, &mut thread_pool);
+
+    let outputs = kestrel::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool);
 
     // return Ok(());
 
