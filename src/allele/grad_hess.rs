@@ -1,10 +1,53 @@
-use crate::{algebra::{Vector, Matrix}, arith::{Arith, Lane, Lane8}, lanevector::LaneVector, log::Log};
+use crate::{algebra::{Matrix, Vector}, arith::{Arith, Lane, Lane8, lane::{Lane2, Lane4}}, lanevector::{GenericLaneVector, LaneVector}};
 
-pub fn compute_grad_hess(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+
+pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    match likelihood_mats {
+        GenericLaneVector::L8(lv) => compute_grad_hess_avx512(lv, x, eps),
+        GenericLaneVector::L4(lv) => compute_grad_hess_avx2(lv, x, eps),
+        GenericLaneVector::L2(lv) => compute_grad_hess_neon(lv, x, eps),
+        GenericLaneVector::L1(lv) => compute_grad_hess_scalar(lv, x, eps),
+    }
+}
+
+fn compute_grad_hess_avx512(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::arch::x86_64::__m512d;
+        return compute_grad_hess_generic::<Lane8, __m512d>(likelihood_mats, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane8!")
+}
+
+fn compute_grad_hess_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::arch::x86_64::__m256d;
+        return compute_grad_hess_generic::<Lane4, __m256d>(likelihood_mats, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane4!")
+}
+
+fn compute_grad_hess_neon(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    #[cfg(target_arch = "aarch64")]
+    {
+        use std::arch::x86_64::__m256d;
+        return compute_grad_hess_generic::<Lane2, __m256d>(likelihood_mats, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane2!")
+}
+
+fn compute_grad_hess_scalar(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    return compute_grad_hess_generic::<f64, f64>(likelihood_mats, x, eps);
+}
+
+fn compute_grad_hess_generic<L: Lane, S: Arith<L>>(likelihood_mats: &LaneVector<L, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     let (blocks, remainder) = likelihood_mats.as_lanes();
 
-    let (bg, bh) = compute_grad_hess_blocks(blocks, x, eps);
-
+    let (bg, bh) = compute_grad_hess_lane::<L, S>(blocks, x, eps);
     let (rg, rh) = compute_grad_hess_lane::<f64, f64>(remainder, x, eps);
 
     let n = likelihood_mats.len() as f64;
@@ -29,19 +72,7 @@ pub fn compute_grad_hess(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>,
     (g, h)
 }
 
-pub fn compute_grad_hess_blocks(blocks: &[[Lane8; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
-    #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx512f") {
-        use std::arch::x86_64::__m512d;
-
-        return compute_grad_hess_lane::<Lane8, __m512d>(blocks, x, eps);
-    }
-
-    unreachable!("Not implemented yet")
-}
-
-fn compute_grad_hess_lane<L : Lane, S>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10])
-where S : Arith<L> + Copy + Log {
+fn compute_grad_hess_lane<L : Lane, S : Arith<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
     // 4
     let mut zg0 = S::zero();
     let mut zg1 = S::zero();
