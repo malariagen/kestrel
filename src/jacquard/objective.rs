@@ -1,5 +1,11 @@
 use crate::{
-    algebra::{Vector, dot, sum}, arith::{Arith, Lane, Lane8, LoadStore, lane::{Lane2, Lane4}}, lanevector::{GenericLaneVector, LaneVector}, log::Log,
+    algebra::{Vector, dot, sum},
+    arith::{
+        Arith, Lane, Lane8, LoadStore,
+        lane::{Lane2, Lane4},
+    },
+    lanevector::{GenericLaneVector, LaneVector},
+    log::Log,
 };
 
 pub fn compute_obj(likelihood_mats: &GenericLaneVector<9>, x: &Vector<9>, eps: f64) -> f64 {
@@ -46,7 +52,11 @@ fn compute_obj_scalar(p_mat: &LaneVector<f64, 9>, x: &Vector<9>, eps: f64) -> f6
     return compute_obj_generic::<f64, f64>(p_mat, x, eps);
 }
 
-fn compute_obj_generic<L : Lane, S : Arith + LoadStore<L> + Log>(p_mat: &LaneVector<L, 9>, x: &Vector<9>, eps: f64) -> f64 {
+fn compute_obj_generic<L: Lane, S: Arith + LoadStore<L> + Log>(
+    p_mat: &LaneVector<L, 9>,
+    x: &Vector<9>,
+    eps: f64,
+) -> f64 {
     let (blocks, remainder) = p_mat.as_lanes();
 
     let b = compute_obj_lane::<L, S>(blocks, x, eps);

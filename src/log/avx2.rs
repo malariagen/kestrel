@@ -37,7 +37,18 @@ fn log_avx2(mut d: __m256d) -> __m256d {
     let x4 = _mm256_mul_pd(x2, x2);
     let x8 = _mm256_mul_pd(x4, x4);
 
-    let t = super::poly7(x2, x4, x8, _mm256_set1_pd(C_6), _mm256_set1_pd(C_5), _mm256_set1_pd(C_4), _mm256_set1_pd(C_3), _mm256_set1_pd(C_2), _mm256_set1_pd(C_1), _mm256_set1_pd(C_0));
+    let t = super::poly7(
+        x2,
+        x4,
+        x8,
+        _mm256_set1_pd(C_6),
+        _mm256_set1_pd(C_5),
+        _mm256_set1_pd(C_4),
+        _mm256_set1_pd(C_3),
+        _mm256_set1_pd(C_2),
+        _mm256_set1_pd(C_1),
+        _mm256_set1_pd(C_0),
+    );
 
     // This is needed to cast i64 e to f64, incredibly cursed
     let shuf = _mm256_shuffle_epi32(e, 0x08);

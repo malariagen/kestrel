@@ -11,7 +11,7 @@ pub trait LoadStore<L: Lane>: Copy {
     fn store(self, val: &mut L);
 }
 
-pub trait Arith : Copy {
+pub trait Arith: Copy {
     fn zero() -> Self;
     fn set(val: f64) -> Self;
     fn add(self, other: Self) -> Self;

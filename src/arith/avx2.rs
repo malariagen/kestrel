@@ -1,7 +1,7 @@
 use core::arch::x86_64::*;
 
-use crate::arith::{Arith, LoadStore};
 use crate::arith::lane::Lane4;
+use crate::arith::{Arith, LoadStore};
 
 impl LoadStore<Lane4> for __m256d {
     #[inline]

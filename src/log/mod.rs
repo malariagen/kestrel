@@ -13,7 +13,6 @@ const C_2: f64 = 0.285_714_293_279_429_931_7;
 const C_1: f64 = 0.399_999_999_963_525_199;
 const C_0: f64 = 0.666_666_666_666_733_354_1;
 
-
 #[cfg(target_arch = "x86_64")]
 mod avx2;
 #[cfg(target_arch = "x86_64")]
@@ -55,7 +54,7 @@ fn fast_two_sum_dd<S: Arith>(a: (S, S), b: (S, S)) -> (S, S) {
 }
 
 #[inline]
-fn fast_two_mult_ss<S : Arith>(a: S, b: S) -> (S, S) {
+fn fast_two_mult_ss<S: Arith>(a: S, b: S) -> (S, S) {
     let p = a.mul(b);
     let r = a.fms(b, p);
     (p, r)
@@ -84,13 +83,13 @@ fn div_sd<S: Arith>(a: S, b: (S, S)) -> (S, S) {
 }
 
 #[inline]
-fn poly7<S: Arith>( x: S, x2: S, x4: S, c6: S, c5: S, c4: S, c3: S, c2: S, c1: S, c0: S) -> S {
+fn poly7<S: Arith>(x: S, x2: S, x4: S, c6: S, c5: S, c4: S, c3: S, c2: S, c1: S, c0: S) -> S {
     x4.fma(poly3(x, x2, c6, c5, c4), poly4(x, x2, c3, c2, c1, c0))
 }
 
 #[inline]
-fn poly3<S : Arith>(x: S, x2: S, c2: S, c1: S, c0: S) -> S {
-    x2.fma(c2, x.fma( c1, c0))
+fn poly3<S: Arith>(x: S, x2: S, c2: S, c1: S, c0: S) -> S {
+    x2.fma(c2, x.fma(c1, c0))
 }
 
 #[inline]

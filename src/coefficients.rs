@@ -13,7 +13,14 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot}, arith::{Lane8, simd::Simd}, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
+    algebra::{Vector, dot},
+    arith::{Lane8, simd::Simd},
+    blockbuffer::BlockBuffer,
+    cls,
+    conditional::{self, M},
+    jacquard::{grad_hess, objective},
+    lanevector::{GenericLaneVector, LaneVector},
+    sqp::{self, Tuneables},
 };
 
 pub fn calculate_relatedness_coefficients_gt(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
@@ -121,7 +128,7 @@ pub fn calculate_relatedness_coefficients_gl(
     mut likelihoods: Array3<f64>,
     allele_frequencies: &Array2<f64>,
     thread_pool: &mut ThreadPool,
-    simd: Simd
+    simd: Simd,
 ) -> Vec<Output> {
     let num_v = allele_frequencies.shape()[0];
 

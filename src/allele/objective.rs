@@ -1,7 +1,11 @@
 use crate::{
-    algebra::Vector, arith::{
-        Arith, Lane, Lane8, LoadStore, lane::{Lane2, Lane4},
-    }, lanevector::{GenericLaneVector, LaneVector}, log::Log,
+    algebra::Vector,
+    arith::{
+        Arith, Lane, Lane8, LoadStore,
+        lane::{Lane2, Lane4},
+    },
+    lanevector::{GenericLaneVector, LaneVector},
+    log::Log,
 };
 
 pub fn compute_objective(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>, eps: f64) -> f64 {
