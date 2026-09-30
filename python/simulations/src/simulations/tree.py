@@ -7,6 +7,7 @@ from pathlib import Path
 
 import ibd
 import ped
+from util import ResourceTracker
 
 from concurrent.futures import ProcessPoolExecutor
 
@@ -144,6 +145,6 @@ if __name__ == "__main__":
     random_seed = 0xcbc8bf613dc84639e312d7bca02a98cc
     seed_seq = np.random.SeedSequence(random_seed)
 
-    with ProcessPoolExecutor(max_workers=10, initializer=init_pedigree) as executor:
+    with ResourceTracker(), ProcessPoolExecutor(max_workers=10, initializer=init_pedigree) as executor:
         # The list is needed to propagate exceptions
         results = list(executor.map(simulate, range(reps), seed_seq.spawn(reps)))
