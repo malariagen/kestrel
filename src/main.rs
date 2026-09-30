@@ -28,7 +28,7 @@ fn main() -> Result<()> {
 
     let af = kestrel::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd);
 
-    let outputs = kestrel::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool);
+    let outputs = kestrel::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool, simd);
 
     // return Ok(());
 

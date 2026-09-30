@@ -8,7 +8,7 @@ pub struct LaneVector<L: Lane, const R: usize> {
     len: usize,
 }
 
-impl<L: Lane + Copy, const R: usize> LaneVector<L, R> {
+impl<L: Lane, const R: usize> LaneVector<L, R> {
     pub fn new(len: usize) -> Self {
         let lanes = len / L::N;
         let rem = len % L::N;

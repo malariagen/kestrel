@@ -13,14 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot},
-    arith::Lane8,
-    blockbuffer::BlockBuffer,
-    cls,
-    conditional::{self, M},
-    jacquard::{grad_hess, objective},
-    lanevector::LaneVector,
-    sqp::{self, Tuneables},
+    algebra::{Vector, dot}, arith::{Lane8, simd::Simd}, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
 };
 
 pub fn calculate_relatedness_coefficients_gt(genotypes: &Array3<i8>, allele_frequencies: &Array2<f64>) -> Array2<f64> {
@@ -128,6 +121,7 @@ pub fn calculate_relatedness_coefficients_gl(
     mut likelihoods: Array3<f64>,
     allele_frequencies: &Array2<f64>,
     thread_pool: &mut ThreadPool,
+    simd: Simd
 ) -> Vec<Output> {
     let num_v = allele_frequencies.shape()[0];
 
@@ -172,7 +166,7 @@ pub fn calculate_relatedness_coefficients_gl(
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each_init(
-            || LaneVector::new(num_v),
+            || GenericLaneVector::new(num_v, simd),
             |p_mat, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
                 let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
@@ -353,7 +347,7 @@ pub fn calculate_mixture_component_matrix_gl(
     m_matrices: &[M],
     likelihoods_x: &ArrayView2<f64>,
     likelihoods_y: &ArrayView2<f64>,
-    p_mat: &mut LaneVector<Lane8, 9>,
+    p_mat: &mut GenericLaneVector<9>,
 ) {
     let (chunks_x, rem_x) = likelihoods_x.as_slice().unwrap().as_chunks::<10>();
     let (chunks_y, rem_y) = likelihoods_y.as_slice().unwrap().as_chunks::<10>();

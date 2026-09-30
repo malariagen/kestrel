@@ -1,7 +1,5 @@
 use crate::{
-    algebra::{Matrix, Vector},
-    arith::{Arith, Lane, Lane8},
-    lanevector::LaneVector,
+    algebra::{Matrix, Vector}, arith::{Arith, Lane, Lane8, lane::{Lane2, Lane4}}, lanevector::{GenericLaneVector, LaneVector},
 };
 
 // h - 8*8*45 = 2880 bytes
@@ -9,10 +7,54 @@ use crate::{
 
 const BLOCKS: usize = 32;
 
-pub fn compute_grad_hess(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    match likelihood_mats {
+        GenericLaneVector::L8(lv) => compute_grad_hess_avx512(lv, x, eps),
+        GenericLaneVector::L4(lv) => compute_grad_hess_avx2(lv, x, eps),
+        GenericLaneVector::L2(lv) => compute_grad_hess_neon(lv, x, eps),
+        GenericLaneVector::L1(lv) => compute_grad_hess_scalar(lv, x, eps),
+    }
+}
+
+fn compute_grad_hess_avx512(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::arch::x86_64::__m512d;
+        return compute_grad_hess_generic::<Lane8, __m512d>(p_mat, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane8!")
+}
+
+fn compute_grad_hess_avx2(p_mat: &LaneVector<Lane4, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use std::arch::x86_64::__m256d;
+        unimplemented!("AHHHH")
+        // return compute_grad_hess::<Lane4, __m256d>(likelihood_mats, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane4!")
+}
+
+fn compute_grad_hess_neon(p_mat: &LaneVector<Lane2, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    #[cfg(target_arch = "aarch64")]
+    {
+        use std::arch::x86_64::__m256d;
+        return compute_grad_hess_generic::<Lane2, __m256d>(p_mat, x, eps);
+    }
+
+    panic!("Architecture incompatible with Lane2!")
+}
+
+fn compute_grad_hess_scalar(p_mat: &LaneVector<f64, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    return compute_grad_hess_generic::<f64, f64>(p_mat, x, eps);
+}
+
+fn compute_grad_hess_generic<L : Lane, S : Arith<L>>(p_mat: &LaneVector<L, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
     let (blocks, remainder) = p_mat.as_lanes();
 
-    let (bg, bh) = compute_grad_hess_blocks(blocks, x, eps);
+    let (bg, bh) = compute_grad_hess_lane::<L, S>(blocks, x, eps);
     let (rg, rh) = compute_grad_hess_lane::<f64, f64>(remainder, x, eps);
 
     let n = p_mat.len() as f64;
@@ -37,18 +79,7 @@ pub fn compute_grad_hess(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) 
     (g, h)
 }
 
-pub fn compute_grad_hess_blocks(blocks: &[[Lane8; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Vector<45>) {
-    #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx512f") {
-        use std::arch::x86_64::__m512d;
-
-        return compute_grad_hess_lane::<Lane8, __m512d>(blocks, x, eps);
-    }
-
-    unimplemented!("SIMD intrinsics haven't been written for your platform yet")
-}
-
-pub fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(
+fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(
     blocks: &[[L; 9]],
     x: &[f64; 9],
     eps: f64,
@@ -106,9 +137,10 @@ fn tile_loop<L: Lane, S: Arith<L>>(
 
     let zx: [S; 9] = std::array::from_fn(|i| S::set(x[i]));
 
-    // This will always be <= BLOCKS
     let blocks = tile.len();
+    debug_assert!(blocks <= BLOCKS);
 
+    // Fill buffer and compute gradient
     {
         let mut zg = [S::zero(); 9];
 
@@ -150,6 +182,7 @@ fn tile_loop<L: Lane, S: Arith<L>>(
         }
     }
 
+    // Compute first 15 elements of Hessian
     {
         // Row 0
         let mut z00 = S::zero();
@@ -246,6 +279,7 @@ fn tile_loop<L: Lane, S: Arith<L>>(
         z16.store(&mut h[14]);
     }
 
+    // Compute next 15 elements of Hessian
     {
         let mut z17 = S::zero();
         let mut z18 = S::zero();
@@ -342,6 +376,7 @@ fn tile_loop<L: Lane, S: Arith<L>>(
         z38.store(&mut h[29]);
     }
 
+    // Compute last 15 elements of Hessian
     {
         // Row 4
         let mut z44 = S::zero();
