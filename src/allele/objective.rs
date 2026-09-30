@@ -1,11 +1,7 @@
 use crate::{
-    algebra::Vector,
-    arith::{
-        Arith, Lane, Lane8,
-        lane::{Lane2, Lane4},
-    },
-    lanevector::{GenericLaneVector, LaneVector},
-    log::Log,
+    algebra::Vector, arith::{
+        Arith, Lane, Lane8, LoadStore, lane::{Lane2, Lane4},
+    }, lanevector::{GenericLaneVector, LaneVector}, log::Log,
 };
 
 pub fn compute_objective(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>, eps: f64) -> f64 {
@@ -52,7 +48,7 @@ fn compute_obj_scalar(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps:
     return compute_obj_generic::<f64, f64>(likelihood_mats, x, eps);
 }
 
-fn compute_obj_generic<L: Lane, S: Arith<L> + Log>(
+fn compute_obj_generic<L: Lane, S: Arith + Log + LoadStore<L>>(
     likelihood_mats: &LaneVector<L, 10>,
     x: &Vector<4>,
     eps: f64,
@@ -67,7 +63,7 @@ fn compute_obj_generic<L: Lane, S: Arith<L> + Log>(
     -(b + r) / (n as f64)
 }
 
-fn compute_obj_lane<L: Lane, S: Arith<L> + Log>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64 {
+fn compute_obj_lane<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64 {
     // 2
     let mut zs = S::zero();
     let ze = S::set(eps);

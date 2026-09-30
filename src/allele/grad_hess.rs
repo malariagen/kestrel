@@ -1,10 +1,7 @@
 use crate::{
-    algebra::{Matrix, Vector},
-    arith::{
-        Arith, Lane, Lane8,
-        lane::{Lane2, Lane4},
-    },
-    lanevector::{GenericLaneVector, LaneVector},
+    algebra::{Matrix, Vector}, arith::{
+        Arith, Lane, Lane8, LoadStore, lane::{Lane2, Lane4},
+    }, lanevector::{GenericLaneVector, LaneVector},
 };
 
 pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
@@ -54,7 +51,7 @@ fn compute_grad_hess_scalar(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>
     return compute_grad_hess_generic::<f64, f64>(likelihood_mats, x, eps);
 }
 
-fn compute_grad_hess_generic<L: Lane, S: Arith<L>>(
+fn compute_grad_hess_generic<L: Lane, S: Arith + LoadStore<L>>(
     likelihood_mats: &LaneVector<L, 10>,
     x: &Vector<4>,
     eps: f64,
@@ -86,7 +83,7 @@ fn compute_grad_hess_generic<L: Lane, S: Arith<L>>(
     (g, h)
 }
 
-fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
+fn compute_grad_hess_lane<L: Lane, S: Arith + LoadStore<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> ([f64; 4], [f64; 10]) {
     // 4
     let mut zg0 = S::zero();
     let mut zg1 = S::zero();

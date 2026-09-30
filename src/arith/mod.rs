@@ -6,10 +6,13 @@ pub mod lane;
 mod scalar;
 pub mod simd;
 
-pub trait Arith<L: Lane>: Copy {
-    fn zero() -> Self;
+pub trait LoadStore<L: Lane>: Copy {
     fn load(val: &L) -> Self;
     fn store(self, val: &mut L);
+}
+
+pub trait Arith : Copy {
+    fn zero() -> Self;
     fn set(val: f64) -> Self;
     fn add(self, other: Self) -> Self;
     fn sub(self, other: Self) -> Self;

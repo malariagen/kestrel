@@ -1,19 +1,9 @@
 use core::arch::x86_64::*;
 
-use crate::arith::Arith;
+use crate::arith::{Arith, LoadStore};
 use crate::arith::lane::Lane4;
 
-impl Arith<Lane4> for __m256d {
-    #[inline]
-    fn zero() -> Self {
-        unsafe { _mm256_setzero_pd() }
-    }
-
-    #[inline]
-    fn set(val: f64) -> Self {
-        unsafe { _mm256_set1_pd(val) }
-    }
-
+impl LoadStore<Lane4> for __m256d {
     #[inline]
     fn load(val: &Lane4) -> Self {
         unsafe { _mm256_load_pd(val.0.as_ptr()) }
@@ -22,6 +12,18 @@ impl Arith<Lane4> for __m256d {
     #[inline]
     fn store(self, val: &mut Lane4) {
         unsafe { _mm256_store_pd(val.0.as_mut_ptr(), self) }
+    }
+}
+
+impl Arith for __m256d {
+    #[inline]
+    fn zero() -> Self {
+        unsafe { _mm256_setzero_pd() }
+    }
+
+    #[inline]
+    fn set(val: f64) -> Self {
+        unsafe { _mm256_set1_pd(val) }
     }
 
     #[inline]

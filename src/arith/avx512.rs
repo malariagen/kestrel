@@ -1,6 +1,6 @@
 use core::arch::x86_64::*;
 
-use crate::arith::{Arith, Lane, Lane8};
+use crate::arith::{Arith, Lane, Lane8, LoadStore};
 
 impl Lane for Lane8 {
     const N: usize = 8;
@@ -21,17 +21,7 @@ impl Lane for Lane8 {
     }
 }
 
-impl Arith<Lane8> for __m512d {
-    #[inline]
-    fn zero() -> Self {
-        unsafe { _mm512_setzero_pd() }
-    }
-
-    #[inline]
-    fn set(val: f64) -> Self {
-        unsafe { _mm512_set1_pd(val) }
-    }
-
+impl LoadStore<Lane8> for __m512d {
     #[inline]
     fn load(val: &Lane8) -> Self {
         unsafe { _mm512_load_pd(val.0.as_ptr()) }
@@ -40,6 +30,18 @@ impl Arith<Lane8> for __m512d {
     #[inline]
     fn store(self, val: &mut Lane8) {
         unsafe { _mm512_store_pd(val.0.as_mut_ptr(), self) }
+    }
+}
+
+impl Arith for __m512d {
+    #[inline]
+    fn zero() -> Self {
+        unsafe { _mm512_setzero_pd() }
+    }
+
+    #[inline]
+    fn set(val: f64) -> Self {
+        unsafe { _mm512_set1_pd(val) }
     }
 
     #[inline]

@@ -1,5 +1,5 @@
 use crate::{
-    algebra::{Matrix, Vector}, arith::{Arith, Lane, Lane8, lane::{Lane2, Lane4}}, lanevector::{GenericLaneVector, LaneVector},
+    algebra::{Matrix, Vector}, arith::{Arith, Lane, Lane8, LoadStore, lane::{Lane2, Lane4}}, lanevector::{GenericLaneVector, LaneVector},
 };
 
 // h - 8*8*45 = 2880 bytes
@@ -51,7 +51,7 @@ fn compute_grad_hess_scalar(p_mat: &LaneVector<f64, 9>, x: &Vector<9>, eps: f64)
     return compute_grad_hess_generic::<f64, f64>(p_mat, x, eps);
 }
 
-fn compute_grad_hess_generic<L : Lane, S : Arith<L>>(p_mat: &LaneVector<L, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+fn compute_grad_hess_generic<L : Lane, S : Arith + LoadStore<L>>(p_mat: &LaneVector<L, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
     let (blocks, remainder) = p_mat.as_lanes();
 
     let (bg, bh) = compute_grad_hess_lane::<L, S>(blocks, x, eps);
@@ -79,7 +79,7 @@ fn compute_grad_hess_generic<L : Lane, S : Arith<L>>(p_mat: &LaneVector<L, 9>, x
     (g, h)
 }
 
-fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(
+fn compute_grad_hess_lane<L: Lane, S: Arith + LoadStore<L>>(
     blocks: &[[L; 9]],
     x: &[f64; 9],
     eps: f64,
@@ -124,7 +124,7 @@ fn compute_grad_hess_lane<L: Lane, S: Arith<L>>(
     (grad, hess)
 }
 
-fn tile_loop<L: Lane, S: Arith<L>>(
+fn tile_loop<L: Lane, S: Arith + LoadStore<L>>(
     tile: &[[L; 9]],
     x: &[f64; 9],
     eps: f64,
