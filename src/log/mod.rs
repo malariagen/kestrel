@@ -13,7 +13,11 @@ const C_2: f64 = 0.285_714_293_279_429_931_7;
 const C_1: f64 = 0.399_999_999_963_525_199;
 const C_0: f64 = 0.666_666_666_666_733_354_1;
 
-pub mod avx512;
+
+#[cfg(target_arch = "x86_64")]
+mod avx2;
+#[cfg(target_arch = "x86_64")]
+mod avx512;
 pub mod scalar;
 
 pub trait Log {

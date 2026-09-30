@@ -22,9 +22,12 @@ fn log_scalar(mut d: f64) -> f64 {
         d *= D1_32 * D1_32;
     }
 
+    // In IEEE, d = m * 2^e , where 1 <= m < 2.
+    // However, we want to write d = m' * 2^e', where 0.75 <= m' < 1.5.
+    // If 1 <= m < 1.5, then
     let mut e = ilogb2k(d * (1.0 / 0.75));
     // This mantissa will always be within [0.75, 1.5)
-    let m = ldexp3k(d, -e);
+    let m = ldexp3k(d, e);
 
     if o {
         e -= 64;
@@ -63,8 +66,8 @@ fn ilogb2k(d: f64) -> i32 {
 
 #[inline]
 fn ldexp3k(d: f64, e: i32) -> f64 {
-    // The addition will never overflow for floats
-    f64::from_bits(((d.to_bits() as i64).wrapping_add((e as i64) << 52)) as u64)
+    // For two's complement arithmetic, -e << 52  = (-e) * 2^52 = -(e * 2^52) = -(e << 52)
+    f64::from_bits(((d.to_bits() as i64) - ((e as i64) << 52)) as u64)
 }
 
 #[inline]

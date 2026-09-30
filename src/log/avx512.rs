@@ -1,6 +1,6 @@
 use core::arch::x86_64::*;
 
-use crate::log::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, LOG_2_HI, LOG_2_LO, Log};
+use super::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, LOG_2_HI, LOG_2_LO, Log};
 
 // Adapted from https://github.com/burrbull/sleef-rs/blob/master/src/f64x/u10.rs
 // and https://github.com/shibatch/sleef/blob/master/src/libm/sleefsimddp.c
