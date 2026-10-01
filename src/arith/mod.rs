@@ -2,6 +2,8 @@
 mod avx2;
 #[cfg(target_arch = "x86_64")]
 mod avx512;
+#[cfg(target_arch = "aarch64")]
+mod neon;
 pub mod lane;
 mod scalar;
 pub mod simd;

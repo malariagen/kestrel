@@ -18,7 +18,7 @@ fn log_avx2(mut d: __m256d) -> __m256d {
     d = _mm256_blendv_pd(d, nd, maskd);
 
     let sd = _mm256_mul_pd(d, _mm256_set1_pd(1.0 / 0.75));
-    let e = ilogb2k(sd);
+    let mut e = ilogb2k(sd);
     let m = ldexp3k(d, e);
 
     let zero = _mm256_setzero_pd();
@@ -27,7 +27,7 @@ fn log_avx2(mut d: __m256d) -> __m256d {
     // Subtract by 64 to account for normalizing the subnormals
     let maski = _mm256_castpd_si256(maskd);
     let ne = _mm256_sub_epi64(e, _mm256_set1_epi64x(64));
-    let e = _mm256_blendv_epi8(e, ne, maski);
+    e = _mm256_blendv_epi8(e, ne, maski);
 
     let u = _mm256_sub_pd(m, one);
     let l = super::fast_two_sum_ss(one, m);

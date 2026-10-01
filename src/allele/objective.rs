@@ -31,8 +31,7 @@ fn compute_obj_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps:
     #[cfg(target_arch = "x86_64")]
     {
         use std::arch::x86_64::__m256d;
-        unimplemented!("AHHHH")
-        // return compute_obj::<Lane4, __m256d>(likelihood_mats, x, eps);
+        return compute_obj_generic::<Lane4, __m256d>(likelihood_mats, x, eps);
     }
 
     panic!("Architecture incompatible with Lane4!")
@@ -41,8 +40,8 @@ fn compute_obj_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps:
 fn compute_obj_neon(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> f64 {
     #[cfg(target_arch = "aarch64")]
     {
-        use std::arch::x86_64::__m256d;
-        return compute_obj_generic::<Lane2, __m256d>(likelihood_mats, x, eps);
+        use std::arch::aarch64::float64x2_t;
+        return compute_obj_generic::<Lane2, float64x2_t>(likelihood_mats, x, eps);
     }
 
     panic!("Architecture incompatible with Lane2!")

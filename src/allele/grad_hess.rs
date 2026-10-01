@@ -43,8 +43,8 @@ fn compute_grad_hess_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>
 fn compute_grad_hess_neon(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     #[cfg(target_arch = "aarch64")]
     {
-        use std::arch::x86_64::__m256d;
-        return compute_grad_hess_generic::<Lane2, __m256d>(likelihood_mats, x, eps);
+        use std::arch::aarch64::float64x2_t;
+        return compute_grad_hess_generic::<Lane2, float64x2_t>(likelihood_mats, x, eps);
     }
 
     panic!("Architecture incompatible with Lane2!")
