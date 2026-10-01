@@ -25,8 +25,8 @@ fn log_neon(mut d: float64x2_t) -> float64x2_t {
     let one = vdupq_n_f64(1.0);
 
     // Subtract by 64 to account for normalizing the subnormals
-    let ne = vsubq_s64(e, vdupq_n_s64(64));
-    e = vbslq_f64(vreinterpretq_s64_u64(mask_subnormal), ne, e);
+    let offset = vandq_s64(vreinterpretq_s64_u64(mask_subnormal), vdupq_n_s64(64));
+    e = vsubq_s64(e, offset);
 
     let u = vsubq_f64(m, one);
     let l = super::fast_two_sum_ss(one, m);
@@ -56,10 +56,8 @@ fn log_neon(mut d: float64x2_t) -> float64x2_t {
     s = super::fast_two_sum_ds(s, vmulq_f64(vmulq_f64(x2, x.0), t));
 
     let mask_zero = vceqq_f64(d, zero);
-    let mask_neg = vcltq_f64(d, zero);
-    // NaN == NaN is always false, then invert the mask
-    let mask_nan = vmvnq_u64(vceqq_f64(d, d));
-    let mask_neg_nan = vorrq_u64(mask_neg, mask_nan);
+    // If not (d >= 0.0), then either negative or NaN
+    let mask_neg_nan = vmvnq_u64(vcgteq_f64(d, zero));
     let mask_inf = vceqq_f64(d, vdupq_n_f64(f64::INFINITY));
 
     let mut result = vaddq_f64(s.0, s.1);

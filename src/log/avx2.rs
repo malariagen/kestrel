@@ -26,8 +26,8 @@ fn log_avx2(mut d: __m256d) -> __m256d {
 
     // Subtract by 64 to account for normalizing the subnormals
     let maski = _mm256_castpd_si256(maskd);
-    let ne = _mm256_sub_epi64(e, _mm256_set1_epi64x(64));
-    e = _mm256_blendv_epi8(e, ne, maski);
+    let offset = _mm256_and_si256(maski, _mm256_set1_epi64x(64));
+    e = _mm256_sub_epi64(e, offset);
 
     let u = _mm256_sub_pd(m, one);
     let l = super::fast_two_sum_ss(one, m);
