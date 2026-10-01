@@ -25,10 +25,10 @@ fn log_neon(mut d: float64x2_t) -> float64x2_t {
     let one = vdupq_n_f64(1.0);
 
     // Subtract by 64 to account for normalizing the subnormals
-    let ne = vsubq_f64(e, vdupq_n_s64(64));
-    e = vbslq_f64(mask_subnormal, ne, e);
+    let ne = vsubq_s64(e, vdupq_n_s64(64));
+    e = vbslq_f64(vreinterpretq_s64_u64(mask_subnormal), ne, e);
 
-    let u = _mm256_sub_pd(m, one);
+    let u = vsubq_f64(m, one);
     let l = super::fast_two_sum_ss(one, m);
 
     let x = super::div_sd(u, l);
@@ -56,7 +56,7 @@ fn log_neon(mut d: float64x2_t) -> float64x2_t {
     s = super::fast_two_sum_ds(s, vmulq_f64(vmulq_f64(x2, x.0), t));
 
     let mask_zero = vceqq_f64(d, zero);
-    let mask_neg = vctlq_f64(d, zero);
+    let mask_neg = vcltq_f64(d, zero);
     // NaN == NaN is always false, then invert the mask
     let mask_nan = vmvnq_u64(vceqq_f64(d, d));
     let mask_neg_nan = vorrq_u64(mask_neg, mask_nan);
@@ -75,9 +75,9 @@ fn log_neon(mut d: float64x2_t) -> float64x2_t {
 #[target_feature(enable = "neon")]
 fn ilogb2k(d: float64x2_t) -> int64x2_t {
     let bits = vreinterpretq_u64_f64(d);
-    let shifted = vshrq_n_u64(bits, 52);
+    let shifted = vshrq_n_u64::<52>(bits);
     let masked = vandq_u64(shifted, vdupq_n_u64(0x7ff));
-    let e = vsubq_s64(vreintperpretq_s64_u64(masked), ndupq_n_s64(0x3ff));
+    let e = vsubq_s64(vreinterpretq_s64_u64(masked), vdupq_n_s64(0x3ff));
     e
 }
 
