@@ -199,8 +199,8 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
     let num_variants = likelihoods.len();
 
     println!("Parsed {} total variants", total_variants);
-    println!("Skipped {} variants with missing data", skipped_missing);
     println!("Skipped {} variants that were not SNPs", not_snp);
+    println!("Skipped {} variants with missing data", skipped_missing);
     println!("Kept {} final variants", num_variants);
 
     let mut gls = Array3::zeros((num_variants, num_samples, 10));

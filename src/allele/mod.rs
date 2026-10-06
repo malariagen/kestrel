@@ -3,7 +3,7 @@ mod grad_hess;
 mod objective;
 
 use lockfree_progress_bar::ProgressBar;
-use ndarray::{Array2, Array3, Array4};
+use ndarray::{Array2, Array3};
 
 use paralight::{
     iter::{
@@ -16,9 +16,13 @@ use paralight::{
 use crate::{
     algebra::{Vector, sum_to_one},
     arith::simd::Simd,
-    lanevector::{GenericLaneVector, LaneVector},
+    lanevector::{GenericLaneVector},
     sqp::{self, Tuneables},
 };
+
+// Need to read the data linearly. That makes sense.
+// Then, need to repackage it into some specific types using lanes
+// E.g. LaneArray2<Lane8, 9>
 
 pub fn calculate_allele_frequencies(
     likelihoods: &Array3<f64>,
@@ -32,6 +36,11 @@ pub fn calculate_allele_frequencies(
         "Calculating allele frequencies for {} sites using {} samples",
         num_variants, num_samples
     );
+
+    // V x S x 10
+    // Then it produces a V x 4 output matrix. Then we calculate the other V x (9 x 10 x 10) matrix
+    // Then need to re-arrange as S x V x 10
+    // Then yeah.
 
     let bar = ProgressBar::new(num_variants.try_into().unwrap())
         .with_eta()
@@ -51,8 +60,11 @@ pub fn calculate_allele_frequencies(
         .for_each_init(
             || GenericLaneVector::new(num_samples, simd),
             |buffer, (out, variant_likelihood)| {
+
                 let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
+
                 assert!(sample_likelihoods.1.is_empty());
+
                 buffer.fill_from_iter(sample_likelihoods.0.iter().copied());
 
                 let x0 = [0.25; 4];

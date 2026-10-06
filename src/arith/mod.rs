@@ -8,7 +8,7 @@ pub mod lane;
 mod scalar;
 pub mod simd;
 
-pub trait LoadStore<L: Lane>: Copy {
+pub trait LoadStore<L: Lane> {
     fn load(val: &L) -> Self;
     fn store(self, val: &mut L);
 }

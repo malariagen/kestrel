@@ -141,8 +141,6 @@ pub fn calculate_relatedness_coefficients_gl(
     likelihoods.swap_axes(0, 1);
     let swapped = likelihoods.as_standard_layout();
 
-    let num_s = swapped.shape()[0];
-
     assert_eq!(swapped.shape()[1], num_v);
 
     // Only to analyze the data, before I make it faster...
@@ -369,6 +367,9 @@ pub fn calculate_mixture_component_matrix_gl(
     // Have a Buffer<Vec<>> and Buffer<Mat>>
     // For each pair (x, y), need to calculate 900 elements x number of sites
     // Oof that's a lot. For hard-called you just look up a row of M, no calculation needed
+
+    // What I'll need to do is lane vector the likelihoods
+    // Would be nice to have a type where I can have certain lengths known at compile time
 
     let iter = chunks_x
         .iter()

@@ -28,7 +28,7 @@ impl Simd {
             return Simd::Neon;
         }
 
-        println!("No SIMD support detected. A scalar fallback will be used instead, which will be quite slow...");
+        println!("No SIMD support detected. A scalar fallback will be used instead, which may be quite slow...");
         println!("Considering creating an issue in the git repo if you see this, we try to support common hardware.");
         Simd::Scalar
     }
