@@ -124,7 +124,7 @@ pub fn solve_qp_active_set<const N: usize>(
     y0: &Vector<N>,
     modify: bool,
     tune: &Tuneables,
-) -> (Vector<N>, usize) {
+) -> (Vector<N>, u64) {
     let mut y = y0.clone();
 
     let mut working_set = [false; N];
@@ -137,7 +137,9 @@ pub fn solve_qp_active_set<const N: usize>(
 
     let mut iter = 0;
 
-    while iter < N + 1 {
+    let max_iters: u64 = (N + 1).try_into().unwrap();
+
+    while iter < max_iters {
         y = sum_to_one(&y);
 
         let mut free_indices = [0; N];

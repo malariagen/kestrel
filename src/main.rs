@@ -86,7 +86,7 @@ fn main() -> Result<()> {
         // TODO check this
         let convergence = iterations < 100;
         // TODO warning about perplexity > 8?
-        let perplexity = (out.obj).exp();
+        let perplexity = (out.obj).unwrap().exp();
         // TODO condition number of matrix
         let fit = if perplexity < 8.0 { "good" } else { "poor" };
 

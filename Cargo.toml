@@ -9,9 +9,12 @@ keywords = ["bioinformatics", "genetics"]
 categories = ["mathematics", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-# [lib]
-# name = "kestrel"
-# crate-type = ["cdylib"]
+[lib]
+name = "kestrel"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "kestrel"
 
 [dependencies]
 anyhow = "1.0.103"
@@ -28,13 +31,18 @@ paralight = "0.0.12"
 pyo3 = "0.29.0"
 
 [profile.release]
+# vcf parsing is faster with abort,
+# and we don't have any resources for destructors to clean up
+# that exiting the process wouldn't cleanup anyway
 panic = "abort"
 codegen-units = 1
 #overflow-checks = true
 lto = true
 
-debug = true
+# inherits from release profile
+[profile.bench]
 # echo -1 | sudo tee /proc/sys/kernel/perf_event_paranoid
+debug = true
 
 [dev-dependencies]
 divan = "0.1.21"

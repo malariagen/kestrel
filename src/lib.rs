@@ -3,19 +3,17 @@ use pyo3::prelude::*;
 #[pymodule]
 mod kestrel {
     use crate::coefficients;
-    use numpy::{IntoPyArray, PyArray2, PyReadonlyArray3};
+    use numpy::{IntoPyArray, PyArray3, PyReadonlyArray3};
     use pyo3::prelude::*;
 
-    // TODO remove any variants with unknown data
-
     #[pyfunction]
-    fn calculate_relatedness_coefficients<'py>(
+    fn relatedness_coefficients_gt<'py>(
         py: Python<'py>,
-        genotypes: PyReadonlyArray3<'py, i8>,
-    ) -> Bound<'py, PyArray2<f64>> {
+        genotypes: PyReadonlyArray3<'py, u8>,
+    ) -> Bound<'py, PyArray3<f64>> {
         let genotypes_view = genotypes.as_array();
 
-        let kinship = coefficients::calculate_relatedness_coefficients_no_freq(genotypes_view);
+        let kinship = coefficients::calculate_relatedness_coefficients_gt(genotypes_view);
 
         kinship.into_pyarray(py)
     }
@@ -23,6 +21,7 @@ mod kestrel {
 
 extern crate openblas_src;
 
+mod ata;
 pub mod algebra;
 pub mod allele;
 pub mod arith;
@@ -38,5 +37,5 @@ pub mod jacquard;
 pub mod lanematrix;
 pub mod lanevector;
 pub mod log;
-pub mod sqp;
+mod sqp;
 pub mod vcf;

@@ -1,6 +1,6 @@
 use crate::algebra::{Matrix, Vector, scale_div, sub};
-use crate::{cls, iis};
-use ndarray::{Array4, ArrayRef2, ArrayRef3, ArrayView2};
+use crate::iis;
+use ndarray::{Array4, ArrayRef2, ArrayView2};
 
 pub fn calculate_stacked_m(
     all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
@@ -75,8 +75,8 @@ fn ata(a_mat: &[Vector<9>], scale: f64) -> Matrix<9> {
 pub fn calculate_quadratic_c(
     all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
     stacked_m: &[Vector<9>],
-    genotypes_x: ArrayView2<i8>,
-    genotypes_y: ArrayView2<i8>,
+    genotypes_x: ArrayView2<u8>,
+    genotypes_y: ArrayView2<u8>,
     lookup_table: &Array4<usize>,
 ) -> Vector<9> {
     let num_g = all_joint_genotypes.len();
@@ -84,22 +84,17 @@ pub fn calculate_quadratic_c(
 
     let mut c = [0.0; 9];
 
-    let iter_x = genotypes_x.as_slice().unwrap().chunks_exact(2);
-    let iter_y = genotypes_y.as_slice().unwrap().chunks_exact(2);
+    let (iter_x, _) = genotypes_x.as_slice().unwrap().as_chunks::<2>();
+    let (iter_y, _) = genotypes_y.as_slice().unwrap().as_chunks::<2>();
 
     // for (locus, (geno_x, geno_y)) in chunks_x.iter().copied().zip(chunks_y.iter().copied()).enumerate() {
-    for (locus, (geno_x, geno_y)) in iter_x.zip(iter_y).enumerate() {
+    for (locus, (geno_x, geno_y)) in iter_x.iter().zip(iter_y).enumerate() {
         // let [i, j] = geno_x;
         // let [k, l] = geno_y;
         let (i, j) = (geno_x[0], geno_x[1]);
         let (k, l) = (geno_y[0], geno_y[1]);
 
-        // TODO do a check here for missing data
-        // if i < 0 || j < 0 || k < 0 || l < 0 {
-        //     continue;
-        // }
-
-        let g = unsafe { lookup_table.uget((i as usize, j as usize, k as usize, l as usize)) };
+        let g = unsafe { lookup_table.uget((usize::from(i), usize::from(j), usize::from(k), usize::from(l))) };
         // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
 
         let row = unsafe { stacked_m.get_unchecked(locus.unchecked_mul(num_g).unchecked_add(*g)) };
