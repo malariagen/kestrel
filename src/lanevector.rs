@@ -48,6 +48,8 @@ impl<L: Lane, const R: usize> LaneVector<L, R> {
         for row in self.rem.iter_mut() {
             *row = iter.next().unwrap();
         }
+
+        assert!(iter.next().is_none());
     }
 }
 

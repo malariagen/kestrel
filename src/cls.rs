@@ -7,7 +7,6 @@ pub fn calculate_stacked_m(
     allele_frequencies: &ArrayRef2<f64>,
 ) -> Vec<Vector<9>> {
     let num_v = allele_frequencies.shape()[0];
-    // TODO make this locus-specific
     let num_g = all_joint_genotypes.len();
 
     let mut stacked_m = Vec::with_capacity(num_v * num_g);
@@ -30,48 +29,6 @@ pub fn calculate_stacked_m(
     stacked_m
 }
 
-pub fn calculate_quadratic_q_mat(stacked_m: &[Vector<9>], num_v: usize) -> Matrix<9> {
-    let scale = 1.0 / num_v as f64;
-    ata(stacked_m, scale)
-}
-
-fn ata(a_mat: &[Vector<9>], scale: f64) -> Matrix<9> {
-    let rows = a_mat.len();
-
-    let mut h = [[0.0; 9]; 9];
-
-    let n: i32 = 9;
-    let k = i32::try_from(rows).unwrap();
-
-    let lda = n;
-    let ldc = n;
-
-    unsafe {
-        cblas::dsyrk(
-            cblas::Layout::RowMajor,
-            cblas::Part::Lower,
-            cblas::Transpose::Ordinary,
-            n,
-            k,
-            scale,
-            a_mat.as_flattened(),
-            lda,
-            0.0,
-            h.as_flattened_mut(),
-            ldc,
-        );
-    }
-
-    // Make symmetric
-    for i in 0..9 {
-        for j in (i + 1)..9 {
-            h[i][j] = h[j][i];
-        }
-    }
-
-    h
-}
-
 pub fn calculate_quadratic_c(
     all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
     stacked_m: &[Vector<9>],
@@ -87,12 +44,9 @@ pub fn calculate_quadratic_c(
     let (iter_x, _) = genotypes_x.as_slice().unwrap().as_chunks::<2>();
     let (iter_y, _) = genotypes_y.as_slice().unwrap().as_chunks::<2>();
 
-    // for (locus, (geno_x, geno_y)) in chunks_x.iter().copied().zip(chunks_y.iter().copied()).enumerate() {
     for (locus, (geno_x, geno_y)) in iter_x.iter().zip(iter_y).enumerate() {
-        // let [i, j] = geno_x;
-        // let [k, l] = geno_y;
-        let (i, j) = (geno_x[0], geno_x[1]);
-        let (k, l) = (geno_y[0], geno_y[1]);
+        let [i, j] = *geno_x;
+        let [k, l] = *geno_y;
 
         let g = unsafe { lookup_table.uget((usize::from(i), usize::from(j), usize::from(k), usize::from(l))) };
         // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];

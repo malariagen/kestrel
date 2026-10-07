@@ -19,8 +19,6 @@ mod kestrel {
     }
 }
 
-extern crate openblas_src;
-
 mod ata;
 pub mod algebra;
 pub mod allele;

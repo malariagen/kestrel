@@ -1,5 +1,5 @@
 use crate::{
-    algebra::{Matrix, Vector},
+    algebra::Matrix,
     arith::{
         Arith, Lane, Lane8, LoadStore,
         lane::{Lane2, Lane4},
@@ -12,65 +12,64 @@ use crate::{
 
 const BLOCKS: usize = 32;
 
-pub fn compute_ata(likelihood_mats: &GenericLaneVector<9>) -> Matrix<9> {
-    match likelihood_mats {
-        GenericLaneVector::L8(lv) => compute_ata_avx512(lv),
-        GenericLaneVector::L4(lv) => compute_ata_avx2(lv),
-        GenericLaneVector::L2(lv) => compute_ata_neon(lv),
-        GenericLaneVector::L1(lv) => compute_ata_scalar(lv),
+pub fn compute_ata(a_mat: &GenericLaneVector<9>, n: usize) -> Matrix<9> {
+    match a_mat {
+        GenericLaneVector::L8(lv) => compute_ata_avx512(lv, n),
+        GenericLaneVector::L4(lv) => compute_ata_avx2(lv, n),
+        GenericLaneVector::L2(lv) => compute_ata_neon(lv, n),
+        GenericLaneVector::L1(lv) => compute_ata_scalar(lv, n),
     }
 }
 
-fn compute_ata_avx512(a_mat: &LaneVector<Lane8, 9>) -> Matrix<9> {
+fn compute_ata_avx512(a_mat: &LaneVector<Lane8, 9>, n: usize) -> Matrix<9> {
     #[cfg(target_arch = "x86_64")]
     {
         use std::arch::x86_64::__m512d;
-        return compute_ata_generic::<Lane8, __m512d>(a_mat);
+        return compute_ata_generic::<Lane8, __m512d>(a_mat, n);
     }
 
     panic!("Architecture incompatible with Lane8!")
 }
 
-fn compute_ata_avx2(a_mat: &LaneVector<Lane4, 9>) -> Matrix<9> {
+fn compute_ata_avx2(a_mat: &LaneVector<Lane4, 9>, n: usize) -> Matrix<9> {
     #[cfg(target_arch = "x86_64")]
     {
         use std::arch::x86_64::__m256d;
-        return compute_ata_generic::<Lane4, __m256d>(a_mat);
+        return compute_ata_generic::<Lane4, __m256d>(a_mat, n);
     }
 
     panic!("Architecture incompatible with Lane4!")
 }
 
-fn compute_ata_neon(a_mat: &LaneVector<Lane2, 9>) -> Matrix<9> {
+fn compute_ata_neon(a_mat: &LaneVector<Lane2, 9>, n: usize) -> Matrix<9> {
     #[cfg(target_arch = "aarch64")]
     {
         use std::arch::aarch64::float64x2_t;
-        return compute_ata_generic::<Lane2, float64x2_t>(a_mat);
+        return compute_ata_generic::<Lane2, float64x2_t>(a_mat, n);
     }
 
     panic!("Architecture incompatible with Lane2!")
 }
 
-fn compute_ata_scalar(a_mat: &LaneVector<f64, 9>) -> Matrix<9> {
-    return compute_ata_generic::<f64, f64>(a_mat);
+fn compute_ata_scalar(a_mat: &LaneVector<f64, 9>, n: usize) -> Matrix<9> {
+    return compute_ata_generic::<f64, f64>(a_mat, n);
 }
 
 fn compute_ata_generic<L: Lane, S: Arith + LoadStore<L>>(
     a_mat: &LaneVector<L, 9>,
+    n: usize
 ) -> Matrix<9> {
     let (blocks, remainder) = a_mat.as_lanes();
 
     let ba = compute_ata_lane::<L, S>(blocks);
     let ra = compute_ata_lane::<f64, f64>(remainder);
 
-    let n = a_mat.len() as f64;
-
     let mut ata = [[0.0f64; 9]; 9];
 
     let mut a_id = 0;
     for i in 0..9 {
         for j in i..9 {
-            let val = (ba[a_id] + ra[a_id]) / n;
+            let val = (ba[a_id] + ra[a_id]) / n as f64;
             ata[i][j] = val;
             ata[j][i] = val;
             a_id += 1;

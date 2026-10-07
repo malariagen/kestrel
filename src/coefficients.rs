@@ -13,14 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot},
-    arith::{Lane8, simd::Simd},
-    blockbuffer::BlockBuffer,
-    cls,
-    conditional::{self, M},
-    jacquard::{grad_hess, objective},
-    lanevector::{GenericLaneVector, LaneVector},
-    sqp::{self, Tuneables},
+    algebra::{Vector, dot}, arith::{Lane8, simd::Simd}, ata, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
 };
 
 pub fn calculate_relatedness_coefficients_gt_af(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>) -> Array3<f64> {
@@ -30,11 +23,13 @@ pub fn calculate_relatedness_coefficients_gt_af(genotypes: &Array3<u8>, allele_f
 
     assert_eq!(num_h, 2);
 
+    let simd = Simd::detect();
+
     let mut thread_pool = build_thread_pool(None);
 
     let genotypes = reorder_genotypes(genotypes.view());
 
-    calculate_coefficients_inner(&genotypes, allele_frequencies, &mut thread_pool)
+    calculate_coefficients_inner(&genotypes, allele_frequencies, &mut thread_pool, simd)
 }
 
 pub fn calculate_relatedness_coefficients_gt(genotypes: ArrayView3<u8>) -> Array3<f64> {
@@ -46,21 +41,23 @@ pub fn calculate_relatedness_coefficients_gt(genotypes: ArrayView3<u8>) -> Array
     assert!(num_s > 0, "Must have at least one sample");
     assert!(num_h == 2, "Must have a ploidy of 2");
 
+    let simd = Simd:: detect();
+
     let mut thread_pool = build_thread_pool(None);
 
     let allele_frequencies = &calculate_allele_frequencies(genotypes.view());
 
     let genotypes = reorder_genotypes(genotypes.view());
 
-    calculate_coefficients_inner(&genotypes, allele_frequencies, &mut thread_pool)
+    calculate_coefficients_inner(&genotypes, allele_frequencies, &mut thread_pool, simd)
 }
 
 fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
     let num_threads = threads.map_or(ThreadCount::AvailableParallelism, |t| ThreadCount::Count(t));
 
     let pool = ThreadPoolBuilder {
-        // num_threads: num_threads,
-        num_threads: ThreadCount::Count(NonZeroUsize::try_from(10).unwrap()),
+        num_threads: num_threads,
+        // num_threads: ThreadCount::Count(NonZeroUsize::try_from(10).unwrap()),
         range_strategy: RangeStrategy::Fixed,
         cpu_pinning: CpuPinningPolicy::No,
     }
@@ -234,8 +231,7 @@ impl Default for Output {
     }
 }
 
-fn calculate_coefficients_inner(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>, thread_pool: &mut ThreadPool) -> Array3<f64> {
-    let num_v = allele_frequencies.shape()[0];
+fn calculate_coefficients_inner(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Array3<f64> {
 
     // TODO calculate this across each locus to figure out how many alleles there are
     // Then we can condense the stacked matrix to make it smaller
@@ -244,7 +240,12 @@ fn calculate_coefficients_inner(genotypes: &Array3<u8>, allele_frequencies: &Arr
     let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a);
     let stacked_m = cls::calculate_stacked_m(&all_joint_genotypes, allele_frequencies);
     let lookup_table = cls::calculate_joint_genotype_lookup_table(&all_joint_genotypes, num_a);
-    let quadratic_q = cls::calculate_quadratic_q_mat(&stacked_m, num_v);
+
+    let mut glv = GenericLaneVector::new(stacked_m.len(), simd);
+    glv.fill_from_iter(stacked_m.iter().copied());
+
+    let num_v = allele_frequencies.shape()[0];
+    let quadratic_q = ata::compute_ata(&glv, num_v);
 
     let num_s = genotypes.shape()[0];
 
