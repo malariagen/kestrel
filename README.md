@@ -1,6 +1,6 @@
 # Kestrel
 
-Kestrel estimates relatedness coefficients from genomic data. It was started during [GSoC 2026](https://summerofcode.withgoogle.com/programs/2026/projects/ar0jqOKO) and uses an SQP algorithm to calculate the Jacquard coefficients using a maximum likelihood estimator.
+Kestrel estimates relatedness coefficients from genomic data. It was started during [GSoC 2026](https://summerofcode.withgoogle.com/programs/2026/projects/ar0jqOKO) and uses an SQP algorithm to calculate allele frequencies and Jacquard coefficients using a maximum likelihood estimator.
 
 ## Installation
 
@@ -10,7 +10,11 @@ Install [Rust](https://rust-lang.org/tools/install/) (usually using `rustup` fro
 RUSTFLAGS='-C target-cpu=native' cargo build --release
 ```
 
-The binary will be built in `target/release/kestrel`. Currently the algorithms use AVX-512 intrinsics to accelerate the mathematical computations, and will likely run slower if your computer does not support it.
+The binary will be built in `target/release/kestrel`.
+
+### SIMD
+
+The algorithms use SIMD intrinsics to accelerate the calculations on common platforms (AVX2, AVX-512, and NEON), and will use a scalar fallback if none is compatible. In particular, the x86 binaries on PyPI are built for [x86-64-v3](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels) to ensure support for FMA. (In practice this is supported by almost all processors released after 2013, but if the program crashes with a SIGILL on startup that's probably why.) Please open an issue if there are any hardware platforms where SIMD isn't supported.
 
 ## Usage
 
