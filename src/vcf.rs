@@ -241,6 +241,106 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
     Ok((samples, gls))
 }
 
+// From a vcf, reads the hard-called genotypes (GT) as V x S x 2 allele indices in line with
+// expection for relatedness coefficients gt. Skips non-snps (eg indels).
+pub fn parse_vcf_gt(file: &Path) -> Result<(Vec<String>, Array3<u8>)> {
+    let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
+    let header = reader.read_header()?;
+
+    let samples = header.sample_names().iter().map(|s| s.to_owned()).collect::<Vec<_>>();
+
+    let num_samples = samples.len();
+
+    let mut skipped_missing = 0;
+    let mut not_snp = 0;
+    let mut total_variants = 0;
+
+    let mut genotypes = Vec::<Vec<[u8; 2]>>::new(); // V x S x 2
+
+    'variant: for result in reader.records() {
+        let record = result.context("Error reading record")?;
+
+        total_variants += 1;
+
+        if !is_snp(&record)? {
+            not_snp += 1;
+            continue;
+        }
+
+        // is_snp allows at most 3 alternate alleles, so allele indices fit in a u8
+        let num_alleles = record.alternate_bases().len() + 1;
+
+        let samples = record.samples();
+        let gt_series = samples.select("GT").context("No GT data found")?;
+
+        let mut variant_gts = Vec::with_capacity(num_samples);
+
+        for result in gt_series.iter(&header) {
+            // A missing genotype can be written as . or as ./.
+            // Just skip the site/variant if that happens, as for GLs
+            let Some(value) = result? else {
+                skipped_missing += 1;
+                continue 'variant;
+            };
+
+            if let SeriesValue::Genotype(gt) = value {
+                let mut alleles = [0u8; 2];
+                let mut ploidy = 0;
+
+                for result_allele in gt.iter() {
+                    let (allele, _) = result_allele.context("Error reading genotype")?;
+
+                    let Some(allele) = allele else {
+                        skipped_missing += 1;
+                        continue 'variant;
+                    };
+
+                    if allele >= num_alleles {
+                        bail!("Allele {} is not one of the {} alleles at the site", allele, num_alleles);
+                    }
+
+                    if ploidy < 2 {
+                        alleles[ploidy] = allele as u8;
+                    }
+                    ploidy += 1;
+                }
+
+                if ploidy != 2 {
+                    bail!("Genotype with {} alleles is not diploid", ploidy);
+                }
+
+                variant_gts.push(alleles);
+            } else {
+                bail!("Value {:?} is not a genotype", value);
+            }
+        }
+
+        genotypes.push(variant_gts);
+    }
+
+    let num_variants = genotypes.len();
+
+    println!("Parsed {} total variants", total_variants);
+    println!("Skipped {} variants that were not SNPs", not_snp);
+    println!("Skipped {} variants with missing data", skipped_missing);
+    println!("Kept {} final variants", num_variants);
+
+    if num_variants == 0 {
+        bail!("No variants left to analyse");
+    }
+
+    let mut gts = Array3::zeros((num_variants, num_samples, 2));
+
+    for v in 0..num_variants {
+        for s in 0..num_samples {
+            gts[[v, s, 0]] = genotypes[v][s][0];
+            gts[[v, s, 1]] = genotypes[v][s][1];
+        }
+    }
+
+    Ok((samples, gts))
+}
+
 // VCF spec says this must be A, C, G, T, or N (case insensitive)
 fn is_snp(record: &Record) -> Result<bool> {
     let ref_bases = record.reference_bases();
