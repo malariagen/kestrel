@@ -11,7 +11,7 @@ use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoo
 #[derive(Parser)]
 #[command(name = "kestrel", version, about)]
 struct Args {
-    /// VCF file with genotype likelihoods (GL)
+    /// VCF file with genotype likelihoods (GL) or genotypes (GT)
     input: PathBuf,
 
     /// Tab-separated file to write the coefficients to
@@ -20,6 +20,18 @@ struct Args {
     /// Where the allele frequencies come from
     #[arg(short = 'f', long, value_enum, default_value_t = AlleleFreqs::Estimate)]
     allele_freqs: AlleleFreqs,
+
+    /// Which FORMAT tag to compute kinship from
+    #[arg(short = 't', long, value_enum, default_value_t = Tag::Gl)]
+    tag: Tag,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Tag {
+    /// Genotype likelihoods
+    Gl,
+    /// Hard-called genotypes
+    Gt,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -35,6 +47,10 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     if let AlleleFreqs::Info = args.allele_freqs {
         bail!("--allele-freqs info is not implemented yet");
+    }
+
+    if let Tag::Gt = args.tag {
+        bail!("--tag gt is not implemented yet");
     }
 
     let simd = Simd::detect();
