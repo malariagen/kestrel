@@ -50,7 +50,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
     }
 
     if let Tag::Gt = args.tag {
-        bail!("--tag gt is not implemented yet");
+        return run_gt(args.input.as_path(), args.output.as_path());
     }
 
     let simd = Simd::detect();
@@ -152,6 +152,58 @@ pub fn run_cli(args: &[String]) -> Result<()> {
             fit,
             perplexity,
         ))?;
+    }
+
+    writer.flush()?;
+
+    Ok(())
+}
+
+// Same output as the GL route, using the hard-called genotype solver
+fn run_gt(vcf_file: &Path, output: &Path) -> Result<()> {
+    println!("Parsing VCF {:?}", vcf_file);
+
+    let (samples, gt) = crate::vcf::parse_vcf_gt(vcf_file)?;
+
+    // S x S x 9, only filled where the first sample index <= the second
+    let jacquard_mat = crate::coefficients::calculate_relatedness_coefficients_gt(gt.view());
+
+    let mut writer = WriterBuilder::new().delimiter(b'\t').from_path(output)?;
+
+    writer.write_record([
+        "sample1",
+        "sample2",
+        "delta1",
+        "delta2",
+        "delta3",
+        "delta4",
+        "delta5",
+        "delta6",
+        "delta7",
+        "delta8",
+        "delta9",
+        "kinship",
+        "convergence",
+        "iterations",
+        "fit",
+        "perplexity",
+    ])?;
+
+    let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
+
+    for x in 0..samples.len() {
+        for y in x..samples.len() {
+            let sample1 = &samples[x];
+            let sample2 = &samples[y];
+
+            let jacquard: [f64; 9] = std::array::from_fn(|i| jacquard_mat[(x, y, i)]);
+
+            let kinship = dot(&jacquard, &kinship_vec);
+
+            // The genotype solver only returns the coefficients, and the fit
+            // is only defined for likelihoods
+            writer.serialize((sample1, sample2, jacquard, kinship, "NA", "NA", "NA", "NA"))?;
+        }
     }
 
     writer.flush()?;
