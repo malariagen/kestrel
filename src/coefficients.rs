@@ -144,7 +144,9 @@ pub fn calculate_relatedness_coefficients_gl(
     assert_eq!(swapped.shape()[1], num_v);
 
     // Only to analyze the data, before I make it faster...
-    let tmp = swapped.slice(s![0..16, .., ..]);
+    // let tmp = swapped.slice(s![0..16, .., ..]);
+    // Use every sample
+    let tmp = swapped.view();
 
     let pairs: Vec<[(usize, ArrayView2<f64>); 2]> = tmp
         .outer_iter()
