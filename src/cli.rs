@@ -104,7 +104,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
         "convergence",
         "iterations",
         "fit",
-        "perplexity",
+        "perplexity", // I am often perplexed
     ])?;
 
     let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
@@ -150,7 +150,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
             convergence,
             iterations,
             fit,
-            perplexity,
+            perplexity, 
         ))?;
     }
 
@@ -200,8 +200,7 @@ fn run_gt(vcf_file: &Path, output: &Path) -> Result<()> {
 
             let kinship = dot(&jacquard, &kinship_vec);
 
-            // The genotype solver only returns the coefficients, and the fit
-            // is only defined for likelihoods
+            // The genotype solver only returns the coefficients. Fit deets are onlty defined for GLs
             writer.serialize((sample1, sample2, jacquard, kinship, "NA", "NA", "NA", "NA"))?;
         }
     }

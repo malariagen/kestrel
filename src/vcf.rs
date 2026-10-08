@@ -241,9 +241,8 @@ pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
     Ok((samples, gls))
 }
 
-// Reads the hard-called genotypes (GT) as V x S x 2 allele indices, in the form
-// that calculate_relatedness_coefficients_gt expects. Only SNPs where every
-// sample has a called diploid genotype are kept. Phasing is ignored.
+// From a vcf, reads the hard-called genotypes (GT) as V x S x 2 allele indices in line with
+// expection for relatedness coefficients gt. Skips non-snps (eg indels).
 pub fn parse_vcf_gt(file: &Path) -> Result<(Vec<String>, Array3<u8>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
     let header = reader.read_header()?;
