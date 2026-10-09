@@ -16,57 +16,23 @@ use crate::{
     algebra::{Vector, dot}, arith::{Lane8, simd::Simd}, ata, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
 };
 
-pub fn calculate_relatedness_coefficients_gt_af(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>) -> Array3<f64> {
-    let num_v = genotypes.shape()[0];
-    let num_s = genotypes.shape()[1];
-    let num_h = genotypes.shape()[2];
+// pub fn calculate_relatedness_coefficients_gt_af(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>) -> Array3<f64> {
+//     let num_v = genotypes.shape()[0];
+//     let num_s = genotypes.shape()[1];
+//     let num_h = genotypes.shape()[2];
 
-    assert_eq!(num_h, 2);
+//     assert_eq!(num_h, 2);
 
-    let simd = Simd::detect();
+//     let simd = Simd::detect();
 
-    let mut thread_pool = build_thread_pool(None);
+//     let mut thread_pool = build_thread_pool(None);
 
-    let genotypes = reorder_genotypes(genotypes.view());
+//     let genotypes = reorder_genotypes(genotypes.view());
 
-    calculate_coefficients_inner(&genotypes, allele_frequencies, &mut thread_pool, simd)
-}
+//     calculate_coefficients_gt(&genotypes, allele_frequencies, &mut thread_pool, simd)
+// }
 
-pub fn calculate_relatedness_coefficients_gt(genotypes: ArrayView3<u8>) -> Array3<f64> {
-    let num_v = genotypes.shape()[0];
-    let num_s = genotypes.shape()[1];
-    let num_h = genotypes.shape()[2];
-
-    assert!(num_v > 0, "Must have at least one variant");
-    assert!(num_s > 0, "Must have at least one sample");
-    assert!(num_h == 2, "Must have a ploidy of 2");
-
-    let simd = Simd:: detect();
-
-    let mut thread_pool = build_thread_pool(None);
-
-    let allele_frequencies = &calculate_allele_frequencies(genotypes.view());
-
-    let genotypes = reorder_genotypes(genotypes.view());
-
-    calculate_coefficients_inner(&genotypes, allele_frequencies, &mut thread_pool, simd)
-}
-
-fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
-    let num_threads = threads.map_or(ThreadCount::AvailableParallelism, |t| ThreadCount::Count(t));
-
-    let pool = ThreadPoolBuilder {
-        num_threads: num_threads,
-        // num_threads: ThreadCount::Count(NonZeroUsize::try_from(10).unwrap()),
-        range_strategy: RangeStrategy::Fixed,
-        cpu_pinning: CpuPinningPolicy::No,
-    }
-    .build();
-
-    pool
-}
-
-fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
+pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
     let num_v = genotypes.shape()[0];
     let num_s = genotypes.shape()[1];
     let num_h = genotypes.shape()[2];
@@ -233,7 +199,9 @@ impl Default for Output {
     }
 }
 
-fn calculate_coefficients_inner(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Array3<f64> {
+pub fn calculate_coefficients_gt(genotypes: ArrayView3<u8>, allele_frequencies: &Array2<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Vec<Output> {
+
+    let genotypes = reorder_genotypes(genotypes);
 
     // TODO calculate this across each locus to figure out how many alleles there are
     // Then we can condense the stacked matrix to make it smaller
@@ -248,8 +216,6 @@ fn calculate_coefficients_inner(genotypes: &Array3<u8>, allele_frequencies: &Arr
 
     let num_v = allele_frequencies.shape()[0];
     let quadratic_q = ata::compute_ata(&glv, num_v);
-
-    let num_s = genotypes.shape()[0];
 
     let pairs: Vec<[(usize, ArrayView2<u8>); 2]> = genotypes
         .outer_iter()
@@ -294,9 +260,11 @@ fn calculate_coefficients_inner(genotypes: &Array3<u8>, allele_frequencies: &Arr
 
                 let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
-                if iters >= tune.sqp_max_iter {
-                    println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
-                }
+                // TODO increase the iterations here? Or make configurable
+
+                // if iters >= tune.sqp_max_iter {
+                //     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
+                // }
 
                 *out = Output { x: *x, y: *y, jacquard: delta, iters, obj : None };
                 handle.inc();
@@ -305,15 +273,7 @@ fn calculate_coefficients_inner(genotypes: &Array3<u8>, allele_frequencies: &Arr
 
     bar.done();
 
-    let mut jacquard_mat = Array3::<f64>::zeros((num_s, num_s, 9));
-
-    for out in output.iter() {
-        for i in 0..9 {
-            jacquard_mat[(out.x, out.y, i)] = out.jacquard[i];
-        }
-    }
-
-    jacquard_mat
+    output
 }
 
 pub fn calculate_mixture_component_matrix_gl(

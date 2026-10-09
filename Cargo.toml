@@ -20,6 +20,7 @@ name = "kestrel"
 [dependencies]
 anyhow = "1.0.103"
 csv = "1.4.0"
+clap = { version = "4.6", features = ["derive"] }
 # TODO remove?
 itertools = "0.15.0"
 lockfree_progress_bar = "0.1.0"

@@ -1,3 +1,10 @@
+use std::num::NonZeroUsize;
+
+use ndarray::{Array3, ArrayView3};
+use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
+
+use crate::arith::simd::Simd;
+
 mod ata;
 pub mod cli;
 mod algebra;
@@ -20,7 +27,7 @@ mod vcf;
 
 #[pyo3::pymodule]
 mod kestrel {
-    use crate::{cli, coefficients};
+    use crate::cli;
     use numpy::{IntoPyArray, PyArray3, PyReadonlyArray3};
     use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
@@ -31,9 +38,9 @@ mod kestrel {
     ) -> Bound<'py, PyArray3<f64>> {
         let genotypes_view = genotypes.as_array();
 
-        let kinship = coefficients::calculate_relatedness_coefficients_gt(genotypes_view);
+        let jacquard = crate::calculate_relatedness_coefficients_gt(genotypes_view);
 
-        kinship.into_pyarray(py)
+        jacquard.into_pyarray(py)
     }
 
     // https://www.maturin.rs/bindings.html#both-binary-and-library
@@ -43,4 +50,45 @@ mod kestrel {
 
         cli::run_cli(&args).map_err(|e| PyRuntimeError::new_err(format!("{:#}", e)))
     }
+}
+
+fn calculate_relatedness_coefficients_gt(genotypes: ArrayView3<u8>) -> Array3<f64> {
+    let num_v = genotypes.shape()[0];
+    let num_s = genotypes.shape()[1];
+    let num_h = genotypes.shape()[2];
+
+    assert!(num_v > 0, "Must have at least one variant");
+    assert!(num_s > 0, "Must have at least one sample");
+    assert!(num_h == 2, "Must have a ploidy of 2");
+
+    let simd = Simd::detect();
+
+    let mut thread_pool = build_thread_pool(None);
+
+    let af = crate::coefficients::calculate_allele_frequencies(genotypes.view());
+
+    let outputs = crate::coefficients::calculate_coefficients_gt(genotypes, &af, &mut thread_pool, simd);
+
+    let mut jacquard_mat = Array3::<f64>::zeros((num_s, num_s, 9));
+
+    for out in outputs.iter() {
+        for i in 0..9 {
+            jacquard_mat[(out.x, out.y, i)] = out.jacquard[i];
+        }
+    }
+
+    jacquard_mat
+}
+
+fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
+    let num_threads = threads.map_or(ThreadCount::AvailableParallelism, |t| ThreadCount::Count(t));
+
+    let pool = ThreadPoolBuilder {
+        num_threads: num_threads,
+        range_strategy: RangeStrategy::Fixed,
+        cpu_pinning: CpuPinningPolicy::No,
+    }
+    .build();
+
+    pool
 }
