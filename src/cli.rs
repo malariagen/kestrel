@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use clap::{Parser, ValueEnum};
 use csv::Trim::All;
 use csv::WriterBuilder;
-use clap::{Parser, ValueEnum};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder};
 
 use crate::coefficients::Output;
@@ -49,7 +49,6 @@ enum AlleleFreqs {
 // TODO switch println to logger
 
 pub fn run_cli(args: &[String]) -> Result<()> {
-
     let args = Args::parse_from(args);
 
     let simd = Simd::detect();
@@ -77,19 +76,19 @@ pub fn run_cli(args: &[String]) -> Result<()> {
             let af = crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd);
             let outputs = crate::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool, simd);
             (samples, outputs)
-        },
+        }
         Tag::PL => {
             let (samples, gl) = crate::vcf::parse_vcf_pl(vcf_file)?;
             let af = crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd);
             let outputs = crate::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool, simd);
             (samples, outputs)
-        },
+        }
         Tag::GT => {
             let (samples, gt, af) = crate::vcf::parse_vcf_gt(vcf_file, parse_af)?;
             let af = af.unwrap_or_else(|| crate::coefficients::calculate_allele_frequencies(gt.view()));
             let outputs = crate::coefficients::calculate_coefficients_gt(gt.view(), af.view(), &mut thread_pool, simd);
             (samples, outputs)
-        },
+        }
     };
 
     write_output(args.output, &samples, &outputs)?;
@@ -98,7 +97,6 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 }
 
 fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Output]) -> Result<()> {
-
     let mut writer = WriterBuilder::new().delimiter(b'\t').from_path(ofile)?;
 
     writer.write_record([

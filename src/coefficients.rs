@@ -13,7 +13,15 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, arith::{Lane8, simd::Simd}, ata, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
+    algebra::{Vector, dot, mul},
+    arith::{Lane8, simd::Simd},
+    ata,
+    blockbuffer::BlockBuffer,
+    cls,
+    conditional::{self, M},
+    jacquard::{grad_hess, objective},
+    lanevector::{GenericLaneVector, LaneVector},
+    sqp::{self, Tuneables},
 };
 
 // pub fn calculate_relatedness_coefficients_gt_af(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>) -> Array3<f64> {
@@ -199,8 +207,12 @@ impl Default for Output {
     }
 }
 
-pub fn calculate_coefficients_gt(genotypes: ArrayView3<u8>, allele_frequencies: ArrayView2<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Vec<Output> {
-
+pub fn calculate_coefficients_gt(
+    genotypes: ArrayView3<u8>,
+    allele_frequencies: ArrayView2<f64>,
+    thread_pool: &mut ThreadPool,
+    simd: Simd,
+) -> Vec<Output> {
     let genotypes = reorder_genotypes(genotypes);
 
     // TODO calculate this across each locus to figure out how many alleles there are
@@ -241,37 +253,41 @@ pub fn calculate_coefficients_gt(genotypes: ArrayView3<u8>, allele_frequencies: 
     (output.par_iter_mut(), pairs.par_iter())
         .zip_eq()
         .with_thread_pool(thread_pool)
-        .for_each(
-            |(out, [(x, genotypes_x), (y, genotypes_y)])| {
-                let delta = if x == y {
-                    [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
-                } else {
-                    [1.0 / 9.0; 9]
-                };
-                let c = cls::calculate_quadratic_c(
-                    &all_joint_genotypes,
-                    &stacked_m,
-                    *genotypes_x,
-                    *genotypes_y,
-                    &lookup_table,
-                );
+        .for_each(|(out, [(x, genotypes_x), (y, genotypes_y)])| {
+            let delta = if x == y {
+                [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+            } else {
+                [1.0 / 9.0; 9]
+            };
+            let c = cls::calculate_quadratic_c(
+                &all_joint_genotypes,
+                &stacked_m,
+                *genotypes_x,
+                *genotypes_y,
+                &lookup_table,
+            );
 
-                let tune = Tuneables::new();
+            let tune = Tuneables::new();
 
-                let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
+            let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
-                let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
+            let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
 
-                // TODO increase the iterations here? Or make configurable
+            // TODO increase the iterations here? Or make configurable
 
-                // if iters >= tune.sqp_max_iter {
-                //     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
-                // }
+            // if iters >= tune.sqp_max_iter {
+            //     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
+            // }
 
-                *out = Output { x: *x, y: *y, jacquard: delta, iters, obj };
-                handle.inc();
-            },
-        );
+            *out = Output {
+                x: *x,
+                y: *y,
+                jacquard: delta,
+                iters,
+                obj,
+            };
+            handle.inc();
+        });
 
     bar.done();
 

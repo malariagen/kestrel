@@ -55,10 +55,7 @@ fn compute_ata_scalar(a_mat: &LaneVector<f64, 9>, n: usize) -> Matrix<9> {
     return compute_ata_generic::<f64, f64>(a_mat, n);
 }
 
-fn compute_ata_generic<L: Lane, S: Arith + LoadStore<L>>(
-    a_mat: &LaneVector<L, 9>,
-    n: usize
-) -> Matrix<9> {
+fn compute_ata_generic<L: Lane, S: Arith + LoadStore<L>>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> {
     let (blocks, remainder) = a_mat.as_lanes();
 
     let ba = compute_ata_lane::<L, S>(blocks);
@@ -79,9 +76,7 @@ fn compute_ata_generic<L: Lane, S: Arith + LoadStore<L>>(
     ata
 }
 
-fn compute_ata_lane<L: Lane, S: Arith + LoadStore<L>>(
-    blocks: &[[L; 9]],
-) -> [f64; 45] {
+fn compute_ata_lane<L: Lane, S: Arith + LoadStore<L>>(blocks: &[[L; 9]]) -> [f64; 45] {
     // Hmm, in theory we could make individual variables for each h element
     // For 32 regs this could be done in two loops...
 
@@ -113,11 +108,7 @@ fn compute_ata_lane<L: Lane, S: Arith + LoadStore<L>>(
     ata
 }
 
-fn tile_loop<L: Lane, S: Arith + LoadStore<L>>(
-    tile: &[[L; 9]],
-    h: &mut [L; 45],
-) {
-
+fn tile_loop<L: Lane, S: Arith + LoadStore<L>>(tile: &[[L; 9]], h: &mut [L; 45]) {
     // Compute first 15 elements
     {
         // Row 0

@@ -16,7 +16,7 @@ use paralight::{
 use crate::{
     algebra::{Vector, sum_to_one},
     arith::simd::Simd,
-    lanevector::{GenericLaneVector},
+    lanevector::GenericLaneVector,
     sqp::{self, Tuneables},
 };
 
@@ -60,7 +60,6 @@ pub fn calculate_allele_frequencies(
         .for_each_init(
             || GenericLaneVector::new(num_samples, simd),
             |buffer, (out, variant_likelihood)| {
-
                 let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
 
                 assert!(sample_likelihoods.1.is_empty());

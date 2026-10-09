@@ -5,14 +5,14 @@ use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoo
 
 use crate::arith::simd::Simd;
 
-mod ata;
-pub mod cli;
 mod algebra;
 mod allele;
 mod arith;
+mod ata;
 mod blockbuffer;
 mod buffer;
 mod cholesky;
+pub mod cli;
 mod cls;
 mod coefficients;
 mod conditional;
@@ -68,7 +68,10 @@ mod kestrel {
     }
 }
 
-pub fn calculate_relatedness_coefficients_gt(genotypes: ArrayView3<u8>, allele_frequencies: ArrayView2<f64>) -> Array3<f64> {
+pub fn calculate_relatedness_coefficients_gt(
+    genotypes: ArrayView3<u8>,
+    allele_frequencies: ArrayView2<f64>,
+) -> Array3<f64> {
     let num_v = genotypes.shape()[0];
     let num_s = genotypes.shape()[1];
     let num_h = genotypes.shape()[2];

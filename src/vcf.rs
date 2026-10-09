@@ -61,7 +61,7 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
                         Some(a) => {
                             let allele = u8::try_from(a).context("Allele is greater than 255")?;
                             gt_buf.push(allele);
-                        },
+                        }
                         // Skip this site if some of the data is missing
                         None => {
                             skipped_missing += 1;
@@ -75,11 +75,9 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
                 } else {
                     bail!("Genotype {:?} is not diploid", gt);
                 }
-
             } else {
                 bail!("Value {:?} is not a genotype", value);
             }
-
         }
 
         genotypes.push(sample_gts);
@@ -94,7 +92,6 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
             if let InfoValue::Array(af_array) = af_info {
                 if let InfoArray::Float(af_float) = af_array {
-
                     // Most sites are diallelic
                     let mut af_buf = Vec::<f32>::with_capacity(2);
                     for af in af_float.iter() {
@@ -140,7 +137,7 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
             afs[[v, 0]] = 1.0 - alt_sum;
             for (i, af) in variant_afs.iter().enumerate() {
-                afs[[v, i+1]] = f64::from(*af);
+                afs[[v, i + 1]] = f64::from(*af);
             }
         }
 
@@ -151,7 +148,6 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
     Ok((samples, gts, afs))
 }
-
 
 pub fn parse_vcf_gl(file: &Path) -> Result<(Vec<String>, Array3<f64>)> {
     let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
