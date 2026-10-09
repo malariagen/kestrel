@@ -13,7 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot}, arith::{Lane8, simd::Simd}, ata, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
+    algebra::{Vector, dot, mul}, arith::{Lane8, simd::Simd}, ata, blockbuffer::BlockBuffer, cls, conditional::{self, M}, jacquard::{grad_hess, objective}, lanevector::{GenericLaneVector, LaneVector}, sqp::{self, Tuneables},
 };
 
 // pub fn calculate_relatedness_coefficients_gt_af(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>) -> Array3<f64> {
@@ -167,7 +167,7 @@ pub fn calculate_relatedness_coefficients_gl(
                     y: *y,
                     jacquard: delta,
                     iters,
-                    obj: Some(f),
+                    obj: f,
                 };
                 handle.inc();
             },
@@ -183,7 +183,7 @@ pub struct Output {
     pub x: usize,
     pub y: usize,
     pub jacquard: [f64; 9],
-    pub obj: Option<f64>,
+    pub obj: f64,
     pub iters: u64,
 }
 
@@ -194,12 +194,12 @@ impl Default for Output {
             y: 0,
             jacquard: [0.0; 9],
             iters: 0,
-            obj: None,
+            obj: 0.0,
         }
     }
 }
 
-pub fn calculate_coefficients_gt(genotypes: ArrayView3<u8>, allele_frequencies: &Array2<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Vec<Output> {
+pub fn calculate_coefficients_gt(genotypes: ArrayView3<u8>, allele_frequencies: ArrayView2<f64>, thread_pool: &mut ThreadPool, simd: Simd) -> Vec<Output> {
 
     let genotypes = reorder_genotypes(genotypes);
 
@@ -260,13 +260,15 @@ pub fn calculate_coefficients_gt(genotypes: ArrayView3<u8>, allele_frequencies: 
 
                 let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
+                let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
+
                 // TODO increase the iterations here? Or make configurable
 
                 // if iters >= tune.sqp_max_iter {
                 //     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
                 // }
 
-                *out = Output { x: *x, y: *y, jacquard: delta, iters, obj : None };
+                *out = Output { x: *x, y: *y, jacquard: delta, iters, obj };
                 handle.inc();
             },
         );

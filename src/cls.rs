@@ -4,7 +4,7 @@ use ndarray::{Array4, ArrayRef2, ArrayView2};
 
 pub fn calculate_stacked_m(
     all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
-    allele_frequencies: &ArrayRef2<f64>,
+    allele_frequencies: ArrayView2<f64>,
 ) -> Vec<Vector<9>> {
     let num_v = allele_frequencies.shape()[0];
     let num_g = all_joint_genotypes.len();
