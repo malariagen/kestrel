@@ -27,6 +27,7 @@ struct Args {
 }
 
 #[derive(Clone, Copy, ValueEnum)]
+#[value(rename_all = "UPPERCASE")]
 enum Tag {
     /// Log-scaled genotype likelihoods
     GL,
