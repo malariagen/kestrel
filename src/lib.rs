@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use ndarray::{Array3, ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
-use crate::arith::simd::Simd;
+use crate::{arith::simd::Simd, coefficients::Output};
 
 mod algebra;
 mod allele;
@@ -27,7 +27,7 @@ mod vcf;
 
 #[pyo3::pymodule]
 mod kestrel {
-    use crate::cli;
+    use crate::{build_jacquard_array, cli};
     use numpy::{IntoPyArray, PyArray3, PyReadonlyArray2, PyReadonlyArray3};
     use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
@@ -40,7 +40,10 @@ mod kestrel {
 
         let af = crate::coefficients::calculate_allele_frequencies(gt_view);
 
-        let jacquard = crate::calculate_relatedness_coefficients_gt(gt_view, af.view());
+        let outputs = crate::calculate_relatedness_coefficients_gt(gt_view, af.view());
+
+        let num_samples = gt_view.shape()[1];
+        let jacquard = build_jacquard_array(num_samples, &outputs);
 
         jacquard.into_pyarray(py)
     }
@@ -54,7 +57,10 @@ mod kestrel {
         let gt_view = genotypes.as_array();
         let af_view = allele_frequencies.as_array();
 
-        let jacquard = crate::calculate_relatedness_coefficients_gt(gt_view, af_view);
+        let outputs = crate::calculate_relatedness_coefficients_gt(gt_view, af_view);
+
+        let num_samples = gt_view.shape()[1];
+        let jacquard = build_jacquard_array(num_samples, &outputs);
 
         jacquard.into_pyarray(py)
     }
@@ -71,7 +77,7 @@ mod kestrel {
 pub fn calculate_relatedness_coefficients_gt(
     genotypes: ArrayView3<u8>,
     allele_frequencies: ArrayView2<f64>,
-) -> Array3<f64> {
+) -> Vec<Output> {
     let num_v = genotypes.shape()[0];
     let num_s = genotypes.shape()[1];
     let num_h = genotypes.shape()[2];
@@ -92,15 +98,7 @@ pub fn calculate_relatedness_coefficients_gt(
 
     let outputs = crate::coefficients::calculate_coefficients_gt(genotypes, allele_frequencies, &mut thread_pool, simd);
 
-    let mut jacquard_mat = Array3::<f64>::zeros((num_s, num_s, 9));
-
-    for out in outputs.iter() {
-        for i in 0..9 {
-            jacquard_mat[(out.x, out.y, i)] = out.jacquard[i];
-        }
-    }
-
-    jacquard_mat
+    outputs
 }
 
 fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
@@ -114,4 +112,34 @@ fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
     .build();
 
     pool
+}
+
+fn build_jacquard_array(num_samples: usize, outputs: &[Output]) -> Array3<f64> {
+
+    let mut jacquard = Array3::<f64>::zeros((num_samples, num_samples, 9));
+
+    for out in outputs.iter() {
+        let x = out.x;
+        let y = out.y;
+
+        for i in 0..9 {
+            jacquard[[x, y, i]] = out.jacquard[i];
+        }
+
+        if x != y {
+            // Need to swap D3 and D5, and D4 and D6
+            // The rest are the same.
+            jacquard[[y, x, 0]] = jacquard[[x, y, 0]];
+            jacquard[[y, x, 1]] = jacquard[[x, y, 1]];
+            jacquard[[y, x, 2]] = jacquard[[x, y, 4]];
+            jacquard[[y, x, 3]] = jacquard[[x, y, 5]];
+            jacquard[[y, x, 4]] = jacquard[[x, y, 2]];
+            jacquard[[y, x, 5]] = jacquard[[x, y, 3]];
+            jacquard[[y, x, 6]] = jacquard[[x, y, 6]];
+            jacquard[[y, x, 7]] = jacquard[[x, y, 7]];
+            jacquard[[y, x, 8]] = jacquard[[x, y, 8]];
+        }
+    }
+
+    jacquard
 }

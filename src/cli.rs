@@ -1,8 +1,8 @@
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
-use csv::Trim::All;
 use csv::WriterBuilder;
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder};
 
@@ -53,7 +53,12 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     let simd = Simd::detect();
 
-    let threads = std::thread::available_parallelism()?;
+    // let threads: NonZeroUsize = if simd == Simd::Scalar {
+    //     num_cpus::get()
+    // } else {
+    //     num_cpus::get_physical()
+    // }.try_into().unwrap();
+    let threads = std::thread::available_parallelism().unwrap();
 
     println!("Using thread pool with {threads} threads");
 
@@ -72,14 +77,14 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     let (samples, outputs) = match args.tag {
         Tag::GL => {
-            let (samples, gl) = crate::vcf::parse_vcf_gl(vcf_file)?;
-            let af = crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd);
+            let (samples, gl, af) = crate::vcf::parse_vcf_gl(vcf_file, parse_af)?;
+            let af = af.unwrap_or_else(|| crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd));
             let outputs = crate::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool, simd);
             (samples, outputs)
         }
         Tag::PL => {
-            let (samples, gl) = crate::vcf::parse_vcf_pl(vcf_file)?;
-            let af = crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd);
+            let (samples, gl, af) = crate::vcf::parse_vcf_pl(vcf_file, parse_af)?;
+            let af = af.unwrap_or_else(|| crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd));
             let outputs = crate::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool, simd);
             (samples, outputs)
         }
