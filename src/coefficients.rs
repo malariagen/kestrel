@@ -102,7 +102,7 @@ pub fn calculate_relatedness_coefficients_gl(
         .collect();
     let mut outputs = vec![Output::default(); pairs.len()];
 
-    println!(
+    log::info!(
         "Calculating Jacquard coefficients for {} pairs using {} sites",
         pairs.len(),
         num_v
@@ -137,7 +137,7 @@ pub fn calculate_relatedness_coefficients_gl(
                 let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                 if iters >= tune.sqp_max_iter.get() {
-                    println!(
+                    log::info!(
                         "WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded",
                         tune.sqp_max_iter
                     );
@@ -209,7 +209,7 @@ pub fn calculate_coefficients_gt(
         .collect();
     let mut output = vec![Output::default(); pairs.len()];
 
-    println!(
+    log::info!(
         "Calculating Jacquard coefficients for {} pairs using {} variants",
         pairs.len(),
         num_v
@@ -247,7 +247,7 @@ pub fn calculate_coefficients_gt(
             let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
 
             if iters >= tune.qp_max_iter.get() {
-                println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.qp_max_iter);
+                log::warn!("No convergence for Jacquard coefficients, max iterations {} exceeded", tune.qp_max_iter);
             }
 
             *out = Output {

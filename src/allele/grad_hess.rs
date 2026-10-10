@@ -16,7 +16,6 @@ pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>,
     }
 }
 
-
 #[allow(unused_variables, unreachable_code)]
 fn compute_grad_hess_avx512(
     likelihood_mats: &LaneVector<Lane8, 10>,
@@ -31,7 +30,6 @@ fn compute_grad_hess_avx512(
 
     panic!("Architecture incompatible with Lane8!")
 }
-
 
 #[allow(unused_variables, unreachable_code)]
 fn compute_grad_hess_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {

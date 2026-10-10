@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use env_logger::{Builder, Env};
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use csv::WriterBuilder;
@@ -45,9 +46,10 @@ enum AlleleFreqs {
     Info,
 }
 
-// TODO switch println to logger
-
 pub fn run_cli(args: &[String]) -> Result<()> {
+
+    Builder::from_env(Env::default().default_filter_or("info")).format_timestamp(None).format_target(false).init();
+
     let args = Args::parse_from(args);
 
     let simd = Simd::detect();
@@ -59,7 +61,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
     // }.try_into().unwrap();
     let threads = std::thread::available_parallelism().unwrap();
 
-    println!("Using thread pool with {threads} threads");
+    log::info!("Using thread pool with {threads} threads");
 
     let mut thread_pool = ThreadPoolBuilder {
         num_threads: ThreadCount::Count(threads),
@@ -70,7 +72,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     let vcf_file = &args.input;
 
-    println!("Parsing VCF {:?}", vcf_file);
+    log::info!("Parsing VCF {:?}", vcf_file);
 
     let parse_af = args.allele_freqs == AlleleFreqs::Info;
 

@@ -87,10 +87,10 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
         }
     }
 
-    println!("Parsed {} total variants", total_variants);
-    println!("Skipped {} variants that were not SNPs", not_snp);
-    println!("Skipped {} variants with missing data", skipped_missing);
-    println!("Kept {} final variants", num_variants);
+    log::info!("Parsed {} total variants", total_variants);
+    log::info!("Skipped {} variants that were not SNPs", not_snp);
+    log::info!("Skipped {} variants with missing data", skipped_missing);
+    log::info!("Kept {} final variants", num_variants);
 
     let gts = Array3::<u8>::from_shape_vec((num_variants, num_samples, 2), genotypes).unwrap();
 
@@ -193,10 +193,10 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
         }
     }
 
-    println!("Parsed {} total variants", total_variants);
-    println!("Skipped {} variants that were not SNPs", not_snp);
-    println!("Skipped {} variants with missing data", skipped_missing);
-    println!("Kept {} final variants", num_variants);
+    log::info!("Parsed {} total variants", total_variants);
+    log::info!("Skipped {} variants that were not SNPs", not_snp);
+    log::info!("Skipped {} variants with missing data", skipped_missing);
+    log::info!("Kept {} final variants", num_variants);
 
     let gls = Array3::from_shape_vec((num_variants, num_samples, 10), likelihoods).unwrap();
 
@@ -289,10 +289,10 @@ pub fn parse_vcf_pl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
         }
     }
 
-    println!("Parsed {} total variants", total_variants);
-    println!("Skipped {} variants that were not SNPs", not_snp);
-    println!("Skipped {} variants with missing data", skipped_missing);
-    println!("Kept {} final variants", num_variants);
+    log::info!("Parsed {} total variants", total_variants);
+    log::info!("Skipped {} variants that were not SNPs", not_snp);
+    log::info!("Skipped {} variants with missing data", skipped_missing);
+    log::info!("Kept {} final variants", num_variants);
 
     let pls = Array3::from_shape_vec((num_variants, num_samples, 10), likelihoods).unwrap();
 

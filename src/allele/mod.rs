@@ -1,4 +1,3 @@
-// pub mod allele;
 mod grad_hess;
 mod objective;
 
@@ -22,10 +21,6 @@ use crate::{
     sqp::{self, Tuneables},
 };
 
-// Need to read the data linearly. That makes sense.
-// Then, need to repackage it into some specific types using lanes
-// E.g. LaneArray2<Lane8, 9>
-
 pub fn calculate_allele_frequencies(
     likelihoods: &Array3<f64>,
     thread_pool: &mut ThreadPool,
@@ -34,15 +29,10 @@ pub fn calculate_allele_frequencies(
     let num_variants = likelihoods.shape()[0];
     let num_samples = likelihoods.shape()[1];
 
-    println!(
+    log::info!(
         "Calculating allele frequencies for {} sites using {} samples",
         num_variants, num_samples
     );
-
-    // V x S x 10
-    // Then it produces a V x 4 output matrix. Then we calculate the other V x (9 x 10 x 10) matrix
-    // Then need to re-arrange as S x V x 10
-    // Then yeah.
 
     let bar = ProgressBar::new(num_variants.try_into().unwrap())
         .with_eta()
@@ -77,8 +67,8 @@ pub fn calculate_allele_frequencies(
                 let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
                 if iter >= tune.sqp_max_iter.get() {
-                    println!(
-                        "WARNING: no convergence for allele frequencies, max iterations {} exceeded",
+                    log::warn!(
+                        "No convergence for allele frequencies, max iterations {} exceeded",
                         tune.sqp_max_iter
                     );
                 }
@@ -114,7 +104,7 @@ pub fn calculate_allele_frequencies(
         }
     }
 
-    println!("Multi-allelic sites {multi}");
+    log::info!("Multi-allelic sites {multi}");
 
     af
 }
