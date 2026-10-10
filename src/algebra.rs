@@ -10,16 +10,6 @@ pub fn dot<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> f64 {
     sum
 }
 
-pub fn outer<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Matrix<N> {
-    let mut m = [[0.0; N]; N];
-    for i in 0..N {
-        for j in 0..N {
-            m[i][j] = x[i] * y[j];
-        }
-    }
-    m
-}
-
 pub fn dot_n<const N: usize>(n: usize, x: &Vector<N>, y: &Vector<N>) -> f64 {
     let mut sum = 0.0;
     for i in 0..n {
@@ -83,12 +73,4 @@ pub fn sub<const N: usize>(x: &Vector<N>, y: &Vector<N>) -> Vector<N> {
 pub fn sum_to_one<const N: usize>(x: &Vector<N>) -> Vector<N> {
     let s = sum(x);
     std::array::from_fn(|i| x[i] / s)
-}
-
-pub fn scale_div_mut<const N: usize>(m: &mut Matrix<N>, a: f64) {
-    for i in 0..N {
-        for j in 0..N {
-            m[i][j] /= a;
-        }
-    }
 }

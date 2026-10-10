@@ -1,44 +1,28 @@
-use std::num::NonZeroUsize;
+
+use std::num::NonZeroU64;
 
 use itertools::Itertools;
-use ndarray::{Array2, Array3, Array4, ArrayView2, ArrayView3, s};
+use ndarray::{Array2, Array3, ArrayView2, ArrayView3};
 use paralight::{
     iter::{
         ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
         ZipableSource,
     },
-    threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder},
+    threads::ThreadPool,
 };
 
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
     algebra::{Vector, dot, mul},
-    arith::{Lane8, simd::Simd},
+    arith::simd::Simd,
     ata,
-    blockbuffer::BlockBuffer,
     cls,
     conditional::{self, M},
     jacquard::{grad_hess, objective},
-    lanevector::{GenericLaneVector, LaneVector},
+    lanevector::GenericLaneVector,
     sqp::{self, Tuneables},
 };
-
-// pub fn calculate_relatedness_coefficients_gt_af(genotypes: &Array3<u8>, allele_frequencies: &Array2<f64>) -> Array3<f64> {
-//     let num_v = genotypes.shape()[0];
-//     let num_s = genotypes.shape()[1];
-//     let num_h = genotypes.shape()[2];
-
-//     assert_eq!(num_h, 2);
-
-//     let simd = Simd::detect();
-
-//     let mut thread_pool = build_thread_pool(None);
-
-//     let genotypes = reorder_genotypes(genotypes.view());
-
-//     calculate_coefficients_gt(&genotypes, allele_frequencies, &mut thread_pool, simd)
-// }
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
     let num_v = genotypes.shape()[0];
@@ -88,16 +72,6 @@ fn reorder_genotypes(mut genotypes: ArrayView3<u8>) -> Array3<u8> {
     genotypes
 }
 
-fn calculate_max_alleles(genotypes: ArrayView3<i8>) -> Vec<usize> {
-    genotypes
-        .outer_iter()
-        .map(|variant| {
-            let max_allele = *variant.iter().max().unwrap();
-            usize::try_from(max_allele).unwrap() + 1
-        })
-        .collect()
-}
-
 pub fn calculate_relatedness_coefficients_gl(
     mut likelihoods: Array3<f64>,
     allele_frequencies: &Array2<f64>,
@@ -108,7 +82,6 @@ pub fn calculate_relatedness_coefficients_gl(
 
     // TODO calculate this across each locus to figure out how many alleles there are
     // Then we can condense the stacked matrix to make it smaller? Idk, complicated...
-    let num_a = allele_frequencies.shape()[1];
 
     let m_matrices = conditional::calculate_m_matrices(allele_frequencies);
 
@@ -157,13 +130,13 @@ pub fn calculate_relatedness_coefficients_gl(
 
                 calculate_mixture_component_matrix_gl(&m_matrices, likelihoods_x, likelihoods_y, p_mat);
 
-                let tune = Tuneables::new();
+                let tune = Tuneables::new(NonZeroU64::new(100).unwrap(), NonZeroU64::new(10).unwrap());
 
                 let obj = |x: &Vector<9>, eps| objective::compute_obj(p_mat, &x, eps);
                 let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(p_mat, &x, eps);
                 let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
-                if iters >= tune.sqp_max_iter {
+                if iters >= tune.sqp_max_iter.get() {
                     println!(
                         "WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded",
                         tune.sqp_max_iter
@@ -267,17 +240,15 @@ pub fn calculate_coefficients_gt(
                 &lookup_table,
             );
 
-            let tune = Tuneables::new();
+            let tune = Tuneables::new(NonZeroU64::new(100).unwrap(), NonZeroU64::new(10).unwrap());
 
             let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
             let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
 
-            // TODO increase the iterations here? Or make configurable
-
-            // if iters >= tune.sqp_max_iter {
-            //     println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.sqp_max_iter);
-            // }
+            if iters >= tune.qp_max_iter.get() {
+                println!("WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded", tune.qp_max_iter);
+            }
 
             *out = Output {
                 x: *x,
@@ -342,37 +313,9 @@ pub fn calculate_mixture_component_matrix_gl(
     p_mat.fill_from_iter(iter);
 }
 
-fn calculate_mixture_component_matrix<const L: usize>(
-    all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
-    stacked_m: &[Vector<9>],
-    genotypes_x: &ArrayView2<u8>,
-    genotypes_y: &ArrayView2<u8>,
-    lookup_table: &Array4<usize>,
-    p_mat: &mut BlockBuffer<f64, L, 9>,
-) {
-    let num_g = all_joint_genotypes.len();
-
-    let (iter_x, _) = genotypes_x.as_slice().unwrap().as_chunks::<2>();
-    let (iter_y, _) = genotypes_y.as_slice().unwrap().as_chunks::<2>();
-
-    let iter = iter_x.iter().zip(iter_y).enumerate().map(|(locus, (geno_x, geno_y))| {
-        let (i, j) = (geno_x[0], geno_x[1]);
-        let (k, l) = (geno_y[0], geno_y[1]);
-
-        let g = unsafe { lookup_table.uget((usize::from(i), usize::from(j), usize::from(k), usize::from(l))) };
-        // let g = lookup_table[(i as usize, j as usize, k as usize, l as usize)];
-
-        let row = unsafe { stacked_m.get_unchecked(locus.unchecked_mul(num_g).unchecked_add(*g)) };
-        // let row = stacked_m[locus * num_g + g];
-        *row
-    });
-
-    p_mat.fill_from_rows(iter);
-}
-
 #[cfg(test)]
 mod test {
-    use crate::coefficients::{calculate_max_alleles, reorder_genotypes};
+    use crate::coefficients::reorder_genotypes;
     use ndarray::array;
 
     #[test]
@@ -382,14 +325,5 @@ mod test {
         let expected_genotypes = array![[[1, 2], [0, 3]], [[1, 0], [1, 1]], [[3, 4], [1, 1]],];
 
         assert_eq!(reorder_genotypes(genotypes.view()), expected_genotypes);
-    }
-
-    #[test]
-    fn test_total_alleles() {
-        let genotypes = array![[[1, 2], [-1, 0], [4, 3]], [[3, 0], [1, -1], [1, 1]]];
-
-        let max_alleles = vec![5, 4];
-
-        assert_eq!(calculate_max_alleles(genotypes.view()), max_alleles);
     }
 }

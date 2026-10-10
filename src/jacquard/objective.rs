@@ -1,5 +1,5 @@
 use crate::{
-    algebra::{Vector, dot, sum},
+    algebra::Vector,
     arith::{
         Arith, Lane, Lane8, LoadStore,
         lane::{Lane2, Lane4},
@@ -17,6 +17,7 @@ pub fn compute_obj(likelihood_mats: &GenericLaneVector<9>, x: &Vector<9>, eps: f
     }
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn compute_obj_avx512(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> f64 {
     #[cfg(target_arch = "x86_64")]
     {
@@ -27,6 +28,7 @@ fn compute_obj_avx512(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> 
     panic!("Architecture incompatible with Lane8!")
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn compute_obj_avx2(p_mat: &LaneVector<Lane4, 9>, x: &Vector<9>, eps: f64) -> f64 {
     #[cfg(target_arch = "x86_64")]
     {
@@ -37,6 +39,7 @@ fn compute_obj_avx2(p_mat: &LaneVector<Lane4, 9>, x: &Vector<9>, eps: f64) -> f6
     panic!("Architecture incompatible with Lane4!")
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn compute_obj_neon(p_mat: &LaneVector<Lane2, 9>, x: &Vector<9>, eps: f64) -> f64 {
     #[cfg(target_arch = "aarch64")]
     {

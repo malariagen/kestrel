@@ -13,6 +13,7 @@ pub trait LoadStore<L: Lane> {
     fn store(self, val: &mut L);
 }
 
+#[allow(unused)]
 pub trait Arith: Copy {
     fn zero() -> Self;
     fn set(val: f64) -> Self;
@@ -27,6 +28,7 @@ pub trait Arith: Copy {
     fn radd(self) -> f64;
 }
 
+#[allow(unused)]
 pub trait Lane: Copy {
     const N: usize;
 

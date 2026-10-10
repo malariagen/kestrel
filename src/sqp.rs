@@ -1,18 +1,19 @@
+use std::num::NonZeroU64;
+
 use crate::{
     algebra::{Matrix, Vector, add, add_n, dot, mul, mul_n, scale_mul, sub, sum_n, sum_to_one},
     cholesky,
-    eigenval::eigenvals_jacobi,
 };
 
 pub struct Tuneables {
-    pub sqp_max_iter: u64,
+    pub sqp_max_iter: NonZeroU64,
     pub sqp_conv_tol: f64,
 
-    // qp_max_iter: u64,
+    pub qp_max_iter: NonZeroU64,
     pub qp_conv_tol: f64,
     pub qp_zero_search_tol: f64,
 
-    pub bls_max_iter: u64,
+    pub bls_max_iter: NonZeroU64,
     pub bls_sufficient_decrease: f64,
     pub bls_step_size_reduce: f64,
 
@@ -20,14 +21,14 @@ pub struct Tuneables {
 }
 
 impl Tuneables {
-    pub fn new() -> Tuneables {
+    pub fn new(sqp_max_iter: NonZeroU64, qp_max_iter: NonZeroU64) -> Tuneables {
         Tuneables {
-            sqp_max_iter: 100,
+            sqp_max_iter,
             sqp_conv_tol: 1e-8,
-            // qp_max_iter: 10,
+            qp_max_iter,
             qp_conv_tol: 1e-10,
             qp_zero_search_tol: 1e-14,
-            bls_max_iter: 10,
+            bls_max_iter: NonZeroU64::new(10).unwrap(),
             bls_sufficient_decrease: 1e-4,
             bls_step_size_reduce: 0.9,
             epsilon: 1e-8,
@@ -47,12 +48,12 @@ where
 {
     let mut x = *x0;
 
-    let mut qp = 0;
-    let mut bl = 0;
+    // let mut qp = 0;
+    // let mut bl = 0;
 
     let mut f = 0.0;
 
-    for iter in 0..tune.sqp_max_iter {
+    for iter in 0..tune.sqp_max_iter.into() {
         x = sum_to_one(&x);
 
         let (g, h) = grad_hess(&x, tune.epsilon);
@@ -78,22 +79,15 @@ where
 
         let (fnew, xnew, _bls_iter) = backtracking_line_search(&obj, &x, &y, &g, tune);
 
-        qp = _qp_iter;
-        bl = _bls_iter;
-
-        // println!("{iter} {x:?} {y:?} {g:?} {_qp_iter} {_bls_iter}");
-        // println!("{iter} {x:?} {g:?} {_qp_iter} {_bls_iter}");
+        // qp = _qp_iter;
+        // bl = _bls_iter;
 
         x = xnew;
         f = fnew;
-
-        // println!("{iter} {x:?} {g:?} {qp_iter} {bls_iter}");
     }
 
-    (f, x, tune.sqp_max_iter)
+    (f, x, tune.sqp_max_iter.into())
 }
-
-// TODO also print a warning when the algorithm doesn't converge within the iterations
 
 fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> bool {
     // This is the Lagrange multiplier
@@ -137,9 +131,7 @@ pub fn solve_qp_active_set<const N: usize>(
 
     let mut iter = 0;
 
-    let max_iters: u64 = (N + 1).try_into().unwrap();
-
-    while iter < max_iters {
+    while iter < tune.qp_max_iter.into() {
         y = sum_to_one(&y);
 
         let mut free_indices = [0; N];
@@ -294,7 +286,10 @@ where
 
     // We know that y = x + p is already feasible, so this is a feasible starting point
     let mut alpha = 1.0;
-    for iter in 0..tune.bls_max_iter {
+    let mut iter = 0;
+
+    // bls_max_iter is NonZeroU64, so this loop will always terminate
+    loop {
         // Numerically this is always feasible (>= 0) for floats
         let xnew = add(x, &scale_mul(alpha, &p));
         // In theory we could store an intermediate array that makes
@@ -304,15 +299,16 @@ where
             return (fnew, xnew, iter);
         }
 
+        iter += 1;
+
+        // If we hit the maximum number of backtracks, then just
+        // return the last one. This could happen because of floating
+        // point problems, and it's better to be robust instead of
+        // throwing errors (let the main loop handle it).
+        if iter == tune.bls_max_iter.get() {
+            return (fnew, xnew, iter);
+        }
+
         alpha *= tune.bls_step_size_reduce;
     }
-
-    // If we exceed the maximum number of backtracks, then just
-    // return the last one. This could happen because of floating
-    // point problems, and it's better to be robust instead of
-    // throwing errors (let the main loop handle it).
-    // TODO make more efficient
-    let xnew = add(x, &scale_mul(alpha, &p));
-    let fnew = obj(&xnew, tune.epsilon);
-    return (fnew, xnew, tune.bls_max_iter);
 }

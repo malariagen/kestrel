@@ -21,6 +21,7 @@ pub fn compute_ata(a_mat: &GenericLaneVector<9>, n: usize) -> Matrix<9> {
     }
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn compute_ata_avx512(a_mat: &LaneVector<Lane8, 9>, n: usize) -> Matrix<9> {
     #[cfg(target_arch = "x86_64")]
     {
@@ -31,6 +32,7 @@ fn compute_ata_avx512(a_mat: &LaneVector<Lane8, 9>, n: usize) -> Matrix<9> {
     panic!("Architecture incompatible with Lane8!")
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn compute_ata_avx2(a_mat: &LaneVector<Lane4, 9>, n: usize) -> Matrix<9> {
     #[cfg(target_arch = "x86_64")]
     {
@@ -41,6 +43,7 @@ fn compute_ata_avx2(a_mat: &LaneVector<Lane4, 9>, n: usize) -> Matrix<9> {
     panic!("Architecture incompatible with Lane4!")
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn compute_ata_neon(a_mat: &LaneVector<Lane2, 9>, n: usize) -> Matrix<9> {
     #[cfg(target_arch = "aarch64")]
     {

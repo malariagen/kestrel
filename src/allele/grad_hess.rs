@@ -16,6 +16,8 @@ pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>,
     }
 }
 
+
+#[allow(unused_variables, unreachable_code)]
 fn compute_grad_hess_avx512(
     likelihood_mats: &LaneVector<Lane8, 10>,
     x: &Vector<4>,
@@ -30,6 +32,8 @@ fn compute_grad_hess_avx512(
     panic!("Architecture incompatible with Lane8!")
 }
 
+
+#[allow(unused_variables, unreachable_code)]
 fn compute_grad_hess_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     #[cfg(target_arch = "x86_64")]
     {
@@ -40,6 +44,7 @@ fn compute_grad_hess_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>
     panic!("Architecture incompatible with Lane4!")
 }
 
+#[allow(unused_variables, unreachable_code)]
 fn compute_grad_hess_neon(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
     #[cfg(target_arch = "aarch64")]
     {

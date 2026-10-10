@@ -31,9 +31,9 @@ impl<L: Lane, const R: usize> LaneVector<L, R> {
         (&self.lanes, &self.rem)
     }
 
-    pub fn as_lanes_mut(&mut self) -> (&mut [[L; R]], &mut [[f64; R]]) {
-        (&mut self.lanes, &mut self.rem)
-    }
+    // pub fn as_lanes_mut(&mut self) -> (&mut [[L; R]], &mut [[f64; R]]) {
+    //     (&mut self.lanes, &mut self.rem)
+    // }
 
     pub fn fill_from_iter(&mut self, mut iter: impl Iterator<Item = [f64; R]>) {
         for block in self.lanes.iter_mut() {

@@ -2,6 +2,8 @@
 mod grad_hess;
 mod objective;
 
+use std::num::NonZeroU64;
+
 use lockfree_progress_bar::ProgressBar;
 use ndarray::{Array2, Array3};
 
@@ -71,10 +73,10 @@ pub fn calculate_allele_frequencies(
                 let obj = |x: &Vector<4>, eps| objective::compute_objective(buffer, &x, eps);
                 let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(buffer, &x, eps);
 
-                let tune = Tuneables::new();
+                let tune = Tuneables::new(NonZeroU64::new(100).unwrap(), NonZeroU64::new(5).unwrap());
                 let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
-                if iter >= tune.sqp_max_iter {
+                if iter >= tune.sqp_max_iter.get() {
                     println!(
                         "WARNING: no convergence for allele frequencies, max iterations {} exceeded",
                         tune.sqp_max_iter
