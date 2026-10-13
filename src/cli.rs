@@ -1,13 +1,13 @@
+use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::PathBuf;
 
 use env_logger::{Builder, Env};
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use csv::WriterBuilder;
-use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPoolBuilder};
 
 use crate::coefficients::Output;
-use crate::{algebra::dot, arith::simd::Simd};
+use crate::algebra::dot;
 
 #[derive(Parser)]
 #[command(name = "kestrel", version, about)]
@@ -25,6 +25,14 @@ struct Args {
     /// Which FORMAT tag to compute kinship from
     #[arg(short = 't', long, value_enum, default_value_t = Tag::GL)]
     tag: Tag,
+
+    /// Number of threads used for parallelism. Defaults to all available threads.
+    #[arg(short = 'p', long)]
+    threads: Option<NonZeroUsize>,
+
+    /// Maximum number of iterations for minimization algorithm
+    #[arg(short = 'i', long, default_value = "100")]
+    iterations: NonZeroU64,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -52,47 +60,31 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     let args = Args::parse_from(args);
 
-    let simd = Simd::detect();
-
-    // let threads: NonZeroUsize = if simd == Simd::Scalar {
-    //     num_cpus::get()
-    // } else {
-    //     num_cpus::get_physical()
-    // }.try_into().unwrap();
-    let threads = std::thread::available_parallelism().unwrap();
-
-    log::info!("Using thread pool with {threads} threads");
-
-    let mut thread_pool = ThreadPoolBuilder {
-        num_threads: ThreadCount::Count(threads),
-        range_strategy: RangeStrategy::Fixed,
-        cpu_pinning: CpuPinningPolicy::No,
-    }
-    .build();
-
     let vcf_file = &args.input;
 
     log::info!("Parsing VCF {:?}", vcf_file);
 
     let parse_af = args.allele_freqs == AlleleFreqs::Info;
 
+    let iters = args.iterations;
+
     let (samples, outputs) = match args.tag {
         Tag::GL => {
             let (samples, gl, af) = crate::vcf::parse_vcf_gl(vcf_file, parse_af)?;
-            let af = af.unwrap_or_else(|| crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd));
-            let outputs = crate::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool, simd);
+            let af = af.as_ref().map(|a| a.view());
+            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters);
             (samples, outputs)
         }
         Tag::PL => {
             let (samples, gl, af) = crate::vcf::parse_vcf_pl(vcf_file, parse_af)?;
-            let af = af.unwrap_or_else(|| crate::allele::calculate_allele_frequencies(&gl, &mut thread_pool, simd));
-            let outputs = crate::coefficients::calculate_relatedness_coefficients_gl(gl, &af, &mut thread_pool, simd);
+            let af = af.as_ref().map(|a| a.view());
+            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters);
             (samples, outputs)
         }
         Tag::GT => {
             let (samples, gt, af) = crate::vcf::parse_vcf_gt(vcf_file, parse_af)?;
-            let af = af.unwrap_or_else(|| crate::coefficients::calculate_allele_frequencies(gt.view()));
-            let outputs = crate::coefficients::calculate_coefficients_gt(gt.view(), af.view(), &mut thread_pool, simd);
+            let af = af.as_ref().map(|a| a.view());
+            let outputs = crate::wrapper::calculate_relatedness_coefficients_gt(gt.view(), af, args.threads, args.iterations);
             (samples, outputs)
         }
     };

@@ -14,7 +14,12 @@ The binary will be built in `target/release/kestrel`.
 
 ### SIMD
 
-The algorithms use SIMD intrinsics to accelerate the calculations on common platforms (AVX2, AVX-512, and NEON), and will use a scalar fallback if none is compatible. In particular, the x86 binaries on PyPI are built for [x86-64-v3](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels) to ensure support for FMA. (In practice this is supported by almost all processors released after 2013, but if the program crashes with a SIGILL on startup that's probably why.) Please open an issue if there are any hardware platforms where SIMD isn't supported.
+The algorithms use SIMD intrinsics to accelerate the calculations on common platforms (AVX2, AVX-512, and NEON), and will use a scalar fallback if none is compatible. Furthermore, the binaries on PyPI are built for certain minimum CPU features for better performance:
+
+- x86-64 binaries use [x86-64-v3](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels) (introduced in 2013)
+- aarch64 binaries use [Neoverse N1](https://en.wikipedia.org/wiki/ARM_Neoverse#Neoverse_N1) (introduced in 2019)
+
+These baselines are intended to be compatible with all widely-available hardware, but if you have something more esoteric the program will likely crash on startup. In that case I recommend building the program from source, which will always work.
 
 ## Usage
 

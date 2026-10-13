@@ -73,10 +73,11 @@ fn reorder_genotypes(mut genotypes: ArrayView3<u8>) -> Array3<u8> {
 }
 
 pub fn calculate_relatedness_coefficients_gl(
-    mut likelihoods: Array3<f64>,
-    allele_frequencies: &Array2<f64>,
+    mut likelihoods: ArrayView3<f64>,
+    allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,
     simd: Simd,
+    iterations: NonZeroU64
 ) -> Vec<Output> {
     let num_v = allele_frequencies.shape()[0];
 
@@ -116,6 +117,8 @@ pub fn calculate_relatedness_coefficients_gl(
 
     let handle = bar.clone_handle();
 
+    let tune = Tuneables::new(iterations, NonZeroU64::new(10).unwrap());
+
     (outputs.par_iter_mut(), pairs.par_iter())
         .zip_eq()
         .with_thread_pool(thread_pool)
@@ -130,15 +133,13 @@ pub fn calculate_relatedness_coefficients_gl(
 
                 calculate_mixture_component_matrix_gl(&m_matrices, likelihoods_x, likelihoods_y, p_mat);
 
-                let tune = Tuneables::new(NonZeroU64::new(100).unwrap(), NonZeroU64::new(10).unwrap());
-
                 let obj = |x: &Vector<9>, eps| objective::compute_obj(p_mat, &x, eps);
                 let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(p_mat, &x, eps);
                 let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                 if iters >= tune.sqp_max_iter.get() {
-                    log::info!(
-                        "WARNING: no convergence for Jacquard coefficients, max iterations {} exceeded",
+                    log::warn!(
+                        "No convergence for Jacquard coefficients, max iterations {} exceeded",
                         tune.sqp_max_iter
                     );
                 }
@@ -185,6 +186,7 @@ pub fn calculate_coefficients_gt(
     allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,
     simd: Simd,
+    iterations: NonZeroU64
 ) -> Vec<Output> {
     let genotypes = reorder_genotypes(genotypes);
 
@@ -223,6 +225,9 @@ pub fn calculate_coefficients_gt(
 
     let handle = bar.clone_handle();
 
+    // The SQP iterations don't matter here
+    let tune = Tuneables::new(iterations, iterations);
+
     (output.par_iter_mut(), pairs.par_iter())
         .zip_eq()
         .with_thread_pool(thread_pool)
@@ -239,8 +244,6 @@ pub fn calculate_coefficients_gt(
                 *genotypes_y,
                 &lookup_table,
             );
-
-            let tune = Tuneables::new(NonZeroU64::new(100).unwrap(), NonZeroU64::new(10).unwrap());
 
             let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 

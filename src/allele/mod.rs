@@ -4,7 +4,7 @@ mod objective;
 use std::num::NonZeroU64;
 
 use lockfree_progress_bar::ProgressBar;
-use ndarray::{Array2, Array3};
+use ndarray::{Array2, ArrayView3};
 
 use paralight::{
     iter::{
@@ -22,9 +22,10 @@ use crate::{
 };
 
 pub fn calculate_allele_frequencies(
-    likelihoods: &Array3<f64>,
+    likelihoods: ArrayView3<f64>,
     thread_pool: &mut ThreadPool,
     simd: Simd,
+    iterations: NonZeroU64,
 ) -> Array2<f64> {
     let num_variants = likelihoods.shape()[0];
     let num_samples = likelihoods.shape()[1];
@@ -41,6 +42,8 @@ pub fn calculate_allele_frequencies(
         .start();
 
     let handle = bar.clone_handle();
+
+    let tune = Tuneables::new(iterations, NonZeroU64::new(5).unwrap());
 
     // TODO maybe better way
     let var_likelihoods: Vec<_> = likelihoods.outer_iter().collect();
@@ -63,7 +66,6 @@ pub fn calculate_allele_frequencies(
                 let obj = |x: &Vector<4>, eps| objective::compute_objective(buffer, &x, eps);
                 let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(buffer, &x, eps);
 
-                let tune = Tuneables::new(NonZeroU64::new(100).unwrap(), NonZeroU64::new(5).unwrap());
                 let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
                 if iter >= tune.sqp_max_iter.get() {

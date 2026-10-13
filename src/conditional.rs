@@ -1,4 +1,4 @@
-use ndarray::ArrayRef2;
+use ndarray::ArrayView2;
 
 use crate::iis;
 
@@ -30,7 +30,7 @@ pub fn calculate_joint_genotype_table() -> MTable {
     table
 }
 
-pub fn calculate_m_matrices(allele_frequencies: &ArrayRef2<f64>) -> Vec<M> {
+pub fn calculate_m_matrices(allele_frequencies: ArrayView2<f64>) -> Vec<M> {
     let num_a = allele_frequencies.shape()[1];
     assert_eq!(num_a, 4);
 
