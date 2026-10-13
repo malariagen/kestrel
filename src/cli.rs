@@ -1,13 +1,13 @@
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::path::PathBuf;
 
-use env_logger::{Builder, Env};
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use csv::WriterBuilder;
+use env_logger::{Builder, Env};
 
-use crate::coefficients::Output;
 use crate::algebra::dot;
+use crate::coefficients::Output;
 
 #[derive(Parser)]
 #[command(name = "kestrel", version, about)]
@@ -55,8 +55,10 @@ enum AlleleFreqs {
 }
 
 pub fn run_cli(args: &[String]) -> Result<()> {
-
-    Builder::from_env(Env::default().default_filter_or("info")).format_timestamp(None).format_target(false).init();
+    Builder::from_env(Env::default().default_filter_or("info"))
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
 
     let args = Args::parse_from(args);
 
@@ -84,7 +86,8 @@ pub fn run_cli(args: &[String]) -> Result<()> {
         Tag::GT => {
             let (samples, gt, af) = crate::vcf::parse_vcf_gt(vcf_file, parse_af)?;
             let af = af.as_ref().map(|a| a.view());
-            let outputs = crate::wrapper::calculate_relatedness_coefficients_gt(gt.view(), af, args.threads, args.iterations);
+            let outputs =
+                crate::wrapper::calculate_relatedness_coefficients_gt(gt.view(), af, args.threads, args.iterations);
             (samples, outputs)
         }
     };

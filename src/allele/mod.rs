@@ -32,7 +32,8 @@ pub fn calculate_allele_frequencies(
 
     log::info!(
         "Calculating allele frequencies for {} sites using {} samples",
-        num_variants, num_samples
+        num_variants,
+        num_samples
     );
 
     let bar = ProgressBar::new(num_variants.try_into().unwrap())

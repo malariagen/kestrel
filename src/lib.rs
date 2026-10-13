@@ -26,7 +26,7 @@ mod kestrel {
 
     use std::num::{NonZeroU64, NonZeroUsize};
 
-    use numpy::{IntoPyArray, PyArray3, PyArray2, PyArray1, PyReadonlyArray2, PyReadonlyArray3};
+    use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3, PyReadonlyArray2, PyReadonlyArray3};
     use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
     use crate::{build_arrays, cli};
@@ -39,7 +39,11 @@ mod kestrel {
         allele_frequencies: Option<PyReadonlyArray2<'py, f64>>,
         threads: Option<NonZeroUsize>,
         iterations: NonZeroU64,
-    ) -> (Bound<'py, PyArray3<f64>>, Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>) {
+    ) -> (
+        Bound<'py, PyArray3<f64>>,
+        Bound<'py, PyArray2<f64>>,
+        Bound<'py, PyArray1<f64>>,
+    ) {
         let gt_view = genotypes.as_array();
         let af_view = allele_frequencies.as_ref().map(|a| a.as_array());
 
@@ -48,7 +52,11 @@ mod kestrel {
         let num_samples = gt_view.shape()[1];
         let (jacquard, kinship, inbreeding) = build_arrays(num_samples, &outputs);
 
-        (jacquard.into_pyarray(py), kinship.into_pyarray(py), inbreeding.into_pyarray(py))
+        (
+            jacquard.into_pyarray(py),
+            kinship.into_pyarray(py),
+            inbreeding.into_pyarray(py),
+        )
     }
 
     #[pyfunction]
@@ -59,7 +67,11 @@ mod kestrel {
         allele_frequencies: Option<PyReadonlyArray2<'py, f64>>,
         threads: Option<NonZeroUsize>,
         iterations: NonZeroU64,
-    ) -> (Bound<'py, PyArray3<f64>>, Bound<'py, PyArray2<f64>>, Bound<'py, PyArray1<f64>>) {
+    ) -> (
+        Bound<'py, PyArray3<f64>>,
+        Bound<'py, PyArray2<f64>>,
+        Bound<'py, PyArray1<f64>>,
+    ) {
         let gl_view = genotype_likelihoods.as_array();
         let af_view = allele_frequencies.as_ref().map(|a| a.as_array());
 
@@ -68,7 +80,11 @@ mod kestrel {
         let num_samples = gl_view.shape()[1];
         let (jacquard, kinship, inbreeding) = build_arrays(num_samples, &outputs);
 
-        (jacquard.into_pyarray(py), kinship.into_pyarray(py), inbreeding.into_pyarray(py))
+        (
+            jacquard.into_pyarray(py),
+            kinship.into_pyarray(py),
+            inbreeding.into_pyarray(py),
+        )
     }
 
     // https://www.maturin.rs/bindings.html#both-binary-and-library
@@ -81,7 +97,6 @@ mod kestrel {
 }
 
 fn build_arrays(num_samples: usize, outputs: &[Output]) -> (Array3<f64>, Array2<f64>, Array1<f64>) {
-
     let mut jacquard = Array3::<f64>::zeros((num_samples, num_samples, 9));
     let mut kinship = Array2::<f64>::zeros((num_samples, num_samples));
     let mut inbreeding = Array1::<f64>::zeros(num_samples);

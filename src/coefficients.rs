@@ -1,4 +1,3 @@
-
 use std::num::NonZeroU64;
 
 use itertools::Itertools;
@@ -16,8 +15,7 @@ use lockfree_progress_bar::ProgressBar;
 use crate::{
     algebra::{Vector, dot, mul},
     arith::simd::Simd,
-    ata,
-    cls,
+    ata, cls,
     conditional::{self, M},
     jacquard::{grad_hess, objective},
     lanevector::GenericLaneVector,
@@ -77,7 +75,7 @@ pub fn calculate_relatedness_coefficients_gl(
     allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,
     simd: Simd,
-    iterations: NonZeroU64
+    iterations: NonZeroU64,
 ) -> Vec<Output> {
     let num_v = allele_frequencies.shape()[0];
 
@@ -186,7 +184,7 @@ pub fn calculate_coefficients_gt(
     allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,
     simd: Simd,
-    iterations: NonZeroU64
+    iterations: NonZeroU64,
 ) -> Vec<Output> {
     let genotypes = reorder_genotypes(genotypes);
 
@@ -250,7 +248,10 @@ pub fn calculate_coefficients_gt(
             let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
 
             if iters >= tune.qp_max_iter.get() {
-                log::warn!("No convergence for Jacquard coefficients, max iterations {} exceeded", tune.qp_max_iter);
+                log::warn!(
+                    "No convergence for Jacquard coefficients, max iterations {} exceeded",
+                    tune.qp_max_iter
+                );
             }
 
             *out = Output {

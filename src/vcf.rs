@@ -176,7 +176,6 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
                     for _ in gl_buf.len()..10 {
                         samples_buf.push(0.0);
                     }
-
                 } else {
                     bail!("Array {:?} does not contain floats", gl_array);
                 }
@@ -248,7 +247,6 @@ pub fn parse_vcf_pl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
             let value = result?.context("No genotype likelihood for sample found")?;
             if let SeriesValue::Array(pl_array) = value {
                 if let SeriesArray::Integer(pl_int) = pl_array {
-
                     pl_buf.clear();
                     for result_pl in pl_int.iter() {
                         let option_pl = result_pl.context("Error reading genotype likelihood")?;
@@ -265,14 +263,13 @@ pub fn parse_vcf_pl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
                     assert!(pl_buf.len() <= 10);
 
                     for pl in pl_buf.iter() {
-                        let prob = 10.0f64.powf(- *pl / 10.0);
+                        let prob = 10.0f64.powf(-*pl / 10.0);
                         samples_buf.push(prob);
                     }
 
                     for _ in pl_buf.len()..10 {
                         samples_buf.push(0.0);
                     }
-
                 } else {
                     bail!("Array {:?} does not contain integers", pl_array);
                 }
@@ -331,7 +328,12 @@ fn is_snp(record: &Record) -> Result<bool> {
     Ok(true)
 }
 
-fn read_variant_af(header: &Header, record: &Record, allele_frequencies: &mut Vec<f64>, af_buf: &mut Vec<f64>) -> Result<()> {
+fn read_variant_af(
+    header: &Header,
+    record: &Record,
+    allele_frequencies: &mut Vec<f64>,
+    af_buf: &mut Vec<f64>,
+) -> Result<()> {
     let info = record.info();
     let af_info = info
         .get(header, "AF")
@@ -341,7 +343,6 @@ fn read_variant_af(header: &Header, record: &Record, allele_frequencies: &mut Ve
 
     if let InfoValue::Array(af_array) = af_info {
         if let InfoArray::Float(af_float) = af_array {
-
             af_buf.clear();
             for af in af_float.iter() {
                 let af = af.context("Error reading AF")?.context("No AF data found")?;
@@ -361,7 +362,6 @@ fn read_variant_af(header: &Header, record: &Record, allele_frequencies: &mut Ve
             for _ in af_buf.len()..3 {
                 allele_frequencies.push(0.0)
             }
-
         } else {
             bail!("Array {:?} is does not contain floats", af_array);
         }
