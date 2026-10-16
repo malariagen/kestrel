@@ -7,6 +7,10 @@ pub enum Simd {
     Scalar,
 }
 
+// TODO create some kind of Simd trait or something so that
+// I don't have to hard-code the Lane Size => Simd
+// Could instead have Avx512Lane, Avx2Lane, etc.
+
 impl Simd {
     // https://kerkour.com/introduction-rust-simd
     // https://shnatsel.github.io/state-of-simd-rust-2026/

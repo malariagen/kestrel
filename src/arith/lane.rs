@@ -20,9 +20,11 @@ impl Lane for Lane2 {
     fn set(&mut self, i: usize, val: f64) {
         self.0[i] = val;
     }
+}
 
+impl Default for Lane2 {
     #[inline]
-    fn zero() -> Self {
+    fn default() -> Self {
         Self([0.0; Self::N])
     }
 }
@@ -40,8 +42,11 @@ impl Lane for Lane4 {
         self.0[i] = val;
     }
 
+}
+
+impl Default for Lane4 {
     #[inline]
-    fn zero() -> Self {
+    fn default() -> Self {
         Self([0.0; Self::N])
     }
 }

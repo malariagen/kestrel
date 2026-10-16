@@ -93,7 +93,7 @@ fn compute_ata_lane<L: Lane, S: Arith + LoadStore<L>>(blocks: &[[L; 9]]) -> [f64
     // Row 6: h[39..42] (h66..h68)
     // Row 7: h[42..44] (h77..h78)
     // Row 8: h[44]     (h88)
-    let mut h = [L::zero(); 45];
+    let mut h = [L::default(); 45];
 
     // Register allocation:
     // For each pass: 15 accumulators + at most 5 columns = 20

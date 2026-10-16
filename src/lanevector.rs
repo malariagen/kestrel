@@ -3,8 +3,8 @@ use crate::arith::simd::Simd;
 use crate::arith::{Lane, Lane8};
 
 pub struct LaneVector<L: Lane, const R: usize> {
-    lanes: Vec<[L; R]>,
-    rem: Vec<[f64; R]>,
+    pub lanes: Vec<[L; R]>,
+    pub rem: Vec<[f64; R]>,
     len: usize,
 }
 
@@ -13,7 +13,7 @@ impl<L: Lane, const R: usize> LaneVector<L, R> {
         let lanes = len / L::N;
         let rem = len % L::N;
 
-        let lane_buf = vec![[L::zero(); R]; lanes];
+        let lane_buf = vec![[L::default(); R]; lanes];
         let rem_buf = vec![[0.0; R]; rem];
 
         LaneVector {
@@ -31,9 +31,9 @@ impl<L: Lane, const R: usize> LaneVector<L, R> {
         (&self.lanes, &self.rem)
     }
 
-    // pub fn as_lanes_mut(&mut self) -> (&mut [[L; R]], &mut [[f64; R]]) {
-    //     (&mut self.lanes, &mut self.rem)
-    // }
+    pub fn as_lanes_mut(&mut self) -> (&mut [[L; R]], &mut [[f64; R]]) {
+        (&mut self.lanes, &mut self.rem)
+    }
 
     pub fn fill_from_iter(&mut self, mut iter: impl Iterator<Item = [f64; R]>) {
         for block in self.lanes.iter_mut() {

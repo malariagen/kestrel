@@ -29,13 +29,12 @@ pub trait Arith: Copy {
 }
 
 #[allow(unused)]
-pub trait Lane: Copy {
+pub trait Lane: Copy + Default + Sync {
     const N: usize;
 
-    // TODO use Index + Default?
+    // TODO use Index
     fn get(&self, i: usize) -> f64;
     fn set(&mut self, i: usize, val: f64);
-    fn zero() -> Self;
 }
 
 #[repr(align(64))]

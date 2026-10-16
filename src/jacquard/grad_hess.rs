@@ -4,7 +4,7 @@ use crate::{
         Arith, Lane, Lane8, LoadStore,
         lane::{Lane2, Lane4},
     },
-    lanevector::{GenericLaneVector, LaneVector},
+    lanevector::LaneVector,
 };
 
 // h - 8*8*45 = 2880 bytes
@@ -12,50 +12,53 @@ use crate::{
 
 const BLOCKS: usize = 32;
 
-pub fn compute_grad_hess(likelihood_mats: &GenericLaneVector<9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-    match likelihood_mats {
-        GenericLaneVector::L8(lv) => compute_grad_hess_avx512(lv, x, eps),
-        GenericLaneVector::L4(lv) => compute_grad_hess_avx2(lv, x, eps),
-        GenericLaneVector::L2(lv) => compute_grad_hess_neon(lv, x, eps),
-        GenericLaneVector::L1(lv) => compute_grad_hess_scalar(lv, x, eps),
+pub trait JacquardGradHess: Lane {
+    fn compute_grad_hess(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>);
+}
+
+impl JacquardGradHess for Lane8 {
+    #[allow(unused_variables, unreachable_code)]
+    fn compute_grad_hess(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+        #[cfg(target_arch = "x86_64")]
+        {
+            use std::arch::x86_64::__m512d;
+            return compute_grad_hess_generic::<Lane8, __m512d>(p_mat, x, eps);
+        }
+
+        panic!("Architecture incompatible with Lane8!")
     }
 }
 
-#[allow(unused_variables, unreachable_code)]
-fn compute_grad_hess_avx512(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-    #[cfg(target_arch = "x86_64")]
-    {
-        use std::arch::x86_64::__m512d;
-        return compute_grad_hess_generic::<Lane8, __m512d>(p_mat, x, eps);
-    }
+impl JacquardGradHess for Lane4 {
+    #[allow(unused_variables, unreachable_code)]
+    fn compute_grad_hess(p_mat: &LaneVector<Lane4, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+        #[cfg(target_arch = "x86_64")]
+        {
+            use std::arch::x86_64::__m256d;
+            return compute_grad_hess_generic::<Lane4, __m256d>(p_mat, x, eps);
+        }
 
-    panic!("Architecture incompatible with Lane8!")
+        panic!("Architecture incompatible with Lane4!")
+    }
 }
 
-#[allow(unused_variables, unreachable_code)]
-fn compute_grad_hess_avx2(p_mat: &LaneVector<Lane4, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-    #[cfg(target_arch = "x86_64")]
-    {
-        use std::arch::x86_64::__m256d;
-        return compute_grad_hess_generic::<Lane4, __m256d>(p_mat, x, eps);
-    }
+impl JacquardGradHess for Lane2 {
+    #[allow(unused_variables, unreachable_code)]
+    fn compute_grad_hess(p_mat: &LaneVector<Lane2, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+        #[cfg(target_arch = "aarch64")]
+        {
+            use std::arch::aarch64::float64x2_t;
+            return compute_grad_hess_generic::<Lane2, float64x2_t>(p_mat, x, eps);
+        }
 
-    panic!("Architecture incompatible with Lane4!")
+        panic!("Architecture incompatible with Lane2!")
+    }
 }
 
-#[allow(unused_variables, unreachable_code)]
-fn compute_grad_hess_neon(p_mat: &LaneVector<Lane2, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-    #[cfg(target_arch = "aarch64")]
-    {
-        use std::arch::aarch64::float64x2_t;
-        return compute_grad_hess_generic::<Lane2, float64x2_t>(p_mat, x, eps);
+impl JacquardGradHess for f64 {
+    fn compute_grad_hess(p_mat: &LaneVector<f64, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+        compute_grad_hess_generic::<f64, f64>(p_mat, x, eps)
     }
-
-    panic!("Architecture incompatible with Lane2!")
-}
-
-fn compute_grad_hess_scalar(p_mat: &LaneVector<f64, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-    return compute_grad_hess_generic::<f64, f64>(p_mat, x, eps);
 }
 
 fn compute_grad_hess_generic<L: Lane, S: Arith + LoadStore<L>>(
@@ -96,7 +99,7 @@ fn compute_grad_hess_lane<L: Lane, S: Arith + LoadStore<L>>(
     eps: f64,
 ) -> ([f64; 9], [f64; 45]) {
     // Hmm, in theory we could make individual variables for each g, h element
-    let mut g = [L::zero(); 9];
+    let mut g = [L::default(); 9];
 
     // Upper triangular Hessian accumulators stored in row-major order:
     // Row 0: h[0..9]   (h00..h08)
@@ -108,7 +111,7 @@ fn compute_grad_hess_lane<L: Lane, S: Arith + LoadStore<L>>(
     // Row 6: h[39..42] (h66..h68)
     // Row 7: h[42..44] (h77..h78)
     // Row 8: h[44]     (h88)
-    let mut h = [L::zero(); 45];
+    let mut h = [L::default(); 45];
 
     // Register allocation:
     // - 1 for one (though this can be broadcasted as a constant)
@@ -119,7 +122,7 @@ fn compute_grad_hess_lane<L: Lane, S: Arith + LoadStore<L>>(
 
     // A block = [Lane8; 9]
     // This is one tile
-    let mut scaled_column_buf = [[L::zero(); 9]; BLOCKS];
+    let mut scaled_column_buf = [[L::default(); 9]; BLOCKS];
 
     let (tiles, partial_tile) = blocks.as_chunks::<BLOCKS>();
 

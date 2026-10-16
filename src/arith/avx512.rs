@@ -14,9 +14,11 @@ impl Lane for Lane8 {
     fn set(&mut self, i: usize, val: f64) {
         self.0[i] = val;
     }
+}
 
+impl Default for Lane8 {
     #[inline]
-    fn zero() -> Self {
+    fn default() -> Self {
         Self([0.0; Self::N])
     }
 }

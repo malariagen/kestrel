@@ -13,13 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul},
-    arith::simd::Simd,
-    ata, cls,
-    conditional::{self, M},
-    jacquard::{grad_hess, objective},
-    lanevector::GenericLaneVector,
-    sqp::{self, Tuneables},
+    algebra::{Vector, dot, mul}, arith::{Arith, Lane, LoadStore, simd::Simd}, ata, cls, conditional::{self, M}, jacquard::{grad_hess::{self, JacquardGradHess}, objective::{self, JacquardObjective}}, lanearray2::{LaneArray2, convert_to_lanes}, lanematrix::{LaneM4, M4}, lanevector::{GenericLaneVector, LaneVector}, mixture::MixtureMatrix, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -70,11 +64,10 @@ fn reorder_genotypes(mut genotypes: ArrayView3<u8>) -> Array3<u8> {
     genotypes
 }
 
-pub fn calculate_relatedness_coefficients_gl(
-    mut likelihoods: ArrayView3<f64>,
+pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjective + MixtureMatrix>(
+    likelihoods: ArrayView3<f64>,
     allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,
-    simd: Simd,
     iterations: NonZeroU64,
 ) -> Vec<Output> {
     let num_v = allele_frequencies.shape()[0];
@@ -82,20 +75,17 @@ pub fn calculate_relatedness_coefficients_gl(
     // TODO calculate this across each locus to figure out how many alleles there are
     // Then we can condense the stacked matrix to make it smaller? Idk, complicated...
 
-    let m_matrices = conditional::calculate_m_matrices(allele_frequencies);
+    // let m_matrices = conditional::calculate_m_matrices(allele_frequencies);
+    let m_matrices = conditional::calculate_m_matrices2::<L>(allele_frequencies);
 
-    likelihoods.swap_axes(0, 1);
-    let swapped = likelihoods.as_standard_layout();
-
-    assert_eq!(swapped.shape()[1], num_v);
+    let likelihoods = convert_to_lanes(likelihoods);
 
     // Only to analyze the data, before I make it faster...
     // let tmp = swapped.slice(s![0..16, .., ..]);
     // Use every sample
-    let tmp = swapped.view();
+    // let tmp = swapped.view();
 
-    let pairs: Vec<[(usize, ArrayView2<f64>); 2]> = tmp
-        .outer_iter()
+    let pairs: Vec<_> = likelihoods.iter_rows()
         .enumerate()
         .array_combinations_with_replacement()
         .collect();
@@ -121,7 +111,7 @@ pub fn calculate_relatedness_coefficients_gl(
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each_init(
-            || GenericLaneVector::new(num_v, simd),
+            || LaneVector::<L, 9>::new(num_v),
             |p_mat, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
                 let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
@@ -129,10 +119,11 @@ pub fn calculate_relatedness_coefficients_gl(
                     [1.0 / 9.0; 9]
                 };
 
-                calculate_mixture_component_matrix_gl(&m_matrices, likelihoods_x, likelihoods_y, p_mat);
+                L::mixture_component_matrix(&m_matrices.lanes, likelihoods_x.0, likelihoods_y.0, &mut p_mat.lanes);
+                f64::mixture_component_matrix(&m_matrices.rem, likelihoods_x.1, likelihoods_y.1, &mut p_mat.rem);
 
-                let obj = |x: &Vector<9>, eps| objective::compute_obj(p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| grad_hess::compute_grad_hess(p_mat, &x, eps);
+                let obj = |x: &Vector<9>, eps| L::compute_obj(p_mat, &x, eps);
+                let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(p_mat, &x, eps);
                 let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                 if iters >= tune.sqp_max_iter.get() {
@@ -269,11 +260,11 @@ pub fn calculate_coefficients_gt(
     output
 }
 
-pub fn calculate_mixture_component_matrix_gl(
+pub fn calculate_mixture_component_matrix_gl<L: Lane>(
     m_matrices: &[M],
-    likelihoods_x: &ArrayView2<f64>,
-    likelihoods_y: &ArrayView2<f64>,
-    p_mat: &mut GenericLaneVector<9>,
+    likelihoods_x: ArrayView2<f64>,
+    likelihoods_y: ArrayView2<f64>,
+    p_mat: &mut LaneVector<L, 9>,
 ) {
     let (chunks_x, rem_x) = likelihoods_x.as_slice().unwrap().as_chunks::<10>();
     let (chunks_y, rem_y) = likelihoods_y.as_slice().unwrap().as_chunks::<10>();
@@ -284,13 +275,8 @@ pub fn calculate_mixture_component_matrix_gl(
     assert_eq!(m_matrices.len(), chunks_x.len());
     assert_eq!(m_matrices.len(), chunks_y.len());
 
-    // TODO may have to lanebuffer all of this stuff...
-    // Have a Buffer<Vec<>> and Buffer<Mat>>
-    // For each pair (x, y), need to calculate 900 elements x number of sites
-    // Oof that's a lot. For hard-called you just look up a row of M, no calculation needed
-
-    // What I'll need to do is lane vector the likelihoods
-    // Would be nice to have a type where I can have certain lengths known at compile time
+    // p = lx * ly * M
+    // We have the number of samples
 
     let iter = chunks_x
         .iter()
