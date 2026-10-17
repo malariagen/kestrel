@@ -63,3 +63,7 @@ See `pedigrees.py` for available relationships (e.g. `full_sib`, `half_sib`, `fi
 - **`--seed`**: random seed (default `1`).
 
 **Why simulate across genome sizes / recombination rates?** Two individuals with the same pedigree relationship (e.g. full siblings, both expected kinship = 0.25) don't inherit *exactly* the same fraction of shared genome every time -- recombination is stochastic, so realised IBD sharing varies around the pedigree expectation, and that variance shrinks as the genome (and the number of independent recombining segments) grows. This is explored in detail in [Visscher et al. 2006, *Assumption-Free Estimation of Heritability from Genome-Wide Identity-by-Descent Sharing*, PLoS Genetics](https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.0020041). Simulating over a range of `genome_size`/`recomb` values lets you characterise how much this realised-vs-expected variance affects Kestrel's estimates, and how much genome coverage is needed before its kinship estimates reliably resolve close relationships.
+
+# Citation
+
+Preprint in progress, please link to the GitHub repo for now :)
