@@ -1,5 +1,7 @@
 use crate::{
-    algebra::{Matrix, Vector}, arith::{ Arith, Lane, LoadStore}, lanevector::{LaneVector},
+    algebra::{Matrix, Vector},
+    arith::{Arith, Lane, LoadStore},
+    lanevector::LaneVector,
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -9,17 +11,13 @@ use crate::arith::avx512::Lane8;
 #[cfg(target_arch = "aarch64")]
 use crate::arith::neon::Lane2;
 
-pub trait AlleleGradHess : Lane {
+pub trait AlleleGradHess: Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>);
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess for Lane8 {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Lane8, 10>,
-        x: &Vector<4>,
-        eps: f64,
-    ) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
         use std::arch::x86_64::__m512d;
         return compute_grad_hess_generic::<Lane8, __m512d>(likelihood_mats, x, eps);
     }
@@ -33,21 +31,23 @@ impl AlleleGradHess for Lane4 {
     }
 }
 
-
 #[cfg(target_arch = "aarch64")]
 impl AlleleGradHess for Lane2 {
-    fn compute_grad_hess_neon(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess_neon(
+        likelihood_mats: &LaneVector<Lane2, 10>,
+        x: &Vector<4>,
+        eps: f64,
+    ) -> (Vector<4>, Matrix<4>) {
         use std::arch::aarch64::float64x2_t;
         return compute_grad_hess_generic::<Lane2, float64x2_t>(likelihood_mats, x, eps);
     }
 }
 
 impl AlleleGradHess for f64 {
-fn compute_grad_hess(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
-    return compute_grad_hess_generic::<f64, f64>(likelihood_mats, x, eps);
+    fn compute_grad_hess(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+        return compute_grad_hess_generic::<f64, f64>(likelihood_mats, x, eps);
+    }
 }
-}
-
 
 fn compute_grad_hess_generic<L: Lane, S: Arith + LoadStore<L>>(
     likelihood_mats: &LaneVector<L, 10>,

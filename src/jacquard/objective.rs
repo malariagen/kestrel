@@ -1,8 +1,6 @@
 use crate::{
     algebra::Vector,
-    arith::{
-        Arith, Lane, LoadStore,
-    },
+    arith::{Arith, Lane, LoadStore},
     lanevector::LaneVector,
     log::Log,
 };

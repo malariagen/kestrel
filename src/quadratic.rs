@@ -1,9 +1,7 @@
 use crate::{
     algebra::Matrix,
-    arith::{
-        Arith, Lane, LoadStore,
-    },
-    lanevector::{LaneVector},
+    arith::{Arith, Lane, LoadStore},
+    lanevector::LaneVector,
 };
 
 // h - 8*8*45 = 2880 bytes
@@ -18,30 +16,28 @@ use crate::arith::avx512::Lane8;
 #[cfg(target_arch = "aarch64")]
 use crate::arith::neon::Lane2;
 
-pub trait ClsQuadratic : Lane {
+pub trait ClsQuadratic: Lane {
     fn compute_quadratic(a_mat: &LaneVector<Self, 9>, n: usize) -> Matrix<9>;
 }
 
 #[cfg(target_arch = "x86_64")]
 impl ClsQuadratic for Lane8 {
     fn compute_quadratic(a_mat: &LaneVector<Lane8, 9>, n: usize) -> Matrix<9> {
-    use std::arch::x86_64::__m512d;
-    return compute_quadratic_generic::<Lane8, __m512d>(a_mat, n);
+        use std::arch::x86_64::__m512d;
+        return compute_quadratic_generic::<Lane8, __m512d>(a_mat, n);
+    }
 }
-}
-
 
 #[cfg(target_arch = "x86_64")]
 impl ClsQuadratic for Lane4 {
-fn compute_quadratic(a_mat: &LaneVector<Lane4, 9>, n: usize) -> Matrix<9> {
+    fn compute_quadratic(a_mat: &LaneVector<Lane4, 9>, n: usize) -> Matrix<9> {
         use std::arch::x86_64::__m256d;
         return compute_quadratic_generic::<Lane4, __m256d>(a_mat, n);
-}
+    }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl ClsQuadratic for Lane2 {
-
     fn compute_quadratic(a_mat: &LaneVector<Lane2, 9>, n: usize) -> Matrix<9> {
         use std::arch::aarch64::float64x2_t;
         return compute_quadratic_generic::<Lane2, float64x2_t>(a_mat, n);
@@ -49,11 +45,9 @@ impl ClsQuadratic for Lane2 {
 }
 
 impl ClsQuadratic for f64 {
-
-fn compute_quadratic(a_mat: &LaneVector<f64, 9>, n: usize) -> Matrix<9> {
-    return compute_quadratic_generic::<f64, f64>(a_mat, n);
-}
-
+    fn compute_quadratic(a_mat: &LaneVector<f64, 9>, n: usize) -> Matrix<9> {
+        return compute_quadratic_generic::<f64, f64>(a_mat, n);
+    }
 }
 
 fn compute_quadratic_generic<L: Lane, S: Arith + LoadStore<L>>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> {

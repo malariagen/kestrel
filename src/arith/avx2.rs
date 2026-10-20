@@ -18,7 +18,6 @@ impl Lane for Lane4 {
     fn set(&mut self, i: usize, val: f64) {
         self.0[i] = val;
     }
-
 }
 
 impl Default for Lane4 {

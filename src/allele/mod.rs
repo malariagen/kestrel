@@ -15,10 +15,13 @@ use paralight::{
 };
 
 use crate::{
-    algebra::{Vector, sum_to_one}, allele::{grad_hess::AlleleGradHess, objective::AlleleObjective}, lanevector::{LaneVector}, sqp::{self, Tuneables},
+    algebra::{Vector, sum_to_one},
+    allele::{grad_hess::AlleleGradHess, objective::AlleleObjective},
+    lanevector::LaneVector,
+    sqp::{self, Tuneables},
 };
 
-pub fn calculate_allele_frequencies<L : AlleleGradHess + AlleleObjective>(
+pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
     likelihoods: ArrayView3<f64>,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,

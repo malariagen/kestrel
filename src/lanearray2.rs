@@ -32,7 +32,7 @@ impl<L: Lane, const R: usize> LaneArray2<L, R> {
             rem,
             rows,
             num_lanes,
-            num_rem
+            num_rem,
         }
     }
 

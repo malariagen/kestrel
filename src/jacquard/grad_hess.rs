@@ -1,7 +1,7 @@
 use crate::{
-    algebra::{Matrix, Vector}, arith::{
-        Arith, Lane, LoadStore,
-    }, lanevector::LaneVector,
+    algebra::{Matrix, Vector},
+    arith::{Arith, Lane, LoadStore},
+    lanevector::LaneVector,
 };
 
 #[cfg(target_arch = "x86_64")]

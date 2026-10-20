@@ -13,7 +13,15 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, cls, conditional::{self}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::LaneVector, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables},
+    algebra::{Vector, dot, mul},
+    cls,
+    conditional::{self},
+    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
+    lanearray2::convert_to_lanes,
+    lanevector::LaneVector,
+    mixture::MixtureMatrix,
+    quadratic::ClsQuadratic,
+    sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -85,7 +93,8 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     // Use every sample
     // let tmp = swapped.view();
 
-    let pairs: Vec<_> = likelihoods.iter_rows()
+    let pairs: Vec<_> = likelihoods
+        .iter_rows()
         .enumerate()
         .array_combinations_with_replacement()
         .collect();
@@ -170,7 +179,7 @@ impl Default for Output {
     }
 }
 
-pub fn calculate_coefficients_gt<L : ClsQuadratic>(
+pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     genotypes: ArrayView3<u8>,
     allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,

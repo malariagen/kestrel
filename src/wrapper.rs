@@ -4,7 +4,8 @@ use ndarray::{ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    arith::{simd::Simd}, coefficients::{Output, calculate_allele_frequencies},
+    arith::simd::Simd,
+    coefficients::{Output, calculate_allele_frequencies},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -50,12 +51,32 @@ pub fn calculate_relatedness_coefficients_gt(
 
     let outputs = match simd {
         #[cfg(target_arch = "x86_64")]
-        Simd::Avx2 => crate::coefficients::calculate_coefficients_gt::<Lane4>( genotypes, allele_frequencies, &mut thread_pool, iterations),
+        Simd::Avx2 => crate::coefficients::calculate_coefficients_gt::<Lane4>(
+            genotypes,
+            allele_frequencies,
+            &mut thread_pool,
+            iterations,
+        ),
         #[cfg(target_arch = "x86_64")]
-        Simd::Avx512 => crate::coefficients::calculate_coefficients_gt::<Lane8>( genotypes, allele_frequencies, &mut thread_pool, iterations),
+        Simd::Avx512 => crate::coefficients::calculate_coefficients_gt::<Lane8>(
+            genotypes,
+            allele_frequencies,
+            &mut thread_pool,
+            iterations,
+        ),
         #[cfg(target_arch = "aarch64")]
-        Simd::Neon => crate::coefficients::calculate_coefficients_gt::<Lane2>( genotypes, allele_frequencies, &mut thread_pool, iterations),
-        Simd::Scalar => crate::coefficients::calculate_coefficients_gt::<f64>( genotypes, allele_frequencies, &mut thread_pool, iterations),
+        Simd::Neon => crate::coefficients::calculate_coefficients_gt::<Lane2>(
+            genotypes,
+            allele_frequencies,
+            &mut thread_pool,
+            iterations,
+        ),
+        Simd::Scalar => crate::coefficients::calculate_coefficients_gt::<f64>(
+            genotypes,
+            allele_frequencies,
+            &mut thread_pool,
+            iterations,
+        ),
     };
 
     outputs
@@ -77,13 +98,29 @@ pub fn calculate_relatedness_coefficients_gl(
         Some(af) => af,
         None => {
             calculated_af = match simd {
-            #[cfg(target_arch = "x86_64")]
-            Simd::Avx512 => crate::allele::calculate_allele_frequencies::<Lane8>(genotype_likelihoods, &mut thread_pool, iterations),
-            #[cfg(target_arch = "x86_64")]
-            Simd::Avx2 => crate::allele::calculate_allele_frequencies::<Lane4>(genotype_likelihoods, &mut thread_pool, iterations),
-            #[cfg(target_arch = "aarch64")]
-            Simd::Neon => crate::allele::calculate_allele_frequencies::<Lane2>(genotype_likelihoods, &mut thread_pool, iterations),
-            Simd::Scalar => crate::allele::calculate_allele_frequencies::<f64>(genotype_likelihoods, &mut thread_pool, iterations),
+                #[cfg(target_arch = "x86_64")]
+                Simd::Avx512 => crate::allele::calculate_allele_frequencies::<Lane8>(
+                    genotype_likelihoods,
+                    &mut thread_pool,
+                    iterations,
+                ),
+                #[cfg(target_arch = "x86_64")]
+                Simd::Avx2 => crate::allele::calculate_allele_frequencies::<Lane4>(
+                    genotype_likelihoods,
+                    &mut thread_pool,
+                    iterations,
+                ),
+                #[cfg(target_arch = "aarch64")]
+                Simd::Neon => crate::allele::calculate_allele_frequencies::<Lane2>(
+                    genotype_likelihoods,
+                    &mut thread_pool,
+                    iterations,
+                ),
+                Simd::Scalar => crate::allele::calculate_allele_frequencies::<f64>(
+                    genotype_likelihoods,
+                    &mut thread_pool,
+                    iterations,
+                ),
             };
 
             calculated_af.view()
@@ -126,7 +163,7 @@ pub fn calculate_relatedness_coefficients_gl(
             &mut thread_pool,
             iterations,
         ),
-        Simd::Scalar =>  crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(
+        Simd::Scalar => crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(
             genotype_likelihoods,
             allele_frequencies,
             &mut thread_pool,

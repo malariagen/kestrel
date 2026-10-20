@@ -1,4 +1,7 @@
-use crate::{arith::{Arith, Lane, LoadStore}, lanematrix::M4};
+use crate::{
+    arith::{Arith, Lane, LoadStore},
+    lanematrix::M4,
+};
 
 #[cfg(target_arch = "x86_64")]
 use crate::arith::avx2::Lane4;
@@ -17,14 +20,14 @@ pub trait MixtureMatrix: Lane {
 }
 
 pub fn test_asm(
-        m_matrices: &[M4<Lane8>],
-        likelihoods_x: &[[Lane8; 10]],
-        likelihoods_y: &[[Lane8; 10]],
-        p_mat: &mut [[Lane8; 9]],
-    ) {
-            use std::arch::x86_64::__m512d;
-            return calculate_mixture_component_matrix::<Lane8, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
-    }
+    m_matrices: &[M4<Lane8>],
+    likelihoods_x: &[[Lane8; 10]],
+    likelihoods_y: &[[Lane8; 10]],
+    p_mat: &mut [[Lane8; 9]],
+) {
+    use std::arch::x86_64::__m512d;
+    return calculate_mixture_component_matrix::<Lane8, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+}
 
 #[cfg(target_arch = "x86_64")]
 impl MixtureMatrix for Lane8 {
@@ -63,7 +66,12 @@ impl MixtureMatrix for Lane2 {
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::aarch64::float64x2_t;
-        return calculate_mixture_component_matrix::<Lane2, float64x2_t>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+        return calculate_mixture_component_matrix::<Lane2, float64x2_t>(
+            m_matrices,
+            likelihoods_x,
+            likelihoods_y,
+            p_mat,
+        );
     }
 }
 
@@ -85,7 +93,6 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>>(
     likelihoods_y: &[[L; 10]],
     p_mat: &mut [[L; 9]],
 ) {
-
     let len = m_matrices.len();
     assert!(likelihoods_x.len() == len);
     assert!(likelihoods_y.len() == len);
@@ -93,10 +100,10 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>>(
 
     // p = lx * ly * M
     for l in 0..len {
-        let out = unsafe { p_mat.get_unchecked_mut(l)};
-        let like_x = unsafe { likelihoods_x.get_unchecked(l)};
-        let like_y = unsafe { likelihoods_y.get_unchecked(l)};
-        let m = unsafe { m_matrices.get_unchecked(l)};
+        let out = unsafe { p_mat.get_unchecked_mut(l) };
+        let like_x = unsafe { likelihoods_x.get_unchecked(l) };
+        let like_y = unsafe { likelihoods_y.get_unchecked(l) };
+        let m = unsafe { m_matrices.get_unchecked(l) };
 
         // 9 registers
         let mut p: [S; 9] = std::array::from_fn(|_| S::zero());

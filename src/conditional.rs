@@ -36,21 +36,19 @@ pub fn calculate_m_matrices<L: Lane>(allele_frequencies: ArrayView2<f64>) -> Lan
 
     let all_joint_genotypes = calculate_joint_genotype_table();
 
-    let iter = allele_frequencies
-        .outer_iter()
-        .map(|site_p| {
-            std::array::from_fn(|x| {
-                std::array::from_fn(|y| {
-                    let ((i, j), (k, l), iis_mode) = all_joint_genotypes[x][y];
-                    let pi = site_p[i];
-                    let pj = site_p[j];
-                    let pk = site_p[k];
-                    let pl = site_p[l];
+    let iter = allele_frequencies.outer_iter().map(|site_p| {
+        std::array::from_fn(|x| {
+            std::array::from_fn(|y| {
+                let ((i, j), (k, l), iis_mode) = all_joint_genotypes[x][y];
+                let pi = site_p[i];
+                let pj = site_p[j];
+                let pk = site_p[k];
+                let pl = site_p[l];
 
-                    std::array::from_fn(|ibd_mode| iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd_mode + 1))
-                })
+                std::array::from_fn(|ibd_mode| iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd_mode + 1))
             })
-        });
+        })
+    });
 
     let mut lanes = LaneM4::new(num_v);
     lanes.fill_from_iter(iter);

@@ -1,9 +1,7 @@
 use crate::{
     algebra::Vector,
-    arith::{
-        Arith, Lane, LoadStore,
-    },
-    lanevector::{LaneVector},
+    arith::{Arith, Lane, LoadStore},
+    lanevector::LaneVector,
     log::Log,
 };
 
@@ -14,42 +12,38 @@ use crate::arith::avx512::Lane8;
 #[cfg(target_arch = "aarch64")]
 use crate::arith::neon::Lane2;
 
-pub trait AlleleObjective : Lane {
+pub trait AlleleObjective: Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64;
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective for Lane8 {
-
-fn compute_objective(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> f64 {
-    use std::arch::x86_64::__m512d;
-    return compute_obj_generic::<Lane8, __m512d>(likelihood_mats, x, eps);
-
+    fn compute_objective(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> f64 {
+        use std::arch::x86_64::__m512d;
+        return compute_obj_generic::<Lane8, __m512d>(likelihood_mats, x, eps);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective for Lane4 {
-fn compute_objective(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> f64 {
+    fn compute_objective(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> f64 {
         use std::arch::x86_64::__m256d;
         return compute_obj_generic::<Lane4, __m256d>(likelihood_mats, x, eps);
-}
-
+    }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleObjective for Lane2 {
-fn compute_objective(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> f64 {
+    fn compute_objective(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> f64 {
         use std::arch::aarch64::float64x2_t;
         return compute_obj_generic::<Lane2, float64x2_t>(likelihood_mats, x, eps);
-}
-
+    }
 }
 
 impl AlleleObjective for f64 {
     fn compute_objective(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps: f64) -> f64 {
-    return compute_obj_generic::<f64, f64>(likelihood_mats, x, eps);
-}
+        return compute_obj_generic::<f64, f64>(likelihood_mats, x, eps);
+    }
 }
 
 fn compute_obj_generic<L: Lane, S: Arith + Log + LoadStore<L>>(
