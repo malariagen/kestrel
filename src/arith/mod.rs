@@ -1,11 +1,10 @@
 #[cfg(target_arch = "x86_64")]
-mod avx2;
+pub mod avx2;
 #[cfg(target_arch = "x86_64")]
-mod avx512;
-pub mod lane;
+pub mod avx512;
 #[cfg(target_arch = "aarch64")]
-mod neon;
-mod scalar;
+pub mod neon;
+pub mod scalar;
 pub mod simd;
 
 pub trait LoadStore<L: Lane> {
@@ -36,7 +35,3 @@ pub trait Lane: Copy + Default + Sync {
     fn get(&self, i: usize) -> f64;
     fn set(&mut self, i: usize, val: f64);
 }
-
-#[repr(align(64))]
-#[derive(Clone, Copy, Debug)]
-pub struct Lane8([f64; 8]);

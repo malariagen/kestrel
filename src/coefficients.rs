@@ -13,7 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, arith::{Arith, Lane, LoadStore, simd::Simd}, ata, cls, conditional::{self, M}, jacquard::{grad_hess::{self, JacquardGradHess}, objective::{self, JacquardObjective}}, lanearray2::{LaneArray2, convert_to_lanes}, lanematrix::{LaneM4, M4}, lanevector::{GenericLaneVector, LaneVector}, mixture::MixtureMatrix, sqp::{self, Tuneables},
+    algebra::{Vector, dot, mul}, arith::{Arith, Lane, LoadStore, simd::Simd}, cls, conditional::{self, M}, jacquard::{grad_hess::{self, JacquardGradHess}, objective::{self, JacquardObjective}}, lanearray2::{LaneArray2, convert_to_lanes}, lanematrix::{LaneM4, M4}, lanevector::LaneVector, mixture::MixtureMatrix, quadratic::{self, ClsQuadratic}, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -170,11 +170,10 @@ impl Default for Output {
     }
 }
 
-pub fn calculate_coefficients_gt(
+pub fn calculate_coefficients_gt<L : ClsQuadratic>(
     genotypes: ArrayView3<u8>,
     allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,
-    simd: Simd,
     iterations: NonZeroU64,
 ) -> Vec<Output> {
     let genotypes = reorder_genotypes(genotypes);
@@ -187,11 +186,11 @@ pub fn calculate_coefficients_gt(
     let stacked_m = cls::calculate_stacked_m(&all_joint_genotypes, allele_frequencies);
     let lookup_table = cls::calculate_joint_genotype_lookup_table(&all_joint_genotypes, num_a);
 
-    let mut glv = GenericLaneVector::new(stacked_m.len(), simd);
-    glv.fill_from_iter(stacked_m.iter().copied());
+    let mut lv = LaneVector::new(stacked_m.len());
+    lv.fill_from_iter(stacked_m.iter().copied());
 
     let num_v = allele_frequencies.shape()[0];
-    let quadratic_q = ata::compute_ata(&glv, num_v);
+    let quadratic_q = L::compute_quadratic(&lv, num_v);
 
     let pairs: Vec<[(usize, ArrayView2<u8>); 2]> = genotypes
         .outer_iter()

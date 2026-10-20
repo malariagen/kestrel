@@ -1,6 +1,4 @@
-use crate::arith::lane::{Lane2, Lane4};
-use crate::arith::simd::Simd;
-use crate::arith::{Lane, Lane8};
+use crate::arith::Lane;
 
 pub struct LaneVector<L: Lane, const R: usize> {
     pub lanes: Vec<[L; R]>,
@@ -50,32 +48,5 @@ impl<L: Lane, const R: usize> LaneVector<L, R> {
         }
 
         assert!(iter.next().is_none());
-    }
-}
-
-pub enum GenericLaneVector<const R: usize> {
-    L8(LaneVector<Lane8, R>),
-    L4(LaneVector<Lane4, R>),
-    L2(LaneVector<Lane2, R>),
-    L1(LaneVector<f64, R>),
-}
-
-impl<const R: usize> GenericLaneVector<R> {
-    pub fn new(len: usize, simd: Simd) -> Self {
-        match simd {
-            Simd::Avx512 => Self::L8(LaneVector::new(len)),
-            Simd::Avx2 => Self::L4(LaneVector::new(len)),
-            Simd::Neon => Self::L2(LaneVector::new(len)),
-            Simd::Scalar => Self::L1(LaneVector::new(len)),
-        }
-    }
-
-    pub fn fill_from_iter(&mut self, iter: impl Iterator<Item = [f64; R]>) {
-        match self {
-            Self::L8(lv) => lv.fill_from_iter(iter),
-            Self::L4(lv) => lv.fill_from_iter(iter),
-            Self::L2(lv) => lv.fill_from_iter(iter),
-            Self::L1(lv) => lv.fill_from_iter(iter),
-        }
     }
 }

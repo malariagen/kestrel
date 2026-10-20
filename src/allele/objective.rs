@@ -1,57 +1,55 @@
 use crate::{
     algebra::Vector,
     arith::{
-        Arith, Lane, Lane8, LoadStore,
-        lane::{Lane2, Lane4},
+        Arith, Lane, LoadStore,
     },
-    lanevector::{GenericLaneVector, LaneVector},
+    lanevector::{LaneVector},
     log::Log,
 };
 
-pub fn compute_objective(likelihood_mats: &GenericLaneVector<10>, x: &Vector<4>, eps: f64) -> f64 {
-    match likelihood_mats {
-        GenericLaneVector::L8(lv) => compute_obj_avx512(lv, x, eps),
-        GenericLaneVector::L4(lv) => compute_obj_avx2(lv, x, eps),
-        GenericLaneVector::L2(lv) => compute_obj_neon(lv, x, eps),
-        GenericLaneVector::L1(lv) => compute_obj_scalar(lv, x, eps),
+#[cfg(target_arch = "x86_64")]
+use crate::arith::avx2::Lane4;
+#[cfg(target_arch = "x86_64")]
+use crate::arith::avx512::Lane8;
+#[cfg(target_arch = "aarch64")]
+use crate::arith::neon::Lane2;
+
+pub trait AlleleObjective : Lane {
+    fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64;
+}
+
+#[cfg(target_arch = "x86_64")]
+impl AlleleObjective for Lane8 {
+
+fn compute_objective(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> f64 {
+    use std::arch::x86_64::__m512d;
+    return compute_obj_generic::<Lane8, __m512d>(likelihood_mats, x, eps);
+
     }
 }
 
-#[allow(unused_variables, unreachable_code)]
-fn compute_obj_avx512(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> f64 {
-    #[cfg(target_arch = "x86_64")]
-    {
-        use std::arch::x86_64::__m512d;
-        return compute_obj_generic::<Lane8, __m512d>(likelihood_mats, x, eps);
-    }
-
-    panic!("Architecture incompatible with Lane8!")
-}
-
-#[allow(unused_variables, unreachable_code)]
-fn compute_obj_avx2(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> f64 {
-    #[cfg(target_arch = "x86_64")]
-    {
+#[cfg(target_arch = "x86_64")]
+impl AlleleObjective for Lane4 {
+fn compute_objective(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> f64 {
         use std::arch::x86_64::__m256d;
         return compute_obj_generic::<Lane4, __m256d>(likelihood_mats, x, eps);
-    }
-
-    panic!("Architecture incompatible with Lane4!")
 }
 
-#[allow(unused_variables, unreachable_code)]
-fn compute_obj_neon(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> f64 {
-    #[cfg(target_arch = "aarch64")]
-    {
+}
+
+#[cfg(target_arch = "aarch64")]
+impl AlleleObjective for Lane2 {
+fn compute_objective(likelihood_mats: &LaneVector<Lane2, 10>, x: &Vector<4>, eps: f64) -> f64 {
         use std::arch::aarch64::float64x2_t;
         return compute_obj_generic::<Lane2, float64x2_t>(likelihood_mats, x, eps);
-    }
-
-    panic!("Architecture incompatible with Lane2!")
 }
 
-fn compute_obj_scalar(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps: f64) -> f64 {
+}
+
+impl AlleleObjective for f64 {
+    fn compute_objective(likelihood_mats: &LaneVector<f64, 10>, x: &Vector<4>, eps: f64) -> f64 {
     return compute_obj_generic::<f64, f64>(likelihood_mats, x, eps);
+}
 }
 
 fn compute_obj_generic<L: Lane, S: Arith + Log + LoadStore<L>>(

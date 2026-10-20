@@ -1,7 +1,31 @@
 use core::arch::aarch64::*;
 
-use crate::arith::lane::Lane2;
-use crate::arith::{Arith, LoadStore};
+use crate::arith::{Arith, Lane, LoadStore};
+
+#[repr(align(16))]
+#[derive(Clone, Copy, Debug)]
+pub struct Lane2(pub [f64; 2]);
+
+impl Lane for Lane2 {
+    const N: usize = 2;
+
+    #[inline]
+    fn get(&self, i: usize) -> f64 {
+        self.0[i]
+    }
+
+    #[inline]
+    fn set(&mut self, i: usize, val: f64) {
+        self.0[i] = val;
+    }
+}
+
+impl Default for Lane2 {
+    #[inline]
+    fn default() -> Self {
+        Self([0.0; Self::N])
+    }
+}
 
 impl LoadStore<Lane2> for float64x2_t {
     #[inline]

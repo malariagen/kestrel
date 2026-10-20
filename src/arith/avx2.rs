@@ -1,7 +1,32 @@
 use core::arch::x86_64::*;
 
-use crate::arith::lane::Lane4;
-use crate::arith::{Arith, LoadStore};
+use crate::arith::{Arith, Lane, LoadStore};
+
+#[repr(align(32))]
+#[derive(Clone, Copy, Debug)]
+pub struct Lane4(pub [f64; 4]);
+
+impl Lane for Lane4 {
+    const N: usize = 4;
+
+    #[inline]
+    fn get(&self, i: usize) -> f64 {
+        self.0[i]
+    }
+
+    #[inline]
+    fn set(&mut self, i: usize, val: f64) {
+        self.0[i] = val;
+    }
+
+}
+
+impl Default for Lane4 {
+    #[inline]
+    fn default() -> Self {
+        Self([0.0; Self::N])
+    }
+}
 
 impl LoadStore<Lane4> for __m256d {
     #[inline]

@@ -1,6 +1,10 @@
 use core::arch::x86_64::*;
 
-use crate::arith::{Arith, Lane, Lane8, LoadStore};
+use crate::arith::{Arith, Lane, LoadStore};
+
+#[repr(align(64))]
+#[derive(Clone, Copy, Debug)]
+pub struct Lane8([f64; 8]);
 
 impl Lane for Lane8 {
     const N: usize = 8;

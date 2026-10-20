@@ -15,16 +15,12 @@ use paralight::{
 };
 
 use crate::{
-    algebra::{Vector, sum_to_one},
-    arith::simd::Simd,
-    lanevector::GenericLaneVector,
-    sqp::{self, Tuneables},
+    algebra::{Vector, sum_to_one}, allele::{grad_hess::AlleleGradHess, objective::AlleleObjective}, arith::Lane, lanevector::{LaneVector}, sqp::{self, Tuneables},
 };
 
-pub fn calculate_allele_frequencies(
+pub fn calculate_allele_frequencies<L : AlleleGradHess + AlleleObjective>(
     likelihoods: ArrayView3<f64>,
     thread_pool: &mut ThreadPool,
-    simd: Simd,
     iterations: NonZeroU64,
 ) -> Array2<f64> {
     let num_variants = likelihoods.shape()[0];
@@ -54,7 +50,7 @@ pub fn calculate_allele_frequencies(
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each_init(
-            || GenericLaneVector::new(num_samples, simd),
+            || LaneVector::<L, 10>::new(num_samples),
             |buffer, (out, variant_likelihood)| {
                 let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
 
@@ -64,8 +60,8 @@ pub fn calculate_allele_frequencies(
 
                 let x0 = [0.25; 4];
 
-                let obj = |x: &Vector<4>, eps| objective::compute_objective(buffer, &x, eps);
-                let grad_hess = |x: &Vector<4>, eps| grad_hess::compute_grad_hess(buffer, &x, eps);
+                let obj = |x: &Vector<4>, eps| L::compute_objective(buffer, &x, eps);
+                let grad_hess = |x: &Vector<4>, eps| L::compute_grad_hess(buffer, &x, eps);
 
                 let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 

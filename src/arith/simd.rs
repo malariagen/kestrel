@@ -1,15 +1,13 @@
-#[allow(dead_code)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Simd {
+    #[cfg(target_arch = "x86_64")]
     Avx2,
+    #[cfg(target_arch = "x86_64")]
     Avx512,
+    #[cfg(target_arch = "aarch64")]
     Neon,
     Scalar,
 }
-
-// TODO create some kind of Simd trait or something so that
-// I don't have to hard-code the Lane Size => Simd
-// Could instead have Avx512Lane, Avx2Lane, etc.
 
 impl Simd {
     // https://kerkour.com/introduction-rust-simd
