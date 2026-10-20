@@ -1,10 +1,10 @@
 use core::arch::x86_64::*;
 
-use crate::arith::{Arith, Lane, LoadStore};
+use crate::simd::{Arith, Lane, LoadStore};
 
 #[repr(align(32))]
 #[derive(Clone, Copy, Debug)]
-pub struct Avx2Lane(pub [f64; 4]);
+pub struct Avx2Lane([f64; 4]);
 
 impl Lane for Avx2Lane {
     const N: usize = 4;

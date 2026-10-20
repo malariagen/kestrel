@@ -1,4 +1,4 @@
-use crate::arith::Lane;
+use crate::simd::Lane;
 
 pub struct LaneVector<L: Lane, const R: usize> {
     pub lanes: Vec<[L; R]>,

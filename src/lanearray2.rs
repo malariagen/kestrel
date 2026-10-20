@@ -1,6 +1,6 @@
 use ndarray::ArrayView3;
 
-use crate::arith::Lane;
+use crate::simd::Lane;
 
 // This is really an Array3 with a fixed third dimension,
 // And we organize it in this way

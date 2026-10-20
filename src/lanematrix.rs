@@ -1,4 +1,4 @@
-use crate::arith::Lane;
+use crate::simd::Lane;
 
 pub type M4<T> = [[[T; 9]; 10]; 10];
 

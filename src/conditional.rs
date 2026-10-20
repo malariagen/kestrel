@@ -1,6 +1,6 @@
 use ndarray::ArrayView2;
 
-use crate::{arith::Lane, iis, lanematrix::LaneM4};
+use crate::{simd::Lane, iis, lanematrix::LaneM4};
 
 type G = (usize, usize);
 type MTable = [[(G, G, usize); 10]; 10];

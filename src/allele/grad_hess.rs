@@ -1,15 +1,15 @@
 use crate::{
     algebra::{Matrix, Vector},
-    arith::{Arith, Lane, LoadStore},
+    simd::{Arith, Lane, LoadStore},
     lanevector::LaneVector,
 };
 
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx2::Avx2Lane;
+use crate::simd::avx2::Avx2Lane;
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx512::Avx512Lane;
+use crate::simd::avx512::Avx512Lane;
 #[cfg(target_arch = "aarch64")]
-use crate::arith::neon::NeonLane;
+use crate::simd::neon::NeonLane;
 
 pub trait AlleleGradHess: Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>);

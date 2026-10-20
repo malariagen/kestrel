@@ -4,16 +4,16 @@ use ndarray::{ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    arith::simd::Simd,
+    simd::simd::Simd,
     coefficients::{Output, calculate_allele_frequencies},
 };
 
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx2::Avx2Lane;
+use crate::simd::avx2::Avx2Lane;
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx512::Avx512Lane;
+use crate::simd::avx512::Avx512Lane;
 #[cfg(target_arch = "aarch64")]
-use crate::arith::neon::NeonLane;
+use crate::simd::neon::NeonLane;
 
 pub fn calculate_relatedness_coefficients_gt(
     genotypes: ArrayView3<u8>,

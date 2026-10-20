@@ -1,4 +1,4 @@
-use crate::arith::Arith;
+use crate::simd::Arith;
 
 const D1_32: f64 = (1u64 << 32) as f64;
 

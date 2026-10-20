@@ -4,7 +4,7 @@ use crate::{algebra::dot, coefficients::Output};
 
 mod algebra;
 mod allele;
-mod arith;
+mod simd;
 mod cholesky;
 pub mod cli;
 mod cls;

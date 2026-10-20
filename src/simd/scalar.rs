@@ -1,4 +1,4 @@
-use crate::arith::{Arith, Lane, LoadStore};
+use crate::simd::{Arith, Lane, LoadStore};
 
 impl Lane for f64 {
     const N: usize = 1;
