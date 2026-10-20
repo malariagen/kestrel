@@ -4,9 +4,9 @@ use crate::arith::{Arith, Lane, LoadStore};
 
 #[repr(align(64))]
 #[derive(Clone, Copy, Debug)]
-pub struct Lane8([f64; 8]);
+pub struct Avx512Lane([f64; 8]);
 
-impl Lane for Lane8 {
+impl Lane for Avx512Lane {
     const N: usize = 8;
 
     #[inline]
@@ -20,21 +20,21 @@ impl Lane for Lane8 {
     }
 }
 
-impl Default for Lane8 {
+impl Default for Avx512Lane {
     #[inline]
     fn default() -> Self {
         Self([0.0; Self::N])
     }
 }
 
-impl LoadStore<Lane8> for __m512d {
+impl LoadStore<Avx512Lane> for __m512d {
     #[inline]
-    fn load(val: &Lane8) -> Self {
+    fn load(val: &Avx512Lane) -> Self {
         unsafe { _mm512_load_pd(val.0.as_ptr()) }
     }
 
     #[inline]
-    fn store(self, val: &mut Lane8) {
+    fn store(self, val: &mut Avx512Lane) {
         unsafe { _mm512_store_pd(val.0.as_mut_ptr(), self) }
     }
 }

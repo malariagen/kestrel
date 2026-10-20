@@ -5,41 +5,41 @@ use crate::{
 };
 
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx2::Lane4;
+use crate::arith::avx2::Avx2Lane;
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx512::Lane8;
+use crate::arith::avx512::Avx512Lane;
 #[cfg(target_arch = "aarch64")]
-use crate::arith::neon::Lane2;
+use crate::arith::neon::NeonLane;
 
 pub trait AlleleGradHess: Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>);
 }
 
 #[cfg(target_arch = "x86_64")]
-impl AlleleGradHess for Lane8 {
-    fn compute_grad_hess(likelihood_mats: &LaneVector<Lane8, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+impl AlleleGradHess for Avx512Lane {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Avx512Lane, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
         use std::arch::x86_64::__m512d;
-        return compute_grad_hess_generic::<Lane8, __m512d>(likelihood_mats, x, eps);
+        return compute_grad_hess_generic::<Avx512Lane, __m512d>(likelihood_mats, x, eps);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
-impl AlleleGradHess for Lane4 {
-    fn compute_grad_hess(likelihood_mats: &LaneVector<Lane4, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+impl AlleleGradHess for Avx2Lane {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Avx2Lane, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
         use std::arch::x86_64::__m256d;
-        return compute_grad_hess_generic::<Lane4, __m256d>(likelihood_mats, x, eps);
+        return compute_grad_hess_generic::<Avx2Lane, __m256d>(likelihood_mats, x, eps);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
-impl AlleleGradHess for Lane2 {
+impl AlleleGradHess for NeonLane {
     fn compute_grad_hess_neon(
-        likelihood_mats: &LaneVector<Lane2, 10>,
+        likelihood_mats: &LaneVector<NeonLane, 10>,
         x: &Vector<4>,
         eps: f64,
     ) -> (Vector<4>, Matrix<4>) {
         use std::arch::aarch64::float64x2_t;
-        return compute_grad_hess_generic::<Lane2, float64x2_t>(likelihood_mats, x, eps);
+        return compute_grad_hess_generic::<NeonLane, float64x2_t>(likelihood_mats, x, eps);
     }
 }
 

@@ -6,37 +6,37 @@ use crate::{
 };
 
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx2::Lane4;
+use crate::arith::avx2::Avx2Lane;
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx512::Lane8;
+use crate::arith::avx512::Avx512Lane;
 #[cfg(target_arch = "aarch64")]
-use crate::arith::neon::Lane2;
+use crate::arith::neon::NeonLane;
 
 pub trait JacquardObjective: Lane {
     fn compute_obj(likelihood_mats: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64;
 }
 
 #[cfg(target_arch = "x86_64")]
-impl JacquardObjective for Lane8 {
+impl JacquardObjective for Avx512Lane {
     fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
         use std::arch::x86_64::__m512d;
-        return compute_obj_generic::<Lane8, __m512d>(p_mat, x, eps);
+        return compute_obj_generic::<Avx512Lane, __m512d>(p_mat, x, eps);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
-impl JacquardObjective for Lane4 {
-    fn compute_obj(p_mat: &LaneVector<Lane4, 9>, x: &Vector<9>, eps: f64) -> f64 {
+impl JacquardObjective for Avx2Lane {
+    fn compute_obj(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
         use std::arch::x86_64::__m256d;
-        return compute_obj_generic::<Lane4, __m256d>(p_mat, x, eps);
+        return compute_obj_generic::<Avx2Lane, __m256d>(p_mat, x, eps);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
-impl JacquardObjective for Lane2 {
-    fn compute_obj(p_mat: &LaneVector<Lane2, 9>, x: &Vector<9>, eps: f64) -> f64 {
+impl JacquardObjective for NeonLane {
+    fn compute_obj(p_mat: &LaneVector<NeonLane, 9>, x: &Vector<9>, eps: f64) -> f64 {
         use std::arch::aarch64::float64x2_t;
-        return compute_obj_generic::<Lane2, float64x2_t>(p_mat, x, eps);
+        return compute_obj_generic::<NeonLane, float64x2_t>(p_mat, x, eps);
     }
 }
 

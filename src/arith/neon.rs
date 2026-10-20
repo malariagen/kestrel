@@ -4,9 +4,9 @@ use crate::arith::{Arith, Lane, LoadStore};
 
 #[repr(align(16))]
 #[derive(Clone, Copy, Debug)]
-pub struct Lane2(pub [f64; 2]);
+pub struct NeonLane(pub [f64; 2]);
 
-impl Lane for Lane2 {
+impl Lane for NeonLane {
     const N: usize = 2;
 
     #[inline]
@@ -20,21 +20,21 @@ impl Lane for Lane2 {
     }
 }
 
-impl Default for Lane2 {
+impl Default for NeonLane {
     #[inline]
     fn default() -> Self {
         Self([0.0; Self::N])
     }
 }
 
-impl LoadStore<Lane2> for float64x2_t {
+impl LoadStore<NeonLane> for float64x2_t {
     #[inline]
-    fn load(val: &Lane2) -> Self {
+    fn load(val: &NeonLane) -> Self {
         unsafe { vld1q_f64(val.0.as_ptr()) }
     }
 
     #[inline]
-    fn store(self, val: &mut Lane2) {
+    fn store(self, val: &mut NeonLane) {
         unsafe { vst1q_f64(val.0.as_mut_ptr(), self) }
     }
 }

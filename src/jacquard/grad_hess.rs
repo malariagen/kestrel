@@ -5,11 +5,11 @@ use crate::{
 };
 
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx2::Lane4;
+use crate::arith::avx2::Avx2Lane;
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx512::Lane8;
+use crate::arith::avx512::Avx512Lane;
 #[cfg(target_arch = "aarch64")]
-use crate::arith::neon::Lane2;
+use crate::arith::neon::NeonLane;
 
 // h - 8*8*45 = 2880 bytes
 // column buffer - 8 * 8 * 9 * 32 = 18432 bytes (TODO avoid memset)
@@ -21,26 +21,26 @@ pub trait JacquardGradHess: Lane {
 }
 
 #[cfg(target_arch = "x86_64")]
-impl JacquardGradHess for Lane8 {
-    fn compute_grad_hess(p_mat: &LaneVector<Lane8, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+impl JacquardGradHess for Avx512Lane {
+    fn compute_grad_hess(p_mat: &LaneVector<Avx512Lane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
         use std::arch::x86_64::__m512d;
-        return compute_grad_hess_generic::<Lane8, __m512d>(p_mat, x, eps);
+        return compute_grad_hess_generic::<Avx512Lane, __m512d>(p_mat, x, eps);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
-impl JacquardGradHess for Lane4 {
-    fn compute_grad_hess(p_mat: &LaneVector<Lane4, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+impl JacquardGradHess for Avx2Lane {
+    fn compute_grad_hess(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
         use std::arch::x86_64::__m256d;
-        return compute_grad_hess_generic::<Lane4, __m256d>(p_mat, x, eps);
+        return compute_grad_hess_generic::<Avx2Lane, __m256d>(p_mat, x, eps);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
-impl JacquardGradHess for Lane2 {
-    fn compute_grad_hess(p_mat: &LaneVector<Lane2, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+impl JacquardGradHess for NeonLane {
+    fn compute_grad_hess(p_mat: &LaneVector<NeonLane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
         use std::arch::aarch64::float64x2_t;
-        return compute_grad_hess_generic::<Lane2, float64x2_t>(p_mat, x, eps);
+        return compute_grad_hess_generic::<NeonLane, float64x2_t>(p_mat, x, eps);
     }
 }
 
@@ -109,7 +109,7 @@ fn compute_grad_hess_lane<L: Lane, S: Arith + LoadStore<L>>(
     // For calculation of d: 1 for d + 9 columns + 9 gradient = 19
     // For each Hessian pass: 15 accumulators + at most 5 columns = 20
 
-    // A block = [Lane8; 9]
+    // A block = [Avx512Lane; 9]
     // This is one tile
     let mut scaled_column_buf = [[L::default(); 9]; BLOCKS];
 

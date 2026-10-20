@@ -4,11 +4,11 @@ use crate::{
 };
 
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx2::Lane4;
+use crate::arith::avx2::Avx2Lane;
 #[cfg(target_arch = "x86_64")]
-use crate::arith::avx512::Lane8;
+use crate::arith::avx512::Avx512Lane;
 #[cfg(target_arch = "aarch64")]
-use crate::arith::neon::Lane2;
+use crate::arith::neon::NeonLane;
 
 pub trait MixtureMatrix: Lane {
     fn mixture_component_matrix(
@@ -20,17 +20,17 @@ pub trait MixtureMatrix: Lane {
 }
 
 pub fn test_asm(
-    m_matrices: &[M4<Lane8>],
-    likelihoods_x: &[[Lane8; 10]],
-    likelihoods_y: &[[Lane8; 10]],
-    p_mat: &mut [[Lane8; 9]],
+    m_matrices: &[M4<Avx512Lane>],
+    likelihoods_x: &[[Avx512Lane; 10]],
+    likelihoods_y: &[[Avx512Lane; 10]],
+    p_mat: &mut [[Avx512Lane; 9]],
 ) {
     use std::arch::x86_64::__m512d;
-    return calculate_mixture_component_matrix::<Lane8, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+    return calculate_mixture_component_matrix::<Avx512Lane, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
 }
 
 #[cfg(target_arch = "x86_64")]
-impl MixtureMatrix for Lane8 {
+impl MixtureMatrix for Avx512Lane {
     fn mixture_component_matrix(
         m_matrices: &[M4<Self>],
         likelihoods_x: &[[Self; 10]],
@@ -38,12 +38,12 @@ impl MixtureMatrix for Lane8 {
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::x86_64::__m512d;
-        return calculate_mixture_component_matrix::<Lane8, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+        return calculate_mixture_component_matrix::<Avx512Lane, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
-impl MixtureMatrix for Lane4 {
+impl MixtureMatrix for Avx2Lane {
     #[allow(unused_variables, unreachable_code)]
     fn mixture_component_matrix(
         m_matrices: &[M4<Self>],
@@ -52,12 +52,12 @@ impl MixtureMatrix for Lane4 {
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::x86_64::__m256d;
-        return calculate_mixture_component_matrix::<Lane4, __m256d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+        return calculate_mixture_component_matrix::<Avx2Lane, __m256d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
-impl MixtureMatrix for Lane2 {
+impl MixtureMatrix for NeonLane {
     #[allow(unused_variables, unreachable_code)]
     fn mixture_component_matrix(
         m_matrices: &[M4<Self>],
@@ -66,7 +66,7 @@ impl MixtureMatrix for Lane2 {
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::aarch64::float64x2_t;
-        return calculate_mixture_component_matrix::<Lane2, float64x2_t>(
+        return calculate_mixture_component_matrix::<NeonLane, float64x2_t>(
             m_matrices,
             likelihoods_x,
             likelihoods_y,
