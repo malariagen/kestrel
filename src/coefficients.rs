@@ -13,7 +13,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, arith::{Arith, Lane, LoadStore, simd::Simd}, cls, conditional::{self, M}, jacquard::{grad_hess::{self, JacquardGradHess}, objective::{self, JacquardObjective}}, lanearray2::{LaneArray2, convert_to_lanes}, lanematrix::{LaneM4, M4}, lanevector::LaneVector, mixture::MixtureMatrix, quadratic::{self, ClsQuadratic}, sqp::{self, Tuneables},
+    algebra::{Vector, dot, mul}, cls, conditional::{self}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::LaneVector, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables},
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -76,7 +76,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     // Then we can condense the stacked matrix to make it smaller? Idk, complicated...
 
     // let m_matrices = conditional::calculate_m_matrices(allele_frequencies);
-    let m_matrices = conditional::calculate_m_matrices2::<L>(allele_frequencies);
+    let m_matrices = conditional::calculate_m_matrices::<L>(allele_frequencies);
 
     let likelihoods = convert_to_lanes(likelihoods);
 
@@ -257,49 +257,6 @@ pub fn calculate_coefficients_gt<L : ClsQuadratic>(
     bar.done();
 
     output
-}
-
-pub fn calculate_mixture_component_matrix_gl<L: Lane>(
-    m_matrices: &[M],
-    likelihoods_x: ArrayView2<f64>,
-    likelihoods_y: ArrayView2<f64>,
-    p_mat: &mut LaneVector<L, 9>,
-) {
-    let (chunks_x, rem_x) = likelihoods_x.as_slice().unwrap().as_chunks::<10>();
-    let (chunks_y, rem_y) = likelihoods_y.as_slice().unwrap().as_chunks::<10>();
-
-    assert!(rem_x.is_empty());
-    assert!(rem_y.is_empty());
-
-    assert_eq!(m_matrices.len(), chunks_x.len());
-    assert_eq!(m_matrices.len(), chunks_y.len());
-
-    // p = lx * ly * M
-    // We have the number of samples
-
-    let iter = chunks_x
-        .iter()
-        .zip(chunks_y.iter())
-        .zip(m_matrices.iter())
-        .map(|((like_x, like_y), m)| {
-            // g^T M
-            let mut p = [0.0f64; 9];
-            for i in 0..10 {
-                for j in 0..10 {
-                    // This needs to match the order of the rows of the M matrix
-                    // In calculate_all_joint_genotypes, we iterate over the second
-                    // individual completely before doing the first
-                    let g = like_x[i] * like_y[j];
-                    for k in 0..9 {
-                        p[k] = g.mul_add(m[i][j][k], p[k]);
-                    }
-                }
-            }
-
-            p
-        });
-
-    p_mat.fill_from_iter(iter);
 }
 
 #[cfg(test)]

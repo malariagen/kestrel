@@ -2,7 +2,6 @@ use ndarray::ArrayView2;
 
 use crate::{arith::Lane, iis, lanematrix::LaneM4};
 
-pub type M = [[[f64; 9]; 10]; 10];
 type G = (usize, usize);
 type MTable = [[(G, G, usize); 10]; 10];
 
@@ -30,34 +29,7 @@ pub fn calculate_joint_genotype_table() -> MTable {
     table
 }
 
-pub fn calculate_m_matrices(allele_frequencies: ArrayView2<f64>) -> Vec<M> {
-    let num_a = allele_frequencies.shape()[1];
-    assert_eq!(num_a, 4);
-
-    let all_joint_genotypes = calculate_joint_genotype_table();
-
-    let matrices = allele_frequencies
-        .outer_iter()
-        .map(|site_p| {
-            std::array::from_fn(|x| {
-                std::array::from_fn(|y| {
-                    let ((i, j), (k, l), iis_mode) = all_joint_genotypes[x][y];
-                    let pi = site_p[i];
-                    let pj = site_p[j];
-                    let pk = site_p[k];
-                    let pl = site_p[l];
-
-                    std::array::from_fn(|ibd_mode| iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd_mode + 1))
-                })
-            })
-        })
-        .collect::<Vec<_>>();
-
-    matrices
-}
-
-
-pub fn calculate_m_matrices2<L: Lane>(allele_frequencies: ArrayView2<f64>) -> LaneM4<L> {
+pub fn calculate_m_matrices<L: Lane>(allele_frequencies: ArrayView2<f64>) -> LaneM4<L> {
     let num_v = allele_frequencies.shape()[0];
     let num_a = allele_frequencies.shape()[1];
     assert_eq!(num_a, 4);

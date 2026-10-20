@@ -15,7 +15,6 @@ pub struct LaneArray2<L: Lane, const R: usize> {
     pub lanes: Vec<[L; R]>,
     pub rem: Vec<[f64; R]>,
     pub rows: usize,
-    pub cols: usize,
     pub num_lanes: usize,
     pub num_rem: usize,
 }
@@ -32,7 +31,6 @@ impl<L: Lane, const R: usize> LaneArray2<L, R> {
             lanes,
             rem,
             rows,
-            cols,
             num_lanes,
             num_rem
         }
