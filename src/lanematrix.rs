@@ -1,21 +1,21 @@
 use crate::simd::Lane;
 
-pub type M4<T> = [[[T; 9]; 10]; 10];
+pub type M<T, const R: usize> = [[[T; 9]; R]; R];
 
-pub struct LaneM4<L: Lane> {
-    pub lanes: Vec<M4<L>>,
-    pub rem: Vec<M4<f64>>,
+pub struct LaneM<L: Lane, const R: usize> {
+    pub lanes: Vec<M<L, R>>,
+    pub rem: Vec<M<f64, R>>,
 }
 
-impl<L: Lane> LaneM4<L> {
+impl<L: Lane, const R: usize> LaneM<L, R> {
     pub fn new(len: usize) -> Self {
         let lanes = len / L::N;
         let rem = len % L::N;
 
-        let lane_buf = vec![M4::default(); lanes];
-        let rem_buf = vec![M4::default(); rem];
+        let lane_buf = vec![[[[L::default(); 9]; R]; R]; lanes];
+        let rem_buf = vec![[[[0.0; 9]; R]; R]; rem];
 
-        LaneM4 {
+        LaneM {
             lanes: lane_buf,
             rem: rem_buf,
         }
@@ -33,12 +33,12 @@ impl<L: Lane> LaneM4<L> {
     //     (&mut self.lanes, &mut self.rem)
     // }
 
-    pub fn fill_from_iter(&mut self, mut iter: impl Iterator<Item = M4<f64>>) {
+    pub fn fill_from_iter(&mut self, mut iter: impl Iterator<Item = M<f64, R>>) {
         for block in self.lanes.iter_mut() {
             for i in 0..L::N {
                 let m = iter.next().unwrap();
-                for a in 0..10 {
-                    for b in 0..10 {
+                for a in 0..R {
+                    for b in 0..R {
                         for c in 0..9 {
                             block[a][b][c].set(i, m[a][b][c]);
                         }

@@ -1,6 +1,5 @@
 use crate::{
-    simd::{Arith, Lane, LoadStore},
-    lanematrix::M4,
+    lanematrix::{M}, simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -11,62 +10,62 @@ use crate::simd::avx512::Avx512Lane;
 use crate::simd::neon::NeonLane;
 
 pub trait MixtureMatrix: Lane {
-    fn mixture_component_matrix(
-        m_matrices: &[M4<Self>],
-        likelihoods_x: &[[Self; 10]],
-        likelihoods_y: &[[Self; 10]],
+    fn mixture_component_matrix<const R: usize>(
+        m_matrices: &[M<Self, R>],
+        likelihoods_x: &[[Self; R]],
+        likelihoods_y: &[[Self; R]],
         p_mat: &mut [[Self; 9]],
     );
 }
 
 pub fn test_asm(
-    m_matrices: &[M4<Avx512Lane>],
+    m_matrices: &[M<Avx512Lane, 10>],
     likelihoods_x: &[[Avx512Lane; 10]],
     likelihoods_y: &[[Avx512Lane; 10]],
     p_mat: &mut [[Avx512Lane; 9]],
 ) {
     use std::arch::x86_64::__m512d;
-    return calculate_mixture_component_matrix::<Avx512Lane, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+    return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 10>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
 }
 
 #[cfg(target_arch = "x86_64")]
 impl MixtureMatrix for Avx512Lane {
-    fn mixture_component_matrix(
-        m_matrices: &[M4<Self>],
-        likelihoods_x: &[[Self; 10]],
-        likelihoods_y: &[[Self; 10]],
+    fn mixture_component_matrix<const R: usize>(
+        m_matrices: &[M<Self, R>],
+        likelihoods_x: &[[Self; R]],
+        likelihoods_y: &[[Self; R]],
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::x86_64::__m512d;
-        return calculate_mixture_component_matrix::<Avx512Lane, __m512d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+        return calculate_mixture_component_matrix::<Avx512Lane, __m512d, R>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl MixtureMatrix for Avx2Lane {
     #[allow(unused_variables, unreachable_code)]
-    fn mixture_component_matrix(
-        m_matrices: &[M4<Self>],
-        likelihoods_x: &[[Self; 10]],
-        likelihoods_y: &[[Self; 10]],
+    fn mixture_component_matrix<const R: usize>(
+        m_matrices: &[M<Self, R>],
+        likelihoods_x: &[[Self; R]],
+        likelihoods_y: &[[Self; R]],
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::x86_64::__m256d;
-        return calculate_mixture_component_matrix::<Avx2Lane, __m256d>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
+        return calculate_mixture_component_matrix::<Avx2Lane, __m256d, R>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl MixtureMatrix for NeonLane {
     #[allow(unused_variables, unreachable_code)]
-    fn mixture_component_matrix(
-        m_matrices: &[M4<Self>],
-        likelihoods_x: &[[Self; 10]],
-        likelihoods_y: &[[Self; 10]],
+    fn mixture_component_matrix<const R: usize>(
+        m_matrices: &[M<Self, R>],
+        likelihoods_x: &[[Self; R]],
+        likelihoods_y: &[[Self; R]],
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::aarch64::float64x2_t;
-        return calculate_mixture_component_matrix::<NeonLane, float64x2_t>(
+        return calculate_mixture_component_matrix::<NeonLane, float64x2_t, R>(
             m_matrices,
             likelihoods_x,
             likelihoods_y,
@@ -76,21 +75,21 @@ impl MixtureMatrix for NeonLane {
 }
 
 impl MixtureMatrix for f64 {
-    fn mixture_component_matrix(
-        m_matrices: &[M4<Self>],
-        likelihoods_x: &[[Self; 10]],
-        likelihoods_y: &[[Self; 10]],
+    fn mixture_component_matrix<const R: usize>(
+        m_matrices: &[M<Self, R>],
+        likelihoods_x: &[[Self; R]],
+        likelihoods_y: &[[Self; R]],
         p_mat: &mut [[Self; 9]],
     ) {
-        calculate_mixture_component_matrix::<f64, f64>(m_matrices, likelihoods_x, likelihoods_y, p_mat)
+        calculate_mixture_component_matrix::<f64, f64, R>(m_matrices, likelihoods_x, likelihoods_y, p_mat)
     }
 }
 
-#[inline(always)]
-fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>>(
-    m_matrices: &[M4<L>],
-    likelihoods_x: &[[L; 10]],
-    likelihoods_y: &[[L; 10]],
+#[inline]
+fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const R: usize>(
+    m_matrices: &[M<L, R>],
+    likelihoods_x: &[[L; R]],
+    likelihoods_y: &[[L; R]],
     p_mat: &mut [[L; 9]],
 ) {
     let len = m_matrices.len();
@@ -108,9 +107,9 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>>(
         // 9 registers
         let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
 
-        for i in 0..10 {
+        for i in 0..R {
             let lx = S::load(&like_x[i]);
-            for j in 0..10 {
+            for j in 0..R {
                 // For architectures with enough registers this will get hoisted
                 // out of the loop
                 let ly = S::load(&like_y[j]);

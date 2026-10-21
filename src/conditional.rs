@@ -1,6 +1,6 @@
 use ndarray::ArrayView2;
 
-use crate::{simd::Lane, iis, lanematrix::LaneM4};
+use crate::{simd::Lane, iis, lanematrix::LaneM};
 
 type G = (usize, usize);
 type MTable = [[(G, G, usize); 10]; 10];
@@ -29,7 +29,7 @@ pub fn calculate_joint_genotype_table() -> MTable {
     table
 }
 
-pub fn calculate_m_matrices<L: Lane>(allele_frequencies: ArrayView2<f64>) -> LaneM4<L> {
+pub fn calculate_m_matrices<L: Lane>(allele_frequencies: ArrayView2<f64>) -> LaneM<L, 10> {
     let num_v = allele_frequencies.shape()[0];
     let num_a = allele_frequencies.shape()[1];
     assert_eq!(num_a, 4);
@@ -50,7 +50,7 @@ pub fn calculate_m_matrices<L: Lane>(allele_frequencies: ArrayView2<f64>) -> Lan
         })
     });
 
-    let mut lanes = LaneM4::new(num_v);
+    let mut lanes = LaneM::new(num_v);
     lanes.fill_from_iter(iter);
 
     lanes
