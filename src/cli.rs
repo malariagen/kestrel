@@ -118,7 +118,6 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
         "delta7",
         "delta8",
         "delta9",
-        "convergence",
         "iterations",
         "objective",
     ])?;
@@ -142,9 +141,6 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
         let kinship = dot(&out.jacquard, &kinship_vec);
 
         let iterations = out.iters;
-
-        // TODO check this
-        let convergence = iterations < 100;
         let objective = out.obj;
         // TODO condition number of matrix
 
@@ -161,7 +157,6 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
             delta7,
             delta8,
             delta9,
-            convergence,
             iterations,
             objective,
         ))?;

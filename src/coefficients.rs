@@ -1,10 +1,9 @@
 use std::num::NonZeroU64;
 
-use itertools::Itertools;
 use ndarray::{Array2, Array3, ArrayView2, ArrayView3, Axis};
 use paralight::{
     iter::{
-        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, IntoExactParallelSource, ParallelIteratorExt, ZipableSource,
+        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelSource, ParallelIteratorExt, ZipableSource,
     }, threads::ThreadPool,
 };
 
@@ -94,15 +93,8 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     let likelihoods3 = convert_to_lanes::<L, 6>(glaf.gl3.view());
     let likelihoods4 = convert_to_lanes::<L, 10>(glaf.gl4.view());
 
-    let num_samples = likelihoods2.rows;
-
-    // We have S samples. For each sample we have a bunch of sites (di, tri, tetra).
-    // We have the same number of each sample
-
-    // for i in 0..num_samples (in parallel)
-    //   Calculate A_i
-    //   for j in (i+1)..num_samples
-    //       Calculate i*A_j, then compute
+    //let num_samples = likelihoods2.rows;
+    let num_samples = 16;
 
     let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
@@ -143,8 +135,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                 f64::partial_mixture_component_matrix(&m3.rem, like3_x.1, &mut buffers.pv3.rem);
                 f64::partial_mixture_component_matrix(&m4.rem, like4_x.1, &mut buffers.pv4.rem);
 
-                let mut v = Vec::new();
-                for y in x..num_samples {
+                let iter = (x..num_samples).map(|y| {
                     let delta = if x == y {
                         [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
                     } else {
@@ -163,30 +154,32 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                     f64::complete_mixture_component_matrix(&buffers.pv3.rem, like3_y.1, &mut buffers.cv.rem3());
                     f64::complete_mixture_component_matrix(&buffers.pv4.rem, like4_y.1, &mut buffers.cv.rem4());
 
-                    let obj = |x: &Vector<9>, eps| L::compute_obj(&buffers.cv.lanes(), &buffers.cv.rem(), &x, eps);
-                    let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffers.cv.lanes(), &buffers.cv.rem(), &x, eps);
+                    let obj = |x: &Vector<9>, eps| L::compute_obj(&buffers.cv.lanes(), &buffers.cv.rem(), x, eps);
+                    let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffers.cv.lanes(), &buffers.cv.rem(), x, eps);
                     let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                     if iters >= tune.sqp_max_iter.get() {
                         log::warn!(
-                            "No convergence for Jacquard coefficients, max iterations {} exceeded",
+                            "No convergence for Jacquard coefficients of pair {x} {y}, max iterations {} exceeded",
                             tune.sqp_max_iter
                         );
                     }
 
-                    let output = Output {
+                    handle.inc();
+
+                    Output {
                         x,
                         y,
                         jacquard: delta,
                         iters,
                         obj: f,
-                    };
+                    }
 
-                    v.push(output);
-                }
+                });
 
-                handle.add(v.len().try_into().unwrap());
-                *out = v;
+                out.extend(iter);
+
+                // handle.add(out.len().try_into().unwrap());
             },
         );
 
