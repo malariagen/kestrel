@@ -62,13 +62,14 @@ mod kestrel {
     }
 
     #[pyfunction]
-    #[pyo3(signature = (genotype_likelihoods, allele_frequencies = None, threads = None, iterations = NonZeroU64::new(100).unwrap()))]
+    #[pyo3(signature = (genotype_likelihoods, allele_frequencies = None, threads = None, iterations = NonZeroU64::new(100).unwrap(), minimum_allele_frequency = None))]
     fn relatedness_coefficients_gl<'py>(
         py: Python<'py>,
         genotype_likelihoods: PyReadonlyArray3<'py, f64>,
         allele_frequencies: Option<PyReadonlyArray2<'py, f64>>,
         threads: Option<NonZeroUsize>,
         iterations: NonZeroU64,
+        minimum_allele_frequency: Option<f64>
     ) -> (
         Bound<'py, PyArray3<f64>>,
         Bound<'py, PyArray2<f64>>,
@@ -77,7 +78,7 @@ mod kestrel {
         let gl_view = genotype_likelihoods.as_array();
         let af_view = allele_frequencies.as_ref().map(|a| a.as_array());
 
-        let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl_view, af_view, threads, iterations);
+        let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl_view, af_view, threads, iterations, minimum_allele_frequency);
 
         let num_samples = gl_view.shape()[1];
         let (jacquard, kinship, inbreeding) = build_arrays(num_samples, &outputs);

@@ -25,6 +25,7 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
     likelihoods: ArrayView3<f64>,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
+    maf: f64,
 ) -> Array2<f64> {
     let num_variants = likelihoods.shape()[0];
     let num_samples = likelihoods.shape()[1];
@@ -77,8 +78,7 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
 
                 // More rigourous test is LRT
                 for i in 0..4 {
-                    if x[i] > 0.0 && x[i] < (1.0 / (2.0 * num_samples as f64)) {
-                        // println!("{}", x[i]);
+                    if x[i] > 0.0 && x[i] < maf {
                         x[i] = 0.0;
                     }
                 }

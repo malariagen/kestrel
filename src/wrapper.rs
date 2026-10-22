@@ -87,7 +87,23 @@ pub fn calculate_relatedness_coefficients_gl(
     allele_frequencies: Option<ArrayView2<f64>>,
     threads: Option<NonZeroUsize>,
     iterations: NonZeroU64,
+    minimum_allele_frequency: Option<f64>
 ) -> Vec<Output> {
+
+    let num_v = genotype_likelihoods.shape()[0];
+    let num_s = genotype_likelihoods.shape()[1];
+    let num_l = genotype_likelihoods.shape()[2];
+
+    assert!(num_v > 0, "Must have at least one variant");
+    assert!(num_s > 0, "Must have at least one sample");
+    assert!(num_l == 10, "Must have exactly 10 GLs per sample");
+
+    // This is the smallest allele frequency possible given our sample size
+    // Anything lower than this is just noise
+    let maf = minimum_allele_frequency.unwrap_or(1.0 / (2.0 * num_s as f64));
+
+    assert!(0.0 <= maf && maf <= 1.0, "Minimum allele frequency must be within 0 to 1");
+
     let simd = Simd::detect();
 
     let mut thread_pool = build_thread_pool(threads);
@@ -103,37 +119,33 @@ pub fn calculate_relatedness_coefficients_gl(
                     genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
+                    maf
                 ),
                 #[cfg(target_arch = "x86_64")]
                 Simd::Avx2 => crate::allele::calculate_allele_frequencies::<Avx2Lane>(
                     genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
+                    maf
                 ),
                 #[cfg(target_arch = "aarch64")]
                 Simd::Neon => crate::allele::calculate_allele_frequencies::<NeonLane>(
                     genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
+                    maf
                 ),
                 Simd::Scalar => crate::allele::calculate_allele_frequencies::<f64>(
                     genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
+                    maf
                 ),
             };
 
             calculated_af.view()
         }
     };
-
-    let num_v = genotype_likelihoods.shape()[0];
-    let num_s = genotype_likelihoods.shape()[1];
-    let num_l = genotype_likelihoods.shape()[2];
-
-    assert!(num_v > 0, "Must have at least one variant");
-    assert!(num_s > 0, "Must have at least one sample");
-    assert!(num_l == 10, "Must have exactly 10 GLs per sample");
 
     // TODO in theory we could do some checks here that the af are non-negative, sum to one
     // Indexing will work, etc.

@@ -43,7 +43,6 @@ impl MixtureMatrix for Avx512Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl MixtureMatrix for Avx2Lane {
-    #[allow(unused_variables, unreachable_code)]
     fn mixture_component_matrix<const R: usize>(
         m_matrices: &[M<Self, R>],
         likelihoods_x: &[[Self; R]],
@@ -57,7 +56,6 @@ impl MixtureMatrix for Avx2Lane {
 
 #[cfg(target_arch = "aarch64")]
 impl MixtureMatrix for NeonLane {
-    #[allow(unused_variables, unreachable_code)]
     fn mixture_component_matrix<const R: usize>(
         m_matrices: &[M<Self, R>],
         likelihoods_x: &[[Self; R]],

@@ -26,13 +26,17 @@ struct Args {
     #[arg(short = 't', long, value_enum, default_value_t = Tag::GL)]
     tag: Tag,
 
-    /// Number of threads used for parallelism. Defaults to all available threads.
+    /// Number of threads used for parallelism, defaults to all available threads
     #[arg(short = 'p', long)]
     threads: Option<NonZeroUsize>,
 
     /// Maximum number of iterations for minimization algorithm
     #[arg(short = 'i', long, default_value = "100")]
     iterations: NonZeroU64,
+
+    /// Allele frequencies below this threshold are set to zero
+    #[arg(short = 'm', long)]
+    minimum_allele_frequency: Option<f64>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -69,18 +73,19 @@ pub fn run_cli(args: &[String]) -> Result<()> {
     let parse_af = args.allele_freqs == AlleleFreqs::Info;
 
     let iters = args.iterations;
+    let maf = args.minimum_allele_frequency;
 
     let (samples, outputs) = match args.tag {
         Tag::GL => {
             let (samples, gl, af) = crate::vcf::parse_vcf_gl(vcf_file, parse_af)?;
             let af = af.as_ref().map(|a| a.view());
-            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters);
+            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
             (samples, outputs)
         }
         Tag::PL => {
             let (samples, gl, af) = crate::vcf::parse_vcf_pl(vcf_file, parse_af)?;
             let af = af.as_ref().map(|a| a.view());
-            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters);
+            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
             (samples, outputs)
         }
         Tag::GT => {
@@ -140,10 +145,8 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Output]) -> Resul
 
         // TODO check this
         let convergence = iterations < 100;
-        // TODO warning about perplexity > 8?
         let objective = out.obj;
         // TODO condition number of matrix
-        // let fit = if perplexity < 8.0 { "good" } else { "poor" };
 
         writer.serialize((
             sample1,
