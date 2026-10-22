@@ -1,7 +1,6 @@
 use crate::{
     algebra::Vector,
     simd::{Arith, Lane, LoadStore},
-    lanevector::LaneVector,
     log::Log,
 };
 
@@ -13,50 +12,49 @@ use crate::simd::avx512::Avx512Lane;
 use crate::simd::neon::NeonLane;
 
 pub trait JacquardObjective: Lane {
-    fn compute_obj(likelihood_mats: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64;
+    fn compute_obj(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> f64;
 }
 
 #[cfg(target_arch = "x86_64")]
 impl JacquardObjective for Avx512Lane {
-    fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
+    fn compute_obj(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> f64 {
         use std::arch::x86_64::__m512d;
-        return compute_obj_generic::<Avx512Lane, __m512d>(p_mat, x, eps);
+        return compute_obj_generic::<Avx512Lane, __m512d>(lanes, rem, x, eps);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl JacquardObjective for Avx2Lane {
-    fn compute_obj(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
+    fn compute_obj(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> f64 {
         use std::arch::x86_64::__m256d;
-        return compute_obj_generic::<Avx2Lane, __m256d>(p_mat, x, eps);
+        return compute_obj_generic::<Avx2Lane, __m256d>(lanes, rem, x, eps);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl JacquardObjective for NeonLane {
-    fn compute_obj(p_mat: &LaneVector<NeonLane, 9>, x: &Vector<9>, eps: f64) -> f64 {
+    fn compute_obj(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> f64 {
         use std::arch::aarch64::float64x2_t;
-        return compute_obj_generic::<NeonLane, float64x2_t>(p_mat, x, eps);
+        return compute_obj_generic::<NeonLane, float64x2_t>(lanes, rem, x, eps);
     }
 }
 
 impl JacquardObjective for f64 {
-    fn compute_obj(p_mat: &LaneVector<f64, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        return compute_obj_generic::<f64, f64>(p_mat, x, eps);
+    fn compute_obj(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> f64 {
+        return compute_obj_generic::<f64, f64>(lanes, rem, x, eps);
     }
 }
 
 fn compute_obj_generic<L: Lane, S: Arith + LoadStore<L> + Log>(
-    p_mat: &LaneVector<L, 9>,
+    lanes: &[[L; 9]],
+    rem: &[[f64; 9]],
     x: &Vector<9>,
     eps: f64,
 ) -> f64 {
-    let (blocks, remainder) = p_mat.as_lanes();
+    let b = compute_obj_lane::<L, S>(lanes, x, eps);
+    let r = compute_obj_lane::<f64, f64>(rem, x, eps);
 
-    let b = compute_obj_lane::<L, S>(blocks, x, eps);
-    let r = compute_obj_lane::<f64, f64>(remainder, x, eps);
-
-    let n = p_mat.len() as f64;
+    let n = (lanes.len() + rem.len()) as f64;
 
     return -(b + r) / n;
 }

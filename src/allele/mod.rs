@@ -4,7 +4,7 @@ mod objective;
 use std::num::NonZeroU64;
 
 use lockfree_progress_bar::ProgressBar;
-use ndarray::{Array2, ArrayView3};
+use ndarray::{Array1, ArrayView2};
 
 use paralight::{
     iter::{
@@ -22,11 +22,11 @@ use crate::{
 };
 
 pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
-    likelihoods: ArrayView3<f64>,
+    likelihoods: ArrayView2<[f64; 10]>,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
     maf: f64,
-) -> Array2<f64> {
+) -> Array1<[f64; 4]> {
     let num_variants = likelihoods.shape()[0];
     let num_samples = likelihoods.shape()[1];
 
@@ -56,11 +56,9 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
         .for_each_init(
             || LaneVector::<L, 10>::new(num_samples),
             |buffer, (out, variant_likelihood)| {
-                let sample_likelihoods = variant_likelihood.as_slice().unwrap().as_chunks::<10>();
+                let sample_likelihoods = variant_likelihood.as_slice().unwrap();
 
-                assert!(sample_likelihoods.1.is_empty());
-
-                buffer.fill_from_iter(sample_likelihoods.0.iter().copied());
+                buffer.fill_from_iter(sample_likelihoods.iter().copied());
 
                 let x0 = [0.25; 4];
 
@@ -93,20 +91,20 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
 
     bar.done();
 
-    let mut af = Array2::zeros((num_variants, 4));
-    let mut multi = 0;
+    // let mut af = Array2::zeros((num_variants, 4));
+    // let mut multi = 0;
 
-    for (v, x) in outputs.iter().enumerate() {
-        if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
-            multi += 1;
-        }
+    // for (v, x) in outputs.iter().enumerate() {
+    //     if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
+    //         multi += 1;
+    //     }
 
-        for i in 0..4 {
-            af[[v, i]] = x[i];
-        }
-    }
+    //     for i in 0..4 {
+    //         af[[v, i]] = x[i];
+    //     }
+    // }
 
-    log::info!("Multi-allelic sites {multi}");
+    // log::info!("Multi-allelic sites {multi}");
 
-    af
+    Array1::from_vec(outputs)
 }

@@ -1,27 +1,17 @@
 use std::num::NonZeroU64;
 
 use itertools::Itertools;
-use ndarray::{Array2, Array3, ArrayView2, ArrayView3};
+use ndarray::{Array2, Array3, ArrayView2, ArrayView3, Axis};
 use paralight::{
     iter::{
-        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
-        ZipableSource,
-    },
-    threads::ThreadPool,
+        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, IntoExactParallelSource, ParallelIteratorExt, ZipableSource,
+    }, threads::ThreadPool,
 };
 
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul},
-    cls,
-    conditional::{self},
-    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
-    lanearray2::convert_to_lanes,
-    lanevector::LaneVector,
-    mixture::MixtureMatrix,
-    quadratic::ClsQuadratic,
-    sqp::{self, Tuneables},
+    algebra::{Vector, dot, mul}, cls, conditional::{self}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::LaneVector, mixture::{LaneCompleteVector, LanePartialVector, MixtureMatrix}, quadratic::ClsQuadratic, simd::Lane, sqp::{self, Tuneables}, wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -72,41 +62,57 @@ fn reorder_genotypes(mut genotypes: ArrayView3<u8>) -> Array3<u8> {
     genotypes
 }
 
+struct LaneBuffers<L : Lane> {
+    pub pv2: LanePartialVector<L, 3>,
+    pub pv3: LanePartialVector<L, 6>,
+    pub pv4: LanePartialVector<L, 10>,
+    pub cv: LaneCompleteVector<L>
+}
+
+impl<L: Lane> LaneBuffers<L> {
+    fn new(n2: usize, n3: usize, n4: usize) -> LaneBuffers<L> {
+        LaneBuffers { pv2: LanePartialVector::new(n2), pv3: LanePartialVector::new(n3), pv4: LanePartialVector::new(n4) , cv: LaneCompleteVector::new(n2, n3, n4)}
+    }
+}
+
 pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjective + MixtureMatrix>(
-    likelihoods: ArrayView3<f64>,
-    allele_frequencies: ArrayView2<f64>,
+    glaf: &GlAf,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
-) -> Vec<Output> {
-    let num_v = allele_frequencies.shape()[0];
+) -> Vec<Vec<Output>> {
+    let m2 = conditional::calculate_conditional_probability_arrays::<L, 2, 3>(glaf.af2.view());
+    let m3 = conditional::calculate_conditional_probability_arrays::<L, 3, 6>(glaf.af3.view());
+    let m4 = conditional::calculate_conditional_probability_arrays::<L, 4, 10>(glaf.af4.view());
 
-    // TODO calculate this across each locus to figure out how many alleles there are
-    // Then we can condense the stacked matrix to make it smaller? Idk, complicated...
+    let n2 = m2.len;
+    let n3 = m3.len;
+    let n4 = m4.len;
 
-    // let m_matrices = conditional::calculate_m_matrices(allele_frequencies);
-    let m_matrices = conditional::calculate_m_matrices::<L>(allele_frequencies);
+    let num_v = n2 + n3 + n4;
 
-    let likelihoods = convert_to_lanes(likelihoods);
+    let likelihoods2 = convert_to_lanes::<L, 3>(glaf.gl2.view());
+    let likelihoods3 = convert_to_lanes::<L, 6>(glaf.gl3.view());
+    let likelihoods4 = convert_to_lanes::<L, 10>(glaf.gl4.view());
 
-    // Only to analyze the data, before I make it faster...
-    // let tmp = swapped.slice(s![0..16, .., ..]);
-    // Use every sample
-    // let tmp = swapped.view();
+    let num_samples = likelihoods2.rows;
 
-    let pairs: Vec<_> = likelihoods
-        .iter_rows()
-        .enumerate()
-        .array_combinations_with_replacement()
-        .collect();
-    let mut outputs = vec![Output::default(); pairs.len()];
+    // We have S samples. For each sample we have a bunch of sites (di, tri, tetra).
+    // We have the same number of each sample
+
+    // for i in 0..num_samples (in parallel)
+    //   Calculate A_i
+    //   for j in (i+1)..num_samples
+    //       Calculate i*A_j, then compute
+
+    let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
     log::info!(
         "Calculating Jacquard coefficients for {} pairs using {} sites",
-        pairs.len(),
+        num_pairs,
         num_v
     );
 
-    let bar = ProgressBar::new(pairs.len().try_into().unwrap())
+    let bar = ProgressBar::new(num_pairs.try_into().unwrap())
         .with_eta()
         .with_bar_width(50)
         .with_update_interval(100)
@@ -116,46 +122,77 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
 
     let tune = Tuneables::new(iterations, NonZeroU64::new(10).unwrap());
 
-    (outputs.par_iter_mut(), pairs.par_iter())
+    let mut nested_outputs = vec![vec![]; num_samples];
+
+    (nested_outputs.par_iter_mut(), (0..num_samples).into_par_iter())
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each_init(
-            || LaneVector::<L, 9>::new(num_v),
-            |p_mat, (out, [(x, likelihoods_x), (y, likelihoods_y)])| {
-                let delta = if x == y {
-                    [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
-                } else {
-                    [1.0 / 9.0; 9]
-                };
+            || LaneBuffers::new(n2, n3, n4),
+            |buffers, (out, x)| {
 
-                L::mixture_component_matrix(&m_matrices.lanes, likelihoods_x.0, likelihoods_y.0, &mut p_mat.lanes);
-                f64::mixture_component_matrix(&m_matrices.rem, likelihoods_x.1, likelihoods_y.1, &mut p_mat.rem);
+                let like2_x = likelihoods2.sample(x);
+                let like3_x = likelihoods3.sample(x);
+                let like4_x = likelihoods4.sample(x);
 
-                let obj = |x: &Vector<9>, eps| L::compute_obj(p_mat, &x, eps);
-                let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(p_mat, &x, eps);
-                let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+                L::partial_mixture_component_matrix(&m2.lanes, like2_x.0, &mut buffers.pv2.lanes);
+                L::partial_mixture_component_matrix(&m3.lanes, like3_x.0, &mut buffers.pv3.lanes);
+                L::partial_mixture_component_matrix(&m4.lanes, like4_x.0, &mut buffers.pv4.lanes);
 
-                if iters >= tune.sqp_max_iter.get() {
-                    log::warn!(
-                        "No convergence for Jacquard coefficients, max iterations {} exceeded",
-                        tune.sqp_max_iter
-                    );
+                f64::partial_mixture_component_matrix(&m2.rem, like2_x.1, &mut buffers.pv2.rem);
+                f64::partial_mixture_component_matrix(&m3.rem, like3_x.1, &mut buffers.pv3.rem);
+                f64::partial_mixture_component_matrix(&m4.rem, like4_x.1, &mut buffers.pv4.rem);
+
+                let mut v = Vec::new();
+                for y in x..num_samples {
+                    let delta = if x == y {
+                        [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+                    } else {
+                        [1.0 / 9.0; 9]
+                    };
+
+                    let like2_y = likelihoods2.sample(y);
+                    let like3_y = likelihoods3.sample(y);
+                    let like4_y = likelihoods4.sample(y);
+
+                    L::complete_mixture_component_matrix(&buffers.pv2.lanes, like2_y.0, &mut buffers.cv.lanes2());
+                    L::complete_mixture_component_matrix(&buffers.pv3.lanes, like3_y.0, &mut buffers.cv.lanes3());
+                    L::complete_mixture_component_matrix(&buffers.pv4.lanes, like4_y.0, &mut buffers.cv.lanes4());
+
+                    f64::complete_mixture_component_matrix(&buffers.pv2.rem, like2_y.1, &mut buffers.cv.rem2());
+                    f64::complete_mixture_component_matrix(&buffers.pv3.rem, like3_y.1, &mut buffers.cv.rem3());
+                    f64::complete_mixture_component_matrix(&buffers.pv4.rem, like4_y.1, &mut buffers.cv.rem4());
+
+                    let obj = |x: &Vector<9>, eps| L::compute_obj(&buffers.cv.lanes(), &buffers.cv.rem(), &x, eps);
+                    let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffers.cv.lanes(), &buffers.cv.rem(), &x, eps);
+                    let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+
+                    if iters >= tune.sqp_max_iter.get() {
+                        log::warn!(
+                            "No convergence for Jacquard coefficients, max iterations {} exceeded",
+                            tune.sqp_max_iter
+                        );
+                    }
+
+                    let output = Output {
+                        x,
+                        y,
+                        jacquard: delta,
+                        iters,
+                        obj: f,
+                    };
+
+                    v.push(output);
                 }
 
-                *out = Output {
-                    x: *x,
-                    y: *y,
-                    jacquard: delta,
-                    iters,
-                    obj: f,
-                };
-                handle.inc();
+                handle.add(v.len().try_into().unwrap());
+                *out = v;
             },
         );
 
     bar.done();
 
-    outputs
+    nested_outputs
 }
 
 #[derive(Clone, Copy)]
@@ -184,7 +221,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     allele_frequencies: ArrayView2<f64>,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
-) -> Vec<Output> {
+) -> Vec<Vec<Output>> {
     let genotypes = reorder_genotypes(genotypes);
 
     // TODO calculate this across each locus to figure out how many alleles there are
@@ -201,20 +238,17 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     let num_v = allele_frequencies.shape()[0];
     let quadratic_q = L::compute_quadratic(&lv, num_v);
 
-    let pairs: Vec<[(usize, ArrayView2<u8>); 2]> = genotypes
-        .outer_iter()
-        .enumerate()
-        .array_combinations_with_replacement()
-        .collect();
-    let mut output = vec![Output::default(); pairs.len()];
+    let num_samples = genotypes.dim().0;
+
+    let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
     log::info!(
         "Calculating Jacquard coefficients for {} pairs using {} variants",
-        pairs.len(),
+        num_pairs,
         num_v
     );
 
-    let bar = ProgressBar::new(pairs.len().try_into().unwrap())
+    let bar = ProgressBar::new(num_pairs.try_into().unwrap())
         .with_eta()
         .with_bar_width(50)
         .with_update_interval(100)
@@ -225,47 +259,56 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     // The SQP iterations don't matter here
     let tune = Tuneables::new(iterations, iterations);
 
-    (output.par_iter_mut(), pairs.par_iter())
+    let mut nested_outputs = vec![vec![]; num_samples];
+
+    (nested_outputs.par_iter_mut(), (0..num_samples).into_par_iter())
         .zip_eq()
         .with_thread_pool(thread_pool)
-        .for_each(|(out, [(x, genotypes_x), (y, genotypes_y)])| {
-            let delta = if x == y {
-                [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
-            } else {
-                [1.0 / 9.0; 9]
-            };
-            let c = cls::calculate_quadratic_c(
-                &all_joint_genotypes,
-                &stacked_m,
-                *genotypes_x,
-                *genotypes_y,
-                &lookup_table,
-            );
-
-            let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
-
-            let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
-
-            if iters >= tune.qp_max_iter.get() {
-                log::warn!(
-                    "No convergence for Jacquard coefficients, max iterations {} exceeded",
-                    tune.qp_max_iter
+        .for_each(|(out, x)| {
+            let genotypes_x = genotypes.index_axis(Axis(0), x);
+            let iter = (x..num_samples).map(|y| {
+                let genotypes_y = genotypes.index_axis(Axis(0), y);
+                let delta = if x == y {
+                    [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+                } else {
+                    [1.0 / 9.0; 9]
+                };
+                let c = cls::calculate_quadratic_c(
+                    &all_joint_genotypes,
+                    &stacked_m,
+                    genotypes_x,
+                    genotypes_y,
+                    &lookup_table,
                 );
-            }
 
-            *out = Output {
-                x: *x,
-                y: *y,
-                jacquard: delta,
-                iters,
-                obj,
-            };
-            handle.inc();
+                let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
+
+                let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
+
+                if iters >= tune.qp_max_iter.get() {
+                    log::warn!(
+                        "No convergence for Jacquard coefficients, max iterations {} exceeded",
+                        tune.qp_max_iter
+                    );
+                }
+
+                Output {
+                    x,
+                    y,
+                    jacquard: delta,
+                    iters,
+                    obj,
+                }
+            });
+
+            out.extend(iter);
+
+            handle.add(out.len().try_into().unwrap());
         });
 
     bar.done();
 
-    output
+    nested_outputs
 }
 
 #[cfg(test)]

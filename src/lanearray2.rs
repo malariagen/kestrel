@@ -1,4 +1,4 @@
-use ndarray::ArrayView3;
+use ndarray::ArrayView2;
 
 use crate::simd::Lane;
 
@@ -11,32 +11,41 @@ use crate::simd::Lane;
 // but that's worse for cache locality
 
 // We store the Matrix as two flat buffers instead (row major)
-pub struct LaneArray2<L: Lane, const R: usize> {
-    pub lanes: Vec<[L; R]>,
-    pub rem: Vec<[f64; R]>,
+pub struct LaneArray2<L: Lane, const G: usize> {
+    pub lanes: Vec<[L; G]>,
+    pub rem: Vec<[f64; G]>,
     pub rows: usize,
     pub num_lanes: usize,
     pub num_rem: usize,
 }
 
-impl<L: Lane, const R: usize> LaneArray2<L, R> {
-    pub fn new(rows: usize, cols: usize) -> Self {
-        let num_lanes = cols / L::N;
-        let num_rem = cols % L::N;
+impl<L: Lane, const G: usize> LaneArray2<L, G> {
+    pub fn new(nums_samples: usize, num_sites: usize) -> Self {
+        let num_lanes = num_sites / L::N;
+        let num_rem = num_sites % L::N;
 
-        let lanes = vec![[L::default(); R]; rows * num_lanes];
-        let rem = vec![[0.0; R]; rows * num_rem];
+        let lanes = vec![[L::default(); G]; nums_samples * num_lanes];
+        let rem = vec![[0.0; G]; nums_samples * num_rem];
 
         LaneArray2 {
             lanes,
             rem,
-            rows,
+            rows: nums_samples,
             num_lanes,
             num_rem,
         }
     }
 
-    pub fn iter_rows(&self) -> impl Iterator<Item = (&[[L; R]], &[[f64; R]])> {
+    pub fn sample(&self, s: usize) -> (&[[L; G]], &[[f64; G]]) {
+        let num_lanes = self.num_lanes;
+        let num_rem = self.num_rem;
+
+        let lane_row = &self.lanes[s * num_lanes..(s + 1) * num_lanes];
+        let rem_row = &self.rem[s * num_rem..(s + 1) * num_rem];
+        (lane_row, rem_row)
+    }
+
+    pub fn iter_samples(&self) -> impl Iterator<Item = (&[[L; G]], &[[f64; G]])> {
         let num_lanes = self.num_lanes;
         let num_rem = self.num_rem;
 
@@ -48,11 +57,10 @@ impl<L: Lane, const R: usize> LaneArray2<L, R> {
     }
 }
 
-pub fn convert_to_lanes<L: Lane>(genotype_likelihoods: ArrayView3<f64>) -> LaneArray2<L, 10> {
-    let num_v = genotype_likelihoods.shape()[0];
-    let num_s = genotype_likelihoods.shape()[1];
+pub fn convert_to_lanes<L: Lane, const G: usize>(genotype_likelihoods: ArrayView2<[f64; G]>) -> LaneArray2<L, G> {
+    let (num_v, num_s) = genotype_likelihoods.dim();
 
-    let mut lane_array = LaneArray2::<L, 10>::new(num_s, num_v);
+    let mut lane_array = LaneArray2::<L, G>::new(num_s, num_v);
 
     let num_lanes = num_v / L::N;
     let num_rem = num_v % L::N;
@@ -64,8 +72,8 @@ pub fn convert_to_lanes<L: Lane>(genotype_likelihoods: ArrayView3<f64>) -> LaneA
 
             for i in 0..L::N {
                 let v = v_base + i;
-                for r in 0..10 {
-                    block[r].set(i, genotype_likelihoods[[v, s, r]]);
+                for r in 0..G {
+                    block[r].set(i, genotype_likelihoods[[v, s]][r]);
                 }
             }
         }
@@ -74,8 +82,8 @@ pub fn convert_to_lanes<L: Lane>(genotype_likelihoods: ArrayView3<f64>) -> LaneA
             let v = num_lanes * L::N + r;
             let rem_block = &mut lane_array.rem[s * num_rem + r];
 
-            for i in 0..10 {
-                rem_block[i] = genotype_likelihoods[[v, s, i]];
+            for i in 0..G {
+                rem_block[i] = genotype_likelihoods[[v, s]][i];
             }
         }
     }

@@ -1,7 +1,6 @@
 use crate::{
     algebra::{Matrix, Vector},
     simd::{Arith, Lane, LoadStore},
-    lanevector::LaneVector,
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -17,50 +16,49 @@ use crate::simd::neon::NeonLane;
 const BLOCKS: usize = 32;
 
 pub trait JacquardGradHess: Lane {
-    fn compute_grad_hess(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>);
+    fn compute_grad_hess(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>);
 }
 
 #[cfg(target_arch = "x86_64")]
 impl JacquardGradHess for Avx512Lane {
-    fn compute_grad_hess(p_mat: &LaneVector<Avx512Lane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    fn compute_grad_hess(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
         use std::arch::x86_64::__m512d;
-        return compute_grad_hess_generic::<Avx512Lane, __m512d>(p_mat, x, eps);
+        return compute_grad_hess_generic::<Self, __m512d>(lanes, rem, x, eps);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl JacquardGradHess for Avx2Lane {
-    fn compute_grad_hess(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    fn compute_grad_hess(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
         use std::arch::x86_64::__m256d;
-        return compute_grad_hess_generic::<Avx2Lane, __m256d>(p_mat, x, eps);
+        return compute_grad_hess_generic::<Self, __m256d>(lanes, rem, x, eps);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl JacquardGradHess for NeonLane {
-    fn compute_grad_hess(p_mat: &LaneVector<NeonLane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+    fn compute_grad_hess(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
         use std::arch::aarch64::float64x2_t;
-        return compute_grad_hess_generic::<NeonLane, float64x2_t>(p_mat, x, eps);
+        return compute_grad_hess_generic::<Self, float64x2_t>(lanes, rem, x, eps);
     }
 }
 
 impl JacquardGradHess for f64 {
-    fn compute_grad_hess(p_mat: &LaneVector<f64, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-        compute_grad_hess_generic::<f64, f64>(p_mat, x, eps)
+    fn compute_grad_hess(lanes: &[[Self; 9]], rem: &[[f64; 9]], x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
+        compute_grad_hess_generic::<f64, f64>(lanes, rem, x, eps)
     }
 }
 
 fn compute_grad_hess_generic<L: Lane, S: Arith + LoadStore<L>>(
-    p_mat: &LaneVector<L, 9>,
+    lanes: &[[L; 9]],
+    rem: &[[f64; 9]],
     x: &Vector<9>,
     eps: f64,
 ) -> (Vector<9>, Matrix<9>) {
-    let (blocks, remainder) = p_mat.as_lanes();
+    let (bg, bh) = compute_grad_hess_lane::<L, S>(lanes, x, eps);
+    let (rg, rh) = compute_grad_hess_lane::<f64, f64>(rem, x, eps);
 
-    let (bg, bh) = compute_grad_hess_lane::<L, S>(blocks, x, eps);
-    let (rg, rh) = compute_grad_hess_lane::<f64, f64>(remainder, x, eps);
-
-    let n = p_mat.len() as f64;
+    let n = (lanes.len() + rem.len()) as f64;
 
     let mut g = [0.0f64; 9];
     let mut h = [[0.0f64; 9]; 9];

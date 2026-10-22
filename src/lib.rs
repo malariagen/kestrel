@@ -51,8 +51,7 @@ mod kestrel {
 
         let outputs = crate::wrapper::calculate_relatedness_coefficients_gt(gt_view, af_view, threads, iterations);
 
-        let num_samples = gt_view.shape()[1];
-        let (jacquard, kinship, inbreeding) = build_arrays(num_samples, &outputs);
+        let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
 
         (
             jacquard.into_pyarray(py),
@@ -80,8 +79,7 @@ mod kestrel {
 
         let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl_view, af_view, threads, iterations, minimum_allele_frequency);
 
-        let num_samples = gl_view.shape()[1];
-        let (jacquard, kinship, inbreeding) = build_arrays(num_samples, &outputs);
+        let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
 
         (
             jacquard.into_pyarray(py),
@@ -99,14 +97,16 @@ mod kestrel {
     }
 }
 
-fn build_arrays(num_samples: usize, outputs: &[Output]) -> (Array3<f64>, Array2<f64>, Array1<f64>) {
+fn build_arrays(outputs: &[Vec<Output>]) -> (Array3<f64>, Array2<f64>, Array1<f64>) {
+    let num_samples = outputs.len();
+
     let mut jacquard = Array3::<f64>::zeros((num_samples, num_samples, 9));
     let mut kinship = Array2::<f64>::zeros((num_samples, num_samples));
     let mut inbreeding = Array1::<f64>::zeros(num_samples);
 
     let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
-    for out in outputs.iter() {
+    for out in outputs.iter().flatten() {
         let x = out.x;
         let y = out.y;
 

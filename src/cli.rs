@@ -102,7 +102,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Output]) -> Result<()> {
+fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> Result<()> {
     let mut writer = WriterBuilder::new().delimiter(b'\t').from_path(ofile)?;
 
     writer.write_record([
@@ -125,7 +125,7 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Output]) -> Resul
 
     let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
 
-    for out in outputs.iter() {
+    for out in outputs.iter().flatten() {
         let sample1 = &samples[out.x];
         let sample2 = &samples[out.y];
 
