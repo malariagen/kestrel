@@ -79,13 +79,15 @@ pub fn run_cli(args: &[String]) -> Result<()> {
         Tag::GL => {
             let (samples, gl, af) = crate::vcf::parse_vcf_gl(vcf_file, parse_af)?;
             let af = af.as_ref().map(|a| a.view());
-            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
+            let outputs =
+                crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
             (samples, outputs)
         }
         Tag::PL => {
             let (samples, gl, af) = crate::vcf::parse_vcf_pl(vcf_file, parse_af)?;
             let af = af.as_ref().map(|a| a.view());
-            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
+            let outputs =
+                crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
             (samples, outputs)
         }
         Tag::GT => {
@@ -145,20 +147,8 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
         // TODO condition number of matrix
 
         writer.serialize((
-            sample1,
-            sample2,
-            kinship,
-            delta1,
-            delta2,
-            delta3,
-            delta4,
-            delta5,
-            delta6,
-            delta7,
-            delta8,
-            delta9,
-            iterations,
-            objective,
+            sample1, sample2, kinship, delta1, delta2, delta3, delta4, delta5, delta6, delta7, delta8, delta9,
+            iterations, objective,
         ))?;
     }
 

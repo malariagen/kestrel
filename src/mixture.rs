@@ -1,5 +1,6 @@
 use crate::{
-    lanematrix::M, simd::{Arith, Lane, LoadStore},
+    lanematrix::M,
+    simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -40,7 +41,11 @@ impl MixtureMatrix for Avx512Lane {
         partial_mat: &mut [[[Self; 9]; G]],
     ) {
         use std::arch::x86_64::__m512d;
-        return calculate_partial_mixture_component_matrix::<Avx512Lane, __m512d, G>(m_arrays, likelihoods, partial_mat);
+        return calculate_partial_mixture_component_matrix::<Avx512Lane, __m512d, G>(
+            m_arrays,
+            likelihoods,
+            partial_mat,
+        );
     }
 
     fn complete_mixture_component_matrix<const G: usize>(
@@ -82,7 +87,11 @@ impl MixtureMatrix for NeonLane {
         partial_mat: &mut [[[Self; 9]; G]],
     ) {
         use std::arch::aarch64::float64x2_t;
-        return calculate_partial_mixture_component_matrix::<NeonLane, float64x2_t, G>(m_arrays, likelihoods, partial_mat);
+        return calculate_partial_mixture_component_matrix::<NeonLane, float64x2_t, G>(
+            m_arrays,
+            likelihoods,
+            partial_mat,
+        );
     }
 
     fn complete_mixture_component_matrix<const G: usize>(
@@ -91,7 +100,11 @@ impl MixtureMatrix for NeonLane {
         p_mat: &mut [[Self; 9]],
     ) {
         use std::arch::aarch64::float64x2_t;
-        return calculate_complete_mixture_component_matrix::<NeonLane, float64x2_t, G>(partial_mat, likelihoods, p_mat);
+        return calculate_complete_mixture_component_matrix::<NeonLane, float64x2_t, G>(
+            partial_mat,
+            likelihoods,
+            p_mat,
+        );
     }
 }
 
@@ -113,49 +126,49 @@ impl MixtureMatrix for f64 {
     }
 }
 
-#[inline]
-fn calculate_mixture_component_matrix_old<L: Lane, S: Arith + LoadStore<L>, const G: usize>(
-    m_matrices: &[M<L, G>],
-    likelihoods_x: &[[L; G]],
-    likelihoods_y: &[[L; G]],
-    p_mat: &mut [[L; 9]],
-) {
-    let len = m_matrices.len();
-    assert!(likelihoods_x.len() == len);
-    assert!(likelihoods_y.len() == len);
-    assert!(p_mat.len() == len);
+// #[inline]
+// fn calculate_mixture_component_matrix_old<L: Lane, S: Arith + LoadStore<L>, const G: usize>(
+//     m_matrices: &[M<L, G>],
+//     likelihoods_x: &[[L; G]],
+//     likelihoods_y: &[[L; G]],
+//     p_mat: &mut [[L; 9]],
+// ) {
+//     let len = m_matrices.len();
+//     assert!(likelihoods_x.len() == len);
+//     assert!(likelihoods_y.len() == len);
+//     assert!(p_mat.len() == len);
 
-    // p = lx * ly * M
-    for l in 0..len {
-        let out = unsafe { p_mat.get_unchecked_mut(l) };
-        let like_x = unsafe { likelihoods_x.get_unchecked(l) };
-        let like_y = unsafe { likelihoods_y.get_unchecked(l) };
-        let m = unsafe { m_matrices.get_unchecked(l) };
+//     // p = lx * ly * M
+//     for l in 0..len {
+//         let out = unsafe { p_mat.get_unchecked_mut(l) };
+//         let like_x = unsafe { likelihoods_x.get_unchecked(l) };
+//         let like_y = unsafe { likelihoods_y.get_unchecked(l) };
+//         let m = unsafe { m_matrices.get_unchecked(l) };
 
-        // 9 registers
-        let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
+//         // 9 registers
+//         let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
 
-        for i in 0..G {
-            let lx = S::load(&like_x[i]);
-            for j in 0..G {
-                // For architectures with enough registers this will get hoisted
-                // out of the loop
-                let ly = S::load(&like_y[j]);
-                // This needs to match the order of the rows of the M matrix
-                // In calculate_all_joint_genotypes, we iterate over the second
-                // individual completely before doing the first
-                let g = lx.mul(ly);
-                for k in 0..9 {
-                    p[k] = g.fma(S::load(&m[i][j][k]), p[k]);
-                }
-            }
-        }
+//         for i in 0..G {
+//             let lx = S::load(&like_x[i]);
+//             for j in 0..G {
+//                 // For architectures with enough registers this will get hoisted
+//                 // out of the loop
+//                 let ly = S::load(&like_y[j]);
+//                 // This needs to match the order of the rows of the M matrix
+//                 // In calculate_all_joint_genotypes, we iterate over the second
+//                 // individual completely before doing the first
+//                 let g = lx.mul(ly);
+//                 for k in 0..9 {
+//                     p[k] = g.fma(S::load(&m[i][j][k]), p[k]);
+//                 }
+//             }
+//         }
 
-        for k in 0..9 {
-            p[k].store(&mut out[k]);
-        }
-    }
-}
+//         for k in 0..9 {
+//             p[k].store(&mut out[k]);
+//         }
+//     }
+// }
 
 // We have K x G x 9 x G
 // And K x G
@@ -226,11 +239,9 @@ fn calculate_complete_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>,
     }
 }
 
-
 pub struct LanePartialVector<L: Lane, const G: usize> {
     pub lanes: Vec<[[L; 9]; G]>,
     pub rem: Vec<[[f64; 9]; G]>,
-    len: usize,
 }
 
 impl<L: Lane, const G: usize> LanePartialVector<L, G> {
@@ -244,7 +255,6 @@ impl<L: Lane, const G: usize> LanePartialVector<L, G> {
         LanePartialVector {
             lanes: lane_buf,
             rem: rem_buf,
-            len,
         }
     }
 }
@@ -254,10 +264,8 @@ pub struct LaneCompleteVector<L: Lane> {
     rem: Vec<[f64; 9]>,
     num_lanes2: usize,
     num_lanes3: usize,
-    num_lanes4: usize,
     num_rem2: usize,
     num_rem3: usize,
-    num_rem4: usize,
 }
 
 impl<L: Lane> LaneCompleteVector<L> {
@@ -282,10 +290,8 @@ impl<L: Lane> LaneCompleteVector<L> {
             rem,
             num_lanes2,
             num_lanes3,
-            num_lanes4,
             num_rem2,
             num_rem3,
-            num_rem4,
         }
     }
 

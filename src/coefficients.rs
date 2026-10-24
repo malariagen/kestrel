@@ -3,14 +3,26 @@ use std::num::NonZeroU64;
 use ndarray::{Array2, Array3, ArrayView2, ArrayView3, Axis};
 use paralight::{
     iter::{
-        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelSource, ParallelIteratorExt, ZipableSource,
-    }, threads::ThreadPool,
+        ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelSource, ParallelIteratorExt,
+        ZipableSource,
+    },
+    threads::ThreadPool,
 };
 
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, cls, conditional::{self}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::LaneVector, mixture::{LaneCompleteVector, LanePartialVector, MixtureMatrix}, quadratic::ClsQuadratic, simd::Lane, sqp::{self, Tuneables}, wrapper::GlAf,
+    algebra::{Vector, dot, mul},
+    cls,
+    conditional::{self},
+    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
+    lanearray2::convert_to_lanes,
+    lanevector::LaneVector,
+    mixture::{LaneCompleteVector, LanePartialVector, MixtureMatrix},
+    quadratic::ClsQuadratic,
+    simd::Lane,
+    sqp::{self, Tuneables},
+    wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -61,16 +73,21 @@ fn reorder_genotypes(mut genotypes: ArrayView3<u8>) -> Array3<u8> {
     genotypes
 }
 
-struct LaneBuffers<L : Lane> {
+struct LaneBuffers<L: Lane> {
     pub pv2: LanePartialVector<L, 3>,
     pub pv3: LanePartialVector<L, 6>,
     pub pv4: LanePartialVector<L, 10>,
-    pub cv: LaneCompleteVector<L>
+    pub cv: LaneCompleteVector<L>,
 }
 
 impl<L: Lane> LaneBuffers<L> {
     fn new(n2: usize, n3: usize, n4: usize) -> LaneBuffers<L> {
-        LaneBuffers { pv2: LanePartialVector::new(n2), pv3: LanePartialVector::new(n3), pv4: LanePartialVector::new(n4) , cv: LaneCompleteVector::new(n2, n3, n4)}
+        LaneBuffers {
+            pv2: LanePartialVector::new(n2),
+            pv3: LanePartialVector::new(n3),
+            pv4: LanePartialVector::new(n4),
+            cv: LaneCompleteVector::new(n2, n3, n4),
+        }
     }
 }
 
@@ -93,8 +110,8 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     let likelihoods3 = convert_to_lanes::<L, 6>(glaf.gl3.view());
     let likelihoods4 = convert_to_lanes::<L, 10>(glaf.gl4.view());
 
-    //let num_samples = likelihoods2.rows;
-    let num_samples = 16;
+    // let num_samples = likelihoods2.rows;
+    let num_samples = 100;
 
     let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
@@ -122,7 +139,6 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
         .for_each_init(
             || LaneBuffers::new(n2, n3, n4),
             |buffers, (out, x)| {
-
                 let like2_x = likelihoods2.sample(x);
                 let like3_x = likelihoods3.sample(x);
                 let like4_x = likelihoods4.sample(x);
@@ -155,7 +171,8 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                     f64::complete_mixture_component_matrix(&buffers.pv4.rem, like4_y.1, &mut buffers.cv.rem4());
 
                     let obj = |x: &Vector<9>, eps| L::compute_obj(&buffers.cv.lanes(), &buffers.cv.rem(), x, eps);
-                    let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffers.cv.lanes(), &buffers.cv.rem(), x, eps);
+                    let grad_hess =
+                        |x: &Vector<9>, eps| L::compute_grad_hess(&buffers.cv.lanes(), &buffers.cv.rem(), x, eps);
                     let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                     if iters >= tune.sqp_max_iter.get() {
@@ -174,11 +191,9 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                         iters,
                         obj: f,
                     }
-
                 });
 
                 out.extend(iter);
-
                 // handle.add(out.len().try_into().unwrap());
             },
         );

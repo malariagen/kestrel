@@ -1,7 +1,7 @@
 use crate::{
     algebra::Matrix,
-    simd::{Arith, Lane, LoadStore},
     lanevector::LaneVector,
+    simd::{Arith, Lane, LoadStore},
 };
 
 // h - 8*8*45 = 2880 bytes

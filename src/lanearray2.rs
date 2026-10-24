@@ -14,7 +14,6 @@ use crate::simd::Lane;
 pub struct LaneArray2<L: Lane, const G: usize> {
     pub lanes: Vec<[L; G]>,
     pub rem: Vec<[f64; G]>,
-    pub rows: usize,
     pub num_lanes: usize,
     pub num_rem: usize,
 }
@@ -30,7 +29,6 @@ impl<L: Lane, const G: usize> LaneArray2<L, G> {
         LaneArray2 {
             lanes,
             rem,
-            rows: nums_samples,
             num_lanes,
             num_rem,
         }
@@ -43,17 +41,6 @@ impl<L: Lane, const G: usize> LaneArray2<L, G> {
         let lane_row = &self.lanes[s * num_lanes..(s + 1) * num_lanes];
         let rem_row = &self.rem[s * num_rem..(s + 1) * num_rem];
         (lane_row, rem_row)
-    }
-
-    pub fn iter_samples(&self) -> impl Iterator<Item = (&[[L; G]], &[[f64; G]])> {
-        let num_lanes = self.num_lanes;
-        let num_rem = self.num_rem;
-
-        (0..self.rows).map(move |r| {
-            let lane_row = &self.lanes[r * num_lanes..(r + 1) * num_lanes];
-            let rem_row = &self.rem[r * num_rem..(r + 1) * num_rem];
-            (lane_row, rem_row)
-        })
     }
 }
 

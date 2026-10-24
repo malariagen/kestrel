@@ -1,6 +1,6 @@
-use ndarray::{ArrayView1};
+use ndarray::ArrayView1;
 
-use crate::{simd::Lane, iis, lanematrix::LaneM};
+use crate::{iis, lanematrix::LaneM, simd::Lane};
 
 type Genotype = (usize, usize);
 type MIis<const G: usize> = [[(Genotype, Genotype, usize); G]; G];
@@ -29,7 +29,9 @@ pub fn calculate_joint_genotype_iis<const A: usize, const G: usize>() -> MIis<G>
     table
 }
 
-pub fn calculate_conditional_probability_arrays<L: Lane, const A: usize, const G: usize>(allele_frequencies: ArrayView1<[f64; A]>) -> LaneM<L, G> {
+pub fn calculate_conditional_probability_arrays<L: Lane, const A: usize, const G: usize>(
+    allele_frequencies: ArrayView1<[f64; A]>,
+) -> LaneM<L, G> {
     let num_v = allele_frequencies.dim();
 
     let all_joint_genotypes = calculate_joint_genotype_iis::<A, G>();

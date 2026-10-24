@@ -21,7 +21,7 @@ impl<L: Lane, const G: usize> LaneM<L, G> {
         LaneM {
             lanes: lane_buf,
             rem: rem_buf,
-            len
+            len,
         }
     }
 

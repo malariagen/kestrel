@@ -1,11 +1,11 @@
-use std::{alloc::handle_alloc_error, num::{NonZeroU64, NonZeroUsize}};
+use std::num::{NonZeroU64, NonZeroUsize};
 
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2, ArrayView3, Axis};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    simd::simd::Simd,
     coefficients::{Output, calculate_allele_frequencies},
+    simd::simd::Simd,
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -87,22 +87,25 @@ pub fn calculate_relatedness_coefficients_gl(
     allele_frequencies: Option<ArrayView2<f64>>,
     threads: Option<NonZeroUsize>,
     iterations: NonZeroU64,
-    minimum_allele_frequency: Option<f64>
+    minimum_allele_frequency: Option<f64>,
 ) -> Vec<Vec<Output>> {
-
     let (num_v, num_s, num_l) = genotype_likelihoods.dim();
 
     assert!(num_v > 0, "Must have at least one variant");
     assert!(num_s > 0, "Must have at least one sample");
     assert!(num_l == 10, "Must have exactly 10 GLs per sample");
 
-    let genotype_likelihoods: Array2<[f64; 10]> = genotype_likelihoods.map_axis(Axis(2), |lane| std::array::from_fn(|i| lane[i]) );
+    let genotype_likelihoods: Array2<[f64; 10]> =
+        genotype_likelihoods.map_axis(Axis(2), |lane| std::array::from_fn(|i| lane[i]));
 
     // This is the smallest allele frequency possible given our sample size
     // Anything lower than this is just noise
     let maf = minimum_allele_frequency.unwrap_or(1.0 / (2.0 * num_s as f64));
 
-    assert!(0.0 <= maf && maf <= 1.0, "Minimum allele frequency must be within 0 to 1");
+    assert!(
+        0.0 <= maf && maf <= 1.0,
+        "Minimum allele frequency must be within 0 to 1"
+    );
 
     let simd = Simd::detect();
 
@@ -116,7 +119,7 @@ pub fn calculate_relatedness_coefficients_gl(
             assert!(num_a == 4, "Must have all four alleles");
 
             af.map_axis(Axis(1), |lane| std::array::from_fn(|i| lane[i]))
-        },
+        }
         None => {
             calculated_af = match simd {
                 #[cfg(target_arch = "x86_64")]
@@ -124,27 +127,27 @@ pub fn calculate_relatedness_coefficients_gl(
                     genotype_likelihoods.view(),
                     &mut thread_pool,
                     iterations,
-                    maf
+                    maf,
                 ),
                 #[cfg(target_arch = "x86_64")]
                 Simd::Avx2 => crate::allele::calculate_allele_frequencies::<Avx2Lane>(
                     genotype_likelihoods.view(),
                     &mut thread_pool,
                     iterations,
-                    maf
+                    maf,
                 ),
                 #[cfg(target_arch = "aarch64")]
                 Simd::Neon => crate::allele::calculate_allele_frequencies::<NeonLane>(
                     genotype_likelihoods.view(),
                     &mut thread_pool,
                     iterations,
-                    maf
+                    maf,
                 ),
                 Simd::Scalar => crate::allele::calculate_allele_frequencies::<f64>(
                     genotype_likelihoods.view(),
                     &mut thread_pool,
                     iterations,
-                    maf
+                    maf,
                 ),
             };
 
@@ -165,22 +168,16 @@ pub fn calculate_relatedness_coefficients_gl(
             iterations,
         ),
         #[cfg(target_arch = "x86_64")]
-        Simd::Avx2 => crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(
-            &glaf,
-            &mut thread_pool,
-            iterations,
-        ),
+        Simd::Avx2 => {
+            crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(&glaf, &mut thread_pool, iterations)
+        }
         #[cfg(target_arch = "aarch64")]
-        Simd::Neon => crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(
-            &glaf,
-            &mut thread_pool,
-            iterations,
-        ),
-        Simd::Scalar => crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(
-            &glaf,
-            &mut thread_pool,
-            iterations,
-        ),
+        Simd::Neon => {
+            crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(&glaf, &mut thread_pool, iterations)
+        }
+        Simd::Scalar => {
+            crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(&glaf, &mut thread_pool, iterations)
+        }
     };
 
     outputs
@@ -188,11 +185,6 @@ pub fn calculate_relatedness_coefficients_gl(
 
 fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
     let threads = threads.unwrap_or_else(|| std::thread::available_parallelism().unwrap());
-    // let threads: NonZeroUsize = if simd == Simd::Scalar {
-    //     num_cpus::get()
-    // } else {
-    //     num_cpus::get_physical()
-    // }.try_into().unwrap();
 
     log::info!("Using thread pool with {threads} threads");
 
@@ -232,60 +224,61 @@ fn split_gl_af(genotype_likelihoods: ArrayView2<[f64; 10]>, allele_frequencies: 
     let mut nonzero_gl_indices = Vec::with_capacity(10);
     let mut gl_buf = Vec::with_capacity(10);
 
-    genotype_likelihoods.outer_iter().zip(allele_frequencies.iter()).for_each(|(gl, af)| {
+    genotype_likelihoods
+        .outer_iter()
+        .zip(allele_frequencies.iter())
+        .for_each(|(gl, af)| {
+            nonzero_af_indices.clear();
+            af_buf.clear();
 
-        nonzero_af_indices.clear();
-        af_buf.clear();
-
-        for (i, a) in af.iter().enumerate() {
-            if *a > 0.0 {
-                nonzero_af_indices.push(i);
-                af_buf.push(*a);
-            }
-        }
-
-        if let Some(af_arr) = af_buf.as_array::<2>() {
-            af2.push(*af_arr);
-        }
-
-        if let Some(af_arr) = af_buf.as_array::<3>() {
-            af3.push(*af_arr);
-        }
-
-        if let Some(af_arr) = af_buf.as_array::<4>() {
-            af4.push(*af_arr);
-        }
-
-        nonzero_gl_indices.clear();
-        // New array must match VCF order
-        for (j, b) in nonzero_af_indices.iter().enumerate() {
-            for a in &nonzero_af_indices[..=j] {
-                // Index of (a, b) from VCF spec
-                let gl_index = b * (b + 1) / 2 + a;
-                nonzero_gl_indices.push(gl_index);
-            }
-        }
-
-        for sample_gls in gl.iter() {
-
-            gl_buf.clear();
-            for i in nonzero_gl_indices.iter() {
-                gl_buf.push(sample_gls[*i]);
+            for (i, a) in af.iter().enumerate() {
+                if *a > 0.0 {
+                    nonzero_af_indices.push(i);
+                    af_buf.push(*a);
+                }
             }
 
-            if let Some(gl_arr) = gl_buf.as_array::<3>() {
-                gl2.push(*gl_arr);
+            if let Some(af_arr) = af_buf.as_array::<2>() {
+                af2.push(*af_arr);
             }
 
-            if let Some(gl_arr) = gl_buf.as_array::<6>() {
-                gl3.push(*gl_arr);
+            if let Some(af_arr) = af_buf.as_array::<3>() {
+                af3.push(*af_arr);
             }
 
-            if let Some(gl_arr) = gl_buf.as_array::<10>() {
-                gl4.push(*gl_arr);
+            if let Some(af_arr) = af_buf.as_array::<4>() {
+                af4.push(*af_arr);
             }
-        }
-    });
+
+            nonzero_gl_indices.clear();
+            // New array must match VCF order
+            for (j, b) in nonzero_af_indices.iter().enumerate() {
+                for a in &nonzero_af_indices[..=j] {
+                    // Index of (a, b) from VCF spec
+                    let gl_index = b * (b + 1) / 2 + a;
+                    nonzero_gl_indices.push(gl_index);
+                }
+            }
+
+            for sample_gls in gl.iter() {
+                gl_buf.clear();
+                for i in nonzero_gl_indices.iter() {
+                    gl_buf.push(sample_gls[*i]);
+                }
+
+                if let Some(gl_arr) = gl_buf.as_array::<3>() {
+                    gl2.push(*gl_arr);
+                }
+
+                if let Some(gl_arr) = gl_buf.as_array::<6>() {
+                    gl3.push(*gl_arr);
+                }
+
+                if let Some(gl_arr) = gl_buf.as_array::<10>() {
+                    gl4.push(*gl_arr);
+                }
+            }
+        });
 
     let di = af2.len();
     let tri = af3.len();
@@ -305,5 +298,12 @@ fn split_gl_af(genotype_likelihoods: ArrayView2<[f64; 10]>, allele_frequencies: 
     let gl3 = Array2::from_shape_vec((tri, num_samples), gl3).unwrap();
     let gl4 = Array2::from_shape_vec((tetra, num_samples), gl4).unwrap();
 
-    GlAf { af2, af3, af4, gl2, gl3, gl4 }
+    GlAf {
+        af2,
+        af3,
+        af4,
+        gl2,
+        gl3,
+        gl4,
+    }
 }

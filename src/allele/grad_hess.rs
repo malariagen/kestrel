@@ -1,7 +1,7 @@
 use crate::{
     algebra::{Matrix, Vector},
-    simd::{Arith, Lane, LoadStore},
     lanevector::LaneVector,
+    simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -17,7 +17,11 @@ pub trait AlleleGradHess: Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess for Avx512Lane {
-    fn compute_grad_hess(likelihood_mats: &LaneVector<Avx512Lane, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess(
+        likelihood_mats: &LaneVector<Avx512Lane, 10>,
+        x: &Vector<4>,
+        eps: f64,
+    ) -> (Vector<4>, Matrix<4>) {
         use std::arch::x86_64::__m512d;
         return compute_grad_hess_generic::<Avx512Lane, __m512d>(likelihood_mats, x, eps);
     }
@@ -25,7 +29,11 @@ impl AlleleGradHess for Avx512Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess for Avx2Lane {
-    fn compute_grad_hess(likelihood_mats: &LaneVector<Avx2Lane, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess(
+        likelihood_mats: &LaneVector<Avx2Lane, 10>,
+        x: &Vector<4>,
+        eps: f64,
+    ) -> (Vector<4>, Matrix<4>) {
         use std::arch::x86_64::__m256d;
         return compute_grad_hess_generic::<Avx2Lane, __m256d>(likelihood_mats, x, eps);
     }

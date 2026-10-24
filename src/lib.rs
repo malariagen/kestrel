@@ -4,13 +4,13 @@ use crate::{algebra::dot, coefficients::Output};
 
 mod algebra;
 mod allele;
-mod simd;
 mod cholesky;
 pub mod cli;
 mod cls;
 mod coefficients;
 mod conditional;
 mod quadratic;
+mod simd;
 //mod eigenval;
 mod iis;
 mod jacquard;
@@ -68,7 +68,7 @@ mod kestrel {
         allele_frequencies: Option<PyReadonlyArray2<'py, f64>>,
         threads: Option<NonZeroUsize>,
         iterations: NonZeroU64,
-        minimum_allele_frequency: Option<f64>
+        minimum_allele_frequency: Option<f64>,
     ) -> (
         Bound<'py, PyArray3<f64>>,
         Bound<'py, PyArray2<f64>>,
@@ -77,7 +77,13 @@ mod kestrel {
         let gl_view = genotype_likelihoods.as_array();
         let af_view = allele_frequencies.as_ref().map(|a| a.as_array());
 
-        let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(gl_view, af_view, threads, iterations, minimum_allele_frequency);
+        let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(
+            gl_view,
+            af_view,
+            threads,
+            iterations,
+            minimum_allele_frequency,
+        );
 
         let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
 

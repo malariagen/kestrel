@@ -1,8 +1,8 @@
 use crate::{
     algebra::Vector,
-    simd::{Arith, Lane, LoadStore},
     lanevector::LaneVector,
     log::Log,
+    simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
