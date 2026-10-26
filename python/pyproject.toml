@@ -8,7 +8,10 @@ dependencies = [
     "cyvcf2>=0.34.0",
     "stdpopsim>=0.3.0",
     "tskit>=1.0.3",
-    "malariagen-data @ git+https://github.com/malariagen/malariagen-data-python.git"
+    "malariagen-data @ git+https://github.com/malariagen/malariagen-data-python.git",
+    "tqdm>=4.70.1",
+    "msprime",
+    "py-spy>=0.4.2",
 ]
 
 [project.scripts]

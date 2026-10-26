@@ -17,7 +17,7 @@ def parse_true(infile):
     jac = dict()
     for rel in rels:
         match = (df['rel'] == rel)
-        cols = [f'ibd{i}' for i in range(1, 10)]
+        cols = [f'delta{i}' for i in range(1, 10)]
         jac[rel] = df.loc[match, cols].to_numpy().flatten()
 
     return jac
@@ -55,7 +55,7 @@ def tvd(p, q):
 def kinship(x):
     vec = np.array([1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0])
     return np.dot(vec, x)
-    
+
 tjac = parse_true(f"{dir_name}/AnoGam.tsv")
 njac = parse_ngsrelate(f"{dir_name}/ngsrelate.tsv")
 kjac = parse_kestrel(f"{dir_name}/kestrel.tsv")
