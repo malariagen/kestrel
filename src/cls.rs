@@ -1,9 +1,10 @@
 use crate::algebra::{Vector, scale_div, sub};
-use crate::iis;
+use crate::conditional::Genotype;
+use crate::iis::{self, Iis};
 use ndarray::{Array4, ArrayView2};
 
 pub fn calculate_stacked_m(
-    all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
+    all_joint_genotypes: &[(Genotype, Genotype, Iis)],
     allele_frequencies: ArrayView2<f64>,
 ) -> Vec<Vector<9>> {
     let num_v = allele_frequencies.shape()[0];
@@ -19,8 +20,7 @@ pub fn calculate_stacked_m(
             let pk = allele_frequencies[[v, k]];
             let pl = allele_frequencies[[v, l]];
 
-            let row =
-                std::array::from_fn(|ibd_mode| iis::conditional_probability(pi, pj, pk, pl, iis_mode, ibd_mode + 1));
+            let row = iis::conditional_probabilities(pi, pj, pk, pl, iis_mode);
 
             stacked_m.push(row);
         }
@@ -30,7 +30,7 @@ pub fn calculate_stacked_m(
 }
 
 pub fn calculate_quadratic_c(
-    all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
+    all_joint_genotypes: &[((usize, usize), (usize, usize), Iis)],
     stacked_m: &[Vector<9>],
     genotypes_x: ArrayView2<u8>,
     genotypes_y: ArrayView2<u8>,
@@ -58,7 +58,7 @@ pub fn calculate_quadratic_c(
     scale_div(num_v as f64, &c)
 }
 
-pub fn calculate_all_joint_genotypes(num_a: usize) -> Vec<((usize, usize), (usize, usize), usize)> {
+pub fn calculate_all_joint_genotypes(num_a: usize) -> Vec<((usize, usize), (usize, usize), Iis)> {
     let num_single_genotypes = (num_a * (num_a + 1)) / 2;
     let num_joint_genotypes = num_single_genotypes * num_single_genotypes;
     let mut joint_genotypes = Vec::with_capacity(num_joint_genotypes);
@@ -82,7 +82,7 @@ pub fn calculate_all_joint_genotypes(num_a: usize) -> Vec<((usize, usize), (usiz
 }
 
 pub fn calculate_joint_genotype_lookup_table(
-    all_joint_genotypes: &[((usize, usize), (usize, usize), usize)],
+    all_joint_genotypes: &[((usize, usize), (usize, usize), Iis)],
     num_a: usize,
 ) -> Array4<usize> {
     let mut lookup = Array4::<usize>::zeros((num_a, num_a, num_a, num_a));

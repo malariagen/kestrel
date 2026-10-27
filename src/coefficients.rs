@@ -141,17 +141,13 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
         .for_each_init(
             || LaneBuffers::new(n2, n3, n4),
             |buffers, (out, x)| {
-                let like2_x = likelihoods2.sample(x);
-                let like3_x = likelihoods3.sample(x);
-                let like4_x = likelihoods4.sample(x);
+                // L::partial_mixture_component_matrix(&m2.lanes, like2_x.0, &mut buffers.pv2.lanes);
+                // L::partial_mixture_component_matrix(&m3.lanes, like3_x.0, &mut buffers.pv3.lanes);
+                // L::partial_mixture_component_matrix(&m4.lanes, like4_x.0, &mut buffers.pv4.lanes);
 
-                L::partial_mixture_component_matrix(&m2.lanes, like2_x.0, &mut buffers.pv2.lanes);
-                L::partial_mixture_component_matrix(&m3.lanes, like3_x.0, &mut buffers.pv3.lanes);
-                L::partial_mixture_component_matrix(&m4.lanes, like4_x.0, &mut buffers.pv4.lanes);
-
-                f64::partial_mixture_component_matrix(&m2.rem, like2_x.1, &mut buffers.pv2.rem);
-                f64::partial_mixture_component_matrix(&m3.rem, like3_x.1, &mut buffers.pv3.rem);
-                f64::partial_mixture_component_matrix(&m4.rem, like4_x.1, &mut buffers.pv4.rem);
+                // f64::partial_mixture_component_matrix(&m2.rem, like2_x.1, &mut buffers.pv2.rem);
+                // f64::partial_mixture_component_matrix(&m3.rem, like3_x.1, &mut buffers.pv3.rem);
+                // f64::partial_mixture_component_matrix(&m4.rem, like4_x.1, &mut buffers.pv4.rem);
 
                 let iter = (x..num_samples).map(|y| {
                     let delta = if x == y {
@@ -159,6 +155,10 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                     } else {
                         [1.0 / 9.0; 9]
                     };
+
+                    let like2_x = likelihoods2.sample(x);
+                    let like3_x = likelihoods3.sample(x);
+                    let like4_x = likelihoods4.sample(x);
 
                     let like2_y = likelihoods2.sample(y);
                     let like3_y = likelihoods3.sample(y);

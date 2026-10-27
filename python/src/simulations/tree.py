@@ -151,4 +151,3 @@ if __name__ == "__main__":
             f.result() for f in tqdm(as_completed(futures), total=len(futures), desc="Simulating")
         ]
         # The list is needed to propagate exceptions
-        #results = list(tqdm(executor.map(simulate, range(args.reps), seed_seq.spawn(args.reps), repeat(args.out_dir), repeat(args.ne), repeat(args.recomb), repeat(args.mu)), total=args.reps))
