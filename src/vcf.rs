@@ -112,7 +112,6 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
     let num_samples = record_samples.len();
 
-    let mut skipped_missing = 0;
     let mut not_snp = 0;
     let mut total_variants = 0;
     let mut num_variants = 0;
@@ -124,7 +123,7 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
     let mut allele_frequencies = Vec::<f64>::new(); // V x 4
     let mut af_buf = Vec::<f64>::with_capacity(4);
 
-    'variant: for result in reader.records() {
+    for result in reader.records() {
         let record = result.context("Error reading record")?;
 
         total_variants += 1;
@@ -146,16 +145,11 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
                     for result_gl in gl_float.iter() {
                         let option_gl = result_gl.context("Error reading genotype likelihood")?;
-                        // This is where we could have a missing GL
-                        // e.g. vcfgl produced 0:.,.,.,.,.,.,.,.,.,. at a site for one sample
-                        // Just skip the site/variant if that happens
-                        match option_gl {
-                            Some(gl) => gl_buf.push(gl.into()),
-                            None => {
-                                skipped_missing += 1;
-                                continue 'variant;
-                            }
-                        }
+                        // If a site hasn't been sequenced then the GL data will be missing
+                        // e.g. vcfgl produces 0:.,.,.,.,.,.,.,.,.,. when this happens
+                        // It behooves us for it to becometh a NaN
+                        let gl = option_gl.unwrap_or(f32::NAN);
+                        gl_buf.push(gl.into());
                     }
 
                     // We checked that this site is a SNP, so at most 10 GLs
@@ -194,7 +188,6 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
     log::info!("Parsed {} total variants", total_variants);
     log::info!("Skipped {} variants that were not SNPs", not_snp);
-    log::info!("Skipped {} variants with missing data", skipped_missing);
     log::info!("Kept {} final variants", num_variants);
 
     let gls = Array3::from_shape_vec((num_variants, num_samples, 10), likelihoods).unwrap();
@@ -217,7 +210,6 @@ pub fn parse_vcf_pl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
     let num_samples = record_samples.len();
 
-    let mut skipped_missing = 0;
     let mut not_snp = 0;
     let mut total_variants = 0;
     let mut num_variants = 0;
@@ -229,7 +221,7 @@ pub fn parse_vcf_pl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
     let mut allele_frequencies = Vec::<f64>::new(); // V x 4
     let mut af_buf = Vec::<f64>::with_capacity(4);
 
-    'variant: for result in reader.records() {
+    for result in reader.records() {
         let record = result.context("Error reading record")?;
 
         total_variants += 1;
@@ -250,14 +242,8 @@ pub fn parse_vcf_pl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
                     pl_buf.clear();
                     for result_pl in pl_int.iter() {
                         let option_pl = result_pl.context("Error reading genotype likelihood")?;
-                        // If missing PL, skip this site
-                        match option_pl {
-                            Some(pl) => pl_buf.push(pl.into()),
-                            None => {
-                                skipped_missing += 1;
-                                continue 'variant;
-                            }
-                        }
+                        let pl = option_pl.map(|p| f64::from(p)).unwrap_or(f64::NAN);
+                        pl_buf.push(pl);
                     }
 
                     assert!(pl_buf.len() <= 10);
@@ -288,7 +274,6 @@ pub fn parse_vcf_pl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 
     log::info!("Parsed {} total variants", total_variants);
     log::info!("Skipped {} variants that were not SNPs", not_snp);
-    log::info!("Skipped {} variants with missing data", skipped_missing);
     log::info!("Kept {} final variants", num_variants);
 
     let pls = Array3::from_shape_vec((num_variants, num_samples, 10), likelihoods).unwrap();

@@ -51,7 +51,8 @@ impl ClsQuadratic for f64 {
 }
 
 fn compute_quadratic_generic<L: Lane, S: Arith + LoadStore<L>>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> {
-    let (blocks, remainder) = a_mat.as_lanes();
+    let blocks = a_mat.lanes();
+    let remainder = a_mat.rem();
 
     let ba = compute_quadratic_lane::<L, S>(blocks);
     let ra = compute_quadratic_lane::<f64, f64>(remainder);

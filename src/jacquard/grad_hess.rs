@@ -58,7 +58,7 @@ fn compute_grad_hess_generic<L: Lane, S: Arith + LoadStore<L>>(
     let (bg, bh) = compute_grad_hess_lane::<L, S>(lanes, x, eps);
     let (rg, rh) = compute_grad_hess_lane::<f64, f64>(rem, x, eps);
 
-    let n = (lanes.len() + rem.len()) as f64;
+    let n = (L::N * lanes.len() + rem.len()) as f64;
 
     let mut g = [0.0f64; 9];
     let mut h = [[0.0f64; 9]; 9];

@@ -1,48 +1,61 @@
 use crate::simd::Lane;
 
 pub struct LaneVector<L: Lane, const R: usize> {
-    pub lanes: Vec<[L; R]>,
-    pub rem: Vec<[f64; R]>,
-    len: usize,
+    lanes: Vec<[L; R]>,
+    rem: Vec<[f64; R]>,
 }
 
 impl<L: Lane, const R: usize> LaneVector<L, R> {
-    pub fn new(len: usize) -> Self {
-        let lanes = len / L::N;
-        let rem = len % L::N;
+    pub fn new(max_len: usize) -> Self {
+        let lanes = max_len / L::N;
 
-        let lane_buf = vec![[L::default(); R]; lanes];
-        let rem_buf = vec![[0.0; R]; rem];
+        let lane_buf = Vec::with_capacity(lanes);
+        let rem_buf = Vec::with_capacity(L::N);
 
         LaneVector {
             lanes: lane_buf,
             rem: rem_buf,
-            len,
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.len
+    pub fn lanes(&self) -> &[[L; R]] {
+        &self.lanes
     }
 
-    pub fn as_lanes(&self) -> (&[[L; R]], &[[f64; R]]) {
-        (&self.lanes, &self.rem)
+    pub fn rem(&self) -> &[[f64; R]] {
+        &self.rem
     }
 
-    pub fn fill_from_iter(&mut self, mut iter: impl Iterator<Item = [f64; R]>) {
-        for block in self.lanes.iter_mut() {
-            for i in 0..L::N {
-                let row = iter.next().unwrap();
-                for r in 0..R {
-                    block[r].set(i, row[r]);
-                }
+    pub fn fill_from_slice(&mut self, rows: &[[f64; R]]) {
+        self.lanes.clear();
+        self.rem.clear();
+
+        let mut curr_row = 0;
+        let mut block = [L::default(); R];
+
+        for row in rows {
+            if row.iter().any(|f| f.is_nan()) {
+                continue;
+            }
+
+            for r in 0..R {
+                block[r].set(curr_row, row[r]);
+            }
+
+            curr_row += 1;
+
+            if curr_row == L::N {
+                self.lanes.push(block);
+                curr_row = 0;
             }
         }
 
-        for row in self.rem.iter_mut() {
-            *row = iter.next().unwrap();
+        // Now we need to copy out the last few rows that don't fit into a whole block
+        for i in 0..curr_row {
+            let row = std::array::from_fn(|r| block[r].get(i));
+            self.rem.push(row);
         }
 
-        assert!(iter.next().is_none());
+        assert!(!self.lanes.is_empty() || !self.rem.is_empty(), "Must have at least one row to analyze")
     }
 }

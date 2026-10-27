@@ -58,7 +58,7 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
             |buffer, (out, variant_likelihood)| {
                 let sample_likelihoods = variant_likelihood.as_slice().unwrap();
 
-                buffer.fill_from_iter(sample_likelihoods.iter().copied());
+                buffer.fill_from_slice(&sample_likelihoods);
 
                 let x0 = [0.25; 4];
 
@@ -90,21 +90,6 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
         );
 
     bar.done();
-
-    // let mut af = Array2::zeros((num_variants, 4));
-    // let mut multi = 0;
-
-    // for (v, x) in outputs.iter().enumerate() {
-    //     if x.iter().filter(|&i| *i > 0.0).count() >= 3 {
-    //         multi += 1;
-    //     }
-
-    //     for i in 0..4 {
-    //         af[[v, i]] = x[i];
-    //     }
-    // }
-
-    // log::info!("Multi-allelic sites {multi}");
 
     Array1::from_vec(outputs)
 }

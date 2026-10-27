@@ -54,7 +54,7 @@ fn compute_obj_generic<L: Lane, S: Arith + LoadStore<L> + Log>(
     let b = compute_obj_lane::<L, S>(lanes, x, eps);
     let r = compute_obj_lane::<f64, f64>(rem, x, eps);
 
-    let n = (lanes.len() + rem.len()) as f64;
+    let n = (L::N * lanes.len() + rem.len()) as f64;
 
     return -(b + r) / n;
 }

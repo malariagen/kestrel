@@ -44,7 +44,7 @@ def analyze(rep_dir, seed_seq, samples_keep, samples_total):
         bgzip = ["bgzip", f"{vcf}.vcf"]
         subprocess.run(bgzip, check=True, text=True, capture_output=True)
 
-    for depth in ("1", "5",):
+    for depth in ("10",):
     #for depth in ("1", "5", "10", "20", "30"):
         error_rate = 0.001 # Q30
 
@@ -59,7 +59,7 @@ def analyze(rep_dir, seed_seq, samples_keep, samples_total):
 
         print(" ".join(vcfgl))
 
-        subprocess.run(vcfgl, check=True, text=True, capture_output=True)
+        #subprocess.run(vcfgl, check=True, text=True, capture_output=True)
 
         #bcftools = ["bcftools", "concat"] + [f"{dir_name}/AnoGam-{arm}-GL.vcf.gz" for arm in arms] + ["-O", "z", "-o", f"{dir_name}/AnoGam-GL.vcf.gz"]
         #print(" ".join(bcftools))
@@ -70,7 +70,7 @@ def analyze(rep_dir, seed_seq, samples_keep, samples_total):
         # https://popgen.dk/angsd/index.php/Genotype_Likelihoods
         angsd = ["angsd", "-vcf-gl", f"{dir_name}/sim-GL.vcf.gz", "-nInd", f"{samples_total}", "-doMajorMinor", "1", "-doMaf", "1", "-doGlf", "3", "-out", f"{dir_name}/sim-GL-angsd"]
         print(" ".join(angsd))
-        subprocess.run(angsd, check=True, text=True, capture_output=True)
+        #subprocess.run(angsd, check=True, text=True, capture_output=True)
 
         extract_freq(f"{dir_name}/sim-GL-angsd.mafs.gz", f"{dir_name}/angsd-freq.txt")
         extract_samples(f"{dir_name}/sim-GL-angsd.glf.gz", f"{dir_name}/sim-GL-angsd-{samples_keep}.glf.gz", samples_keep, samples_total)

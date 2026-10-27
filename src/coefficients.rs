@@ -106,6 +106,8 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
 
     let num_v = n2 + n3 + n4;
 
+    // TODO need to deal with NaNs here
+
     let likelihoods2 = convert_to_lanes::<L, 3>(glaf.gl2.view());
     let likelihoods3 = convert_to_lanes::<L, 6>(glaf.gl3.view());
     let likelihoods4 = convert_to_lanes::<L, 10>(glaf.gl4.view());
@@ -241,7 +243,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     let lookup_table = cls::calculate_joint_genotype_lookup_table(&all_joint_genotypes, num_a);
 
     let mut lv = LaneVector::new(stacked_m.len());
-    lv.fill_from_iter(stacked_m.iter().copied());
+    lv.fill_from_slice(&stacked_m);
 
     let num_v = allele_frequencies.shape()[0];
     let quadratic_q = L::compute_quadratic(&lv, num_v);
