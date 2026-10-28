@@ -1,5 +1,5 @@
 use crate::{
-    conditional::MIis, iis, lanematrix::M, simd::{Arith, Lane, LoadStore},
+    conditional::{IIS_2, MIis}, iis, lanematrix::M, simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -28,17 +28,35 @@ pub trait MixtureMatrix: Lane {
         likelihoods_y: &[[Self; G]],
         p_mat: &mut [[Self; 9]],
     );
+
+    fn mixture_component_matrix2(
+        allele_frequencies: &[[Self; 2]],
+        likelihoods_x: &[[Self; 3]],
+        likelihoods_y: &[[Self; 3]],
+        p_mat: &mut [[Self; 9]],
+    );
 }
 
-// pub fn test_asm(
-//     m_matrices: &[M<Avx512Lane, 10>],
-//     likelihoods_x: &[[Avx512Lane; 10]],
-//     likelihoods_y: &[[Avx512Lane; 10]],
-//     p_mat: &mut [[Avx512Lane; 9]],
-// ) {
-//     use std::arch::x86_64::__m512d;
-//     return calculate_complete_mixture_component_matrix::<Avx512Lane, __m512d, 10>(m_matrices, likelihoods_x, likelihoods_y, p_mat);
-// }
+pub fn test_asm(
+        all_joint_genotypes: &MIis<3>,
+        allele_frequencies: &[[Avx512Lane; 2]],
+        likelihoods_x: &[[Avx512Lane; 3]],
+        likelihoods_y: &[[Avx512Lane; 3]],
+        p_mat: &mut [[Avx512Lane; 9]],
+) {
+    use std::arch::x86_64::__m512d;
+    return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 2, 3>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+}
+
+pub fn test_asm_bi(
+        allele_frequencies: &[[Avx512Lane; 2]],
+        likelihoods_x: &[[Avx512Lane; 3]],
+        likelihoods_y: &[[Avx512Lane; 3]],
+        p_mat: &mut [[Avx512Lane; 9]],
+) {
+    use std::arch::x86_64::__m512d;
+    return calculate_mixture_component_matrix2::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+}
 
 #[cfg(target_arch = "x86_64")]
 impl MixtureMatrix for Avx512Lane {
@@ -74,6 +92,16 @@ impl MixtureMatrix for Avx512Lane {
         use std::arch::x86_64::__m512d;
         calculate_mixture_component_matrix::<Self, __m512d, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
     }
+
+    fn mixture_component_matrix2(
+        allele_frequencies: &[[Self; 2]],
+        likelihoods_x: &[[Self; 3]],
+        likelihoods_y: &[[Self; 3]],
+        p_mat: &mut [[Self; 9]],
+    ) {
+        use std::arch::x86_64::__m512d;
+        calculate_mixture_component_matrix2::<Self, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
+    }
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -105,6 +133,16 @@ impl MixtureMatrix for Avx2Lane {
     ) {
         use std::arch::x86_64::__m256d;
         calculate_mixture_component_matrix::<Self, __m256d, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
+    }
+
+    fn mixture_component_matrix2(
+        allele_frequencies: &[[Self; 2]],
+        likelihoods_x: &[[Self; 3]],
+        likelihoods_y: &[[Self; 3]],
+        p_mat: &mut [[Self; 9]],
+    )
+    {
+        unimplemented!()
     }
 }
 
@@ -174,9 +212,18 @@ impl MixtureMatrix for f64 {
     ) {
         calculate_mixture_component_matrix::<Self, f64, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
     }
+
+    fn mixture_component_matrix2(
+        allele_frequencies: &[[Self; 2]],
+        likelihoods_x: &[[Self; 3]],
+        likelihoods_y: &[[Self; 3]],
+        p_mat: &mut [[Self; 9]],
+    ) {
+        calculate_mixture_component_matrix2::<Self, f64>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
+    }
 }
 
-#[inline]
+#[inline(always)]
 fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A: usize, const G: usize>(
     all_joint_genotypes: &MIis<G>,
     allele_frequencies: &[[L; A]],
@@ -209,10 +256,62 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A:
 
                 let ((i, j), (k, l), iis_mode) = all_joint_genotypes[gx][gy];
 
-                let pi = S::load(&af[i]);
-                let pj = S::load(&af[j]);
-                let pk = S::load(&af[k]);
-                let pl = S::load(&af[l]);
+                // This will always be safe due to the construction all_joint_genotypes
+                let pi = S::load( unsafe { af.get_unchecked(i) });
+                let pj = S::load( unsafe { af.get_unchecked(j) });
+                let pk = S::load( unsafe { af.get_unchecked(k) });
+                let pl = S::load( unsafe { af.get_unchecked(l) });
+
+                let m_row = iis::conditional_probabilities(pi, pj, pk, pl, iis_mode);
+                for a in 0..9 {
+                    p[a] = g.fma(m_row[a], p[a]);
+                }
+            }
+        }
+
+        for k in 0..9 {
+            p[k].store(&mut out[k]);
+        }
+    }
+}
+
+#[inline(always)]
+fn calculate_mixture_component_matrix2<L: Lane, S: Arith + LoadStore<L>>(
+    allele_frequencies: &[[L; 2]],
+    likelihoods_x: &[[L; 3]],
+    likelihoods_y: &[[L; 3]],
+    p_mat: &mut [[L; 9]],
+) {
+    let len = allele_frequencies.len();
+    assert!(likelihoods_x.len() == len);
+    assert!(likelihoods_y.len() == len);
+    assert!(p_mat.len() == len);
+
+    // p = lx * ly * M
+    for locus in 0..len {
+        let out = unsafe { p_mat.get_unchecked_mut(locus) };
+        let like_x = unsafe { likelihoods_x.get_unchecked(locus) };
+        let like_y = unsafe { likelihoods_y.get_unchecked(locus) };
+        let af = unsafe { allele_frequencies.get_unchecked(locus) };
+
+        // 9 registers
+        let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
+
+        for gx in 0..3 {
+            let lx = S::load(&like_x[gx]);
+            for gy in 0..3 {
+                // For architectures with enough registers this will get hoisted
+                // out of the loop
+                let ly = S::load(&like_y[gy]);
+                let g = lx.mul(ly);
+
+                let ((i, j), (k, l), iis_mode) = IIS_2[gx][gy];
+
+                // This will always be safe due to the construction of IIS_2
+                let pi = S::load( unsafe { af.get_unchecked(i) });
+                let pj = S::load( unsafe { af.get_unchecked(j) });
+                let pk = S::load( unsafe { af.get_unchecked(k) });
+                let pl = S::load( unsafe { af.get_unchecked(l) });
 
                 let m_row = iis::conditional_probabilities(pi, pj, pk, pl, iis_mode);
                 for a in 0..9 {

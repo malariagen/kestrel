@@ -12,17 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul},
-    cls,
-    conditional::{self},
-    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
-    lanearray2::convert_to_lanes,
-    lanevector::LaneVector,
-    mixture::{LaneCompleteVector, LanePartialVector, MixtureMatrix},
-    quadratic::ClsQuadratic,
-    simd::Lane,
-    sqp::{self, Tuneables},
-    wrapper::GlAf,
+    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::LaneVector, mixture::{LaneCompleteVector, LanePartialVector, MixtureMatrix}, quadratic::ClsQuadratic, simd::Lane, sqp::{self, Tuneables}, wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -74,18 +64,18 @@ fn reorder_genotypes(mut genotypes: ArrayView3<u8>) -> Array3<u8> {
 }
 
 struct LaneBuffers<L: Lane> {
-    pub pv2: LanePartialVector<L, 3>,
-    pub pv3: LanePartialVector<L, 6>,
-    pub pv4: LanePartialVector<L, 10>,
+    // pub pv2: LanePartialVector<L, 3>,
+    // pub pv3: LanePartialVector<L, 6>,
+    // pub pv4: LanePartialVector<L, 10>,
     pub cv: LaneCompleteVector<L>,
 }
 
 impl<L: Lane> LaneBuffers<L> {
     fn new(n2: usize, n3: usize, n4: usize) -> LaneBuffers<L> {
         LaneBuffers {
-            pv2: LanePartialVector::new(n2),
-            pv3: LanePartialVector::new(n3),
-            pv4: LanePartialVector::new(n4),
+            // pv2: LanePartialVector::new(n2),
+            // pv3: LanePartialVector::new(n3),
+            // pv4: LanePartialVector::new(n4),
             cv: LaneCompleteVector::new(n2, n3, n4),
         }
     }
@@ -96,13 +86,23 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
 ) -> Vec<Vec<Output>> {
-    let m2 = conditional::calculate_conditional_probability_arrays::<L, 2, 3>(glaf.af2.view());
-    let m3 = conditional::calculate_conditional_probability_arrays::<L, 3, 6>(glaf.af3.view());
-    let m4 = conditional::calculate_conditional_probability_arrays::<L, 4, 10>(glaf.af4.view());
+    // let m2 = conditional::calculate_conditional_probability_arrays::<L, 2, 3>(glaf.af2.view());
+    // let m3 = conditional::calculate_conditional_probability_arrays::<L, 3, 6>(glaf.af3.view());
+    // let m4 = conditional::calculate_conditional_probability_arrays::<L, 4, 10>(glaf.af4.view());
 
-    let n2 = m2.len;
-    let n3 = m3.len;
-    let n4 = m4.len;
+    let n2 = glaf.af2.len();
+    let n3 = glaf.af3.len();
+    let n4 = glaf.af4.len();
+
+    // TODO tidy this up
+    let mut af2 = LaneVector::<L, 2>::new(n2);
+    af2.fill_from_slice(&glaf.af2);
+
+    let mut af3 = LaneVector::<L, 3>::new(n3);
+    af3.fill_from_slice(&glaf.af3);
+
+    let mut af4 = LaneVector::<L, 4>::new(n4);
+    af4.fill_from_slice(&glaf.af4);
 
     let num_v = n2 + n3 + n4;
 
@@ -141,13 +141,9 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
         .for_each_init(
             || LaneBuffers::new(n2, n3, n4),
             |buffers, (out, x)| {
-                // L::partial_mixture_component_matrix(&m2.lanes, like2_x.0, &mut buffers.pv2.lanes);
-                // L::partial_mixture_component_matrix(&m3.lanes, like3_x.0, &mut buffers.pv3.lanes);
-                // L::partial_mixture_component_matrix(&m4.lanes, like4_x.0, &mut buffers.pv4.lanes);
-
-                // f64::partial_mixture_component_matrix(&m2.rem, like2_x.1, &mut buffers.pv2.rem);
-                // f64::partial_mixture_component_matrix(&m3.rem, like3_x.1, &mut buffers.pv3.rem);
-                // f64::partial_mixture_component_matrix(&m4.rem, like4_x.1, &mut buffers.pv4.rem);
+                let like2_x = likelihoods2.sample(x);
+                let like3_x = likelihoods3.sample(x);
+                let like4_x = likelihoods4.sample(x);
 
                 let iter = (x..num_samples).map(|y| {
                     let delta = if x == y {
@@ -156,21 +152,17 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                         [1.0 / 9.0; 9]
                     };
 
-                    let like2_x = likelihoods2.sample(x);
-                    let like3_x = likelihoods3.sample(x);
-                    let like4_x = likelihoods4.sample(x);
-
                     let like2_y = likelihoods2.sample(y);
                     let like3_y = likelihoods3.sample(y);
                     let like4_y = likelihoods4.sample(y);
 
-                    L::complete_mixture_component_matrix(&buffers.pv2.lanes, like2_y.0, &mut buffers.cv.lanes2());
-                    L::complete_mixture_component_matrix(&buffers.pv3.lanes, like3_y.0, &mut buffers.cv.lanes3());
-                    L::complete_mixture_component_matrix(&buffers.pv4.lanes, like4_y.0, &mut buffers.cv.lanes4());
+                    L::mixture_component_matrix2(af2.lanes(), like2_x.0, like2_y.0, &mut buffers.cv.lanes2());
+                    L::mixture_component_matrix(&IIS_3, af3.lanes(), like3_x.0, like3_y.0, &mut buffers.cv.lanes3());
+                    L::mixture_component_matrix(&IIS_4, af4.lanes(), like4_x.0, like4_y.0, &mut buffers.cv.lanes4());
 
-                    f64::complete_mixture_component_matrix(&buffers.pv2.rem, like2_y.1, &mut buffers.cv.rem2());
-                    f64::complete_mixture_component_matrix(&buffers.pv3.rem, like3_y.1, &mut buffers.cv.rem3());
-                    f64::complete_mixture_component_matrix(&buffers.pv4.rem, like4_y.1, &mut buffers.cv.rem4());
+                    f64::mixture_component_matrix2(af2.rem(), like2_x.1, like2_y.1, &mut buffers.cv.rem2());
+                    f64::mixture_component_matrix(&IIS_3, af3.rem(), like3_x.1, like3_y.1, &mut buffers.cv.rem3());
+                    f64::mixture_component_matrix(&IIS_4, af4.rem(), like4_x.1, like4_y.1, &mut buffers.cv.rem4());
 
                     let obj = |x: &Vector<9>, eps| L::compute_obj(&buffers.cv.lanes(), &buffers.cv.rem(), x, eps);
                     let grad_hess =

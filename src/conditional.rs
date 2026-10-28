@@ -5,7 +5,11 @@ use crate::{iis::{self, Iis}, lanematrix::LaneM, simd::Lane};
 pub type Genotype = (usize, usize);
 pub type MIis<const G: usize> = [[(Genotype, Genotype, Iis); G]; G];
 
-pub const fn calculate_joint_genotype_iis<const A: usize, const G: usize>() -> MIis<G> {
+pub const IIS_2: MIis<3> = calculate_joint_genotype_iis::<2, 3>();
+pub const IIS_3: MIis<6> = calculate_joint_genotype_iis::<3, 6>();
+pub const IIS_4: MIis<10> = calculate_joint_genotype_iis::<4, 10>();
+
+const fn calculate_joint_genotype_iis<const A: usize, const G: usize>() -> MIis<G> {
     assert!(G == A * (A + 1) / 2);
     // This is a default value that will always be overwritten
     let mut table = [[((0, 0), (0, 0), Iis::M1); G]; G];

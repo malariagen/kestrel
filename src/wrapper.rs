@@ -1,6 +1,6 @@
 use std::num::{NonZeroU64, NonZeroUsize};
 
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2, ArrayView3, Axis};
+use ndarray::{Array2, ArrayView1, ArrayView2, ArrayView3, Axis};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
@@ -199,9 +199,9 @@ fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
 }
 
 pub struct GlAf {
-    pub af2: Array1<[f64; 2]>,
-    pub af3: Array1<[f64; 3]>,
-    pub af4: Array1<[f64; 4]>,
+    pub af2: Vec<[f64; 2]>,
+    pub af3: Vec<[f64; 3]>,
+    pub af4: Vec<[f64; 4]>,
     pub gl2: Array2<[f64; 3]>,
     pub gl3: Array2<[f64; 6]>,
     pub gl4: Array2<[f64; 10]>,
@@ -289,10 +289,6 @@ fn split_gl_af(genotype_likelihoods: ArrayView2<[f64; 10]>, allele_frequencies: 
     log::info!("Kept {tri} tri-allelic sites");
     log::info!("Kept {tetra} tetra-allelic sites");
     log::info!("Discarded {mono} non-segregating sites");
-
-    let af2 = Array1::from_vec(af2);
-    let af3 = Array1::from_vec(af3);
-    let af4 = Array1::from_vec(af4);
 
     let gl2 = Array2::from_shape_vec((di, num_samples), gl2).unwrap();
     let gl3 = Array2::from_shape_vec((tri, num_samples), gl3).unwrap();
