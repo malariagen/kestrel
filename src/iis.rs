@@ -4,7 +4,7 @@ type IisTable = [[[[[[Option<Iis>; 2]; 2]; 2]; 2]; 2]; 2];
 
 const IIS_TABLE: IisTable = generate_iis_lookup_table();
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Iis {
     M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15
 }

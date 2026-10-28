@@ -8,6 +8,7 @@ use env_logger::{Builder, Env};
 
 use crate::algebra::dot;
 use crate::coefficients::Output;
+use crate::conditional::IIS_3;
 
 #[derive(Parser)]
 #[command(name = "kestrel", version, about)]
@@ -63,6 +64,14 @@ pub fn run_cli(args: &[String]) -> Result<()> {
         .format_timestamp(None)
         .format_target(false)
         .init();
+
+    for (i, a) in IIS_3.iter().enumerate() {
+        for (j, b) in a.iter().enumerate() {
+            println!("{:?} {:?} - {i} {j} - {:?}", b.0, b.1, b.2);
+        }
+    }
+
+    panic!();
 
     let args = Args::parse_from(args);
 

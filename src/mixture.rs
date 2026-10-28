@@ -1,5 +1,5 @@
 use crate::{
-    conditional::{IIS_2, MIis}, iis, lanematrix::M, simd::{Arith, Lane, LoadStore},
+    conditional::{MIis}, iis, lanematrix::M, simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -46,6 +46,14 @@ pub fn test_asm(
 ) {
     use std::arch::x86_64::__m512d;
     return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 2, 3>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+}
+
+
+pub fn test_asm_mix(
+out: &mut [Avx512Lane; 9], like_x: &[Avx512Lane; 3], like_y: &[Avx512Lane; 3], af: &[Avx512Lane; 2]
+) {
+    use std::arch::x86_64::__m512d;
+    mixture_row2::<Avx512Lane, __m512d>(out, like_x, like_y, af);
 }
 
 pub fn test_asm_bi(
@@ -246,6 +254,9 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A:
         // 9 registers
         let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
 
+        // G x G multiplications
+        // G x G x 9 FMA
+
         for gx in 0..G {
             let lx = S::load(&like_x[gx]);
             for gy in 0..G {
@@ -295,47 +306,280 @@ fn calculate_mixture_component_matrix2<L: Lane, S: Arith + LoadStore<L>>(
         let af = unsafe { allele_frequencies.get_unchecked(locus) };
 
         // 9 registers
-        mixture_row2(out, like_x, like_y, af);
+        mixture_row2::<L, S>(out, like_x, like_y, af);
     }
 }
 
-fn mixture_row2<S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 3], like_y: &[L; 3], af: &[L; 2]) {
+// It is possible to pre-calculate the conditional probability matrix M for each locus, and then re-use it for
+// each pair of individuals (x, y). However, that requires loading 9 x 9 = 81 doubles, as opposed to just
+// 2 for the allele frequencies. Furthermore, once you have loaded that matrix M, it takes
+// 3 x 3 = 9 muls to get g, and 9 x 9 = 81 FMAs. The function below takes 9 muls to get g, 18 mul/adds to get
+// the M entries, and then 45 FMAs. Even if you were to store only the 45 non-zero entries of M in memory, you
+// are loading 45 elements vs. computing 18 multiplications. The latter is faster.
+fn mixture_row2<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 3], like_y: &[L; 3], af: &[L; 2]) {
+    // 15 registers
+    let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
+    let lx: [S; 3] = std::array::from_fn(|i| S::load(&like_x[i]));
+    let ly: [S; 3] = std::array::from_fn(|i| S::load(&like_y[i]));
 
-    let mut p_row: [S; 9] = std::array::from_fn(|_| S::zero());
-    let lx = std::array::from_fn(|i| S::load&(like_x));
-    let ly = std::array::from_fn(|i| S::load&(like_y));
-
+    // 2
     let p = S::load(&af[0]);
     let q = S::load(&af[1]);
 
+    // 10
+    let p2 = p.mul(p);
+    let p3 = p2.mul(p);
+    let q2 = q.mul(q);
+    let q3 = q2.mul(q);
+
+    let pq = p.mul(q);
+    let p2q = p2.mul(q);
+    let pq2 = p.mul(q2);
+    let p2q2 = p2.mul(q2);
+
+    let p3q = p3.mul(q);
+    let pq3 = p.mul(q3);
+
+    // 5
+    let twopq = pq.add(pq);
+    let twop2q = p2q.add(p2q);
+    let twop3q = p3q.add(p3q);
+    let twopq2 = pq2.add(pq2);
+    let twopq3 = pq3.add(pq3);
+
+    // We have 32 registers exactly! The compiler needs a few
+    // more for the intermediate multiplications. However due
+    // to non-overlapping lifetimes for the constants it will
+    // be able to fit everything without spilling to the stack.
+
     // genotypes - gl vcf index - iis mode
-    // (0, 0) (0, 0) - 0, 0 - M1
+    // (0, 0) (0, 0) - 0 0 - M1
+    {
+        let g = lx[0].mul(ly[0]);
 
-    for gx in 0..3 {
-        let lx = S::load(&like_x[gx]);
-        for gy in 0..3 {
-            // For architectures with enough registers this will get hoisted
-            // out of the loop
-            let ly = S::load(&like_y[gy]);
-            let g = lx.mul(ly);
+        a[0] = g.fma(p, a[0]);
+        a[1] = g.fma(p2, a[1]);
+        a[2] = g.fma(p2, a[2]);
+        a[3] = g.fma(p3, a[3]);
+        a[4] = g.fma(p2, a[4]);
+        a[5] = g.fma(p3, a[5]);
+        a[6] = g.fma(p2, a[6]);
+        a[7] = g.fma(p3, a[7]);
+        a[8] = g.fma(p2.mul(p2), a[8]);
+    }
+    // (0, 0) (0, 1) - 0 1 - M3
+    {
+        let g = lx[0].mul(ly[1]);
 
-            let ((i, j), (k, l), iis_mode) = IIS_2[gx][gy];
+        a[2] = g.fma(pq, a[2]);
+        a[3] = g.fma(twop2q, a[3]);
+        a[7] = g.fma(p2q, a[7]);
+        a[8] = g.fma(twop3q, a[8]);
+    }
+    // (0, 0) (1, 1) - 0 2 - M2
+    {
+        let g = lx[0].mul(ly[2]);
 
-            // This will always be safe due to the construction of IIS_2
-            let pi = S::load( unsafe { af.get_unchecked(i) });
-            let pj = S::load( unsafe { af.get_unchecked(j) });
-            let pk = S::load( unsafe { af.get_unchecked(k) });
-            let pl = S::load( unsafe { af.get_unchecked(l) });
+        a[1] = g.fma(pq, a[1]);
+        a[3] = g.fma(pq2, a[3]);
+        a[5] = g.fma(p2q, a[5]);
+        a[8] = g.fma(p2q2, a[8]);
+    }
+    // (0, 1) (0, 0) - 1 0 - M6
+    {
+        let g = lx[1].mul(ly[0]);
 
-            let m_row = iis::conditional_probabilities(pi, pj, pk, pl, iis_mode);
-            for a in 0..9 {
-                p_row[a] = g.fma(m_row[a], p_row[a]);
-            }
-        }
+        a[4] = g.fma(pq, a[4]);
+        a[5] = g.fma(twop2q, a[5]);
+        a[7] = g.fma(p2q, a[7]);
+        a[8] = g.fma(twop3q, a[8]);
+    }
+    // (0, 1) (0, 1) - 1 1 - M9
+    {
+        let g = lx[1].mul(ly[1]);
+
+        a[6] = g.fma(twopq, a[6]);
+        a[7] = g.fma(pq, a[7]);
+        a[8] = g.fma(twopq.mul(twopq), a[8]);
+    }
+    // (0, 1) (1, 1) - 1 2 - M7
+    {
+        let g = lx[1].mul(ly[2]);
+
+        a[4] = g.fma(pq, a[4]);
+        a[5] = g.fma(twopq2, a[5]);
+        a[7] = g.fma(pq2, a[7]);
+        a[8] = g.fma(twopq3, a[8]);
+    }
+    // (1, 1) (0, 0) - 2 0 - M2
+    {
+        let g = lx[2].mul(ly[0]);
+
+        a[1] = g.fma(pq, a[1]);
+        a[3] = g.fma(p2q, a[3]);
+        a[5] = g.fma(pq2, a[5]);
+        a[8] = g.fma(p2q2, a[8]);
+    }
+    // (1, 1) (0, 1) - 2 1 - M4
+    {
+        let g = lx[2].mul(ly[1]);
+
+        a[2] = g.fma(pq, a[2]);
+        a[3] = g.fma(twopq2, a[3]);
+        a[7] = g.fma(pq2, a[7]);
+        a[8] = g.fma(twopq3, a[8]);
+    }
+    // (1, 1) (1, 1) - 2 2 - M1
+    {
+        let g = lx[2].mul(ly[2]);
+
+        a[0] = g.fma(q, a[0]);
+        a[1] = g.fma(q2, a[1]);
+        a[2] = g.fma(q2, a[2]);
+        a[3] = g.fma(q3, a[3]);
+        a[4] = g.fma(q2, a[4]);
+        a[5] = g.fma(q3, a[5]);
+        a[6] = g.fma(q2, a[6]);
+        a[7] = g.fma(q3, a[7]);
+        a[8] = g.fma(q2.mul(q2), a[8]);
     }
 
     for k in 0..9 {
-        p_row[k].store(&mut out[k]);
+        a[k].store(&mut out[k]);
+    }
+}
+
+fn mixture_row3<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 6], like_y: &[L; 6], af: &[L; 3]) {
+    // 21 registers
+    let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
+    let lx: [S; 6] = std::array::from_fn(|i| S::load(&like_x[i]));
+    let ly: [S; 6] = std::array::from_fn(|i| S::load(&like_y[i]));
+
+    // 3
+    let p = S::load(&af[0]);
+    let q = S::load(&af[1]);
+    let r = S::load(&af[2]);
+
+    // 10
+    let p2 = p.mul(p);
+    let p3 = p2.mul(p);
+    let q2 = q.mul(q);
+    let q3 = q2.mul(q);
+
+    let pq = p.mul(q);
+    let p2q = p2.mul(q);
+    let pq2 = p.mul(q2);
+    let p2q2 = p2.mul(q2);
+
+    let p3q = p3.mul(q);
+    let pq3 = p.mul(q3);
+
+    // 5
+    let twopq = pq.add(pq);
+    let twop2q = p2q.add(p2q);
+    let twop3q = p3q.add(p3q);
+    let twopq2 = pq2.add(pq2);
+    let twopq3 = pq3.add(pq3);
+
+    // We have 32 registers exactly! The compiler needs a few
+    // more for the intermediate multiplications. However due
+    // to non-overlapping lifetimes for the constants it will
+    // be able to fit everything without spilling to the stack.
+
+    // genotypes - gl vcf index - iis mode
+    // (0, 0) (0, 0) - 0 0 - M1
+    {
+        let g = lx[0].mul(ly[0]);
+
+        a[0] = g.fma(p, a[0]);
+        a[1] = g.fma(p2, a[1]);
+        a[2] = g.fma(p2, a[2]);
+        a[3] = g.fma(p3, a[3]);
+        a[4] = g.fma(p2, a[4]);
+        a[5] = g.fma(p3, a[5]);
+        a[6] = g.fma(p2, a[6]);
+        a[7] = g.fma(p3, a[7]);
+        a[8] = g.fma(p2.mul(p2), a[8]);
+    }
+    // (0, 0) (0, 1) - 0 1 - M3
+    {
+        let g = lx[0].mul(ly[1]);
+
+        a[2] = g.fma(pq, a[2]);
+        a[3] = g.fma(twop2q, a[3]);
+        a[7] = g.fma(p2q, a[7]);
+        a[8] = g.fma(twop3q, a[8]);
+    }
+    // (0, 0) (1, 1) - 0 2 - M2
+    {
+        let g = lx[0].mul(ly[2]);
+
+        a[1] = g.fma(pq, a[1]);
+        a[3] = g.fma(pq2, a[3]);
+        a[5] = g.fma(p2q, a[5]);
+        a[8] = g.fma(p2q2, a[8]);
+    }
+    // (0, 1) (0, 0) - 1 0 - M6
+    {
+        let g = lx[1].mul(ly[0]);
+
+        a[4] = g.fma(pq, a[4]);
+        a[5] = g.fma(twop2q, a[5]);
+        a[7] = g.fma(p2q, a[7]);
+        a[8] = g.fma(twop3q, a[8]);
+    }
+    // (0, 1) (0, 1) - 1 1 - M9
+    {
+        let g = lx[1].mul(ly[1]);
+
+        a[6] = g.fma(twopq, a[6]);
+        a[7] = g.fma(pq, a[7]);
+        a[8] = g.fma(twopq.mul(twopq), a[8]);
+    }
+    // (0, 1) (1, 1) - 1 2 - M7
+    {
+        let g = lx[1].mul(ly[2]);
+
+        a[4] = g.fma(pq, a[4]);
+        a[5] = g.fma(twopq2, a[5]);
+        a[7] = g.fma(pq2, a[7]);
+        a[8] = g.fma(twopq3, a[8]);
+    }
+    // (1, 1) (0, 0) - 2 0 - M2
+    {
+        let g = lx[2].mul(ly[0]);
+
+        a[1] = g.fma(pq, a[1]);
+        a[3] = g.fma(p2q, a[3]);
+        a[5] = g.fma(pq2, a[5]);
+        a[8] = g.fma(p2q2, a[8]);
+    }
+    // (1, 1) (0, 1) - 2 1 - M4
+    {
+        let g = lx[2].mul(ly[1]);
+
+        a[2] = g.fma(pq, a[2]);
+        a[3] = g.fma(twopq2, a[3]);
+        a[7] = g.fma(pq2, a[7]);
+        a[8] = g.fma(twopq3, a[8]);
+    }
+    // (1, 1) (1, 1) - 2 2 - M1
+    {
+        let g = lx[2].mul(ly[2]);
+
+        a[0] = g.fma(q, a[0]);
+        a[1] = g.fma(q2, a[1]);
+        a[2] = g.fma(q2, a[2]);
+        a[3] = g.fma(q3, a[3]);
+        a[4] = g.fma(q2, a[4]);
+        a[5] = g.fma(q3, a[5]);
+        a[6] = g.fma(q2, a[6]);
+        a[7] = g.fma(q3, a[7]);
+        a[8] = g.fma(q2.mul(q2), a[8]);
+    }
+
+    for k in 0..9 {
+        a[k].store(&mut out[k]);
     }
 }
 
