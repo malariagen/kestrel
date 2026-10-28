@@ -295,34 +295,47 @@ fn calculate_mixture_component_matrix2<L: Lane, S: Arith + LoadStore<L>>(
         let af = unsafe { allele_frequencies.get_unchecked(locus) };
 
         // 9 registers
-        let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
+        mixture_row2(out, like_x, like_y, af);
+    }
+}
 
-        for gx in 0..3 {
-            let lx = S::load(&like_x[gx]);
-            for gy in 0..3 {
-                // For architectures with enough registers this will get hoisted
-                // out of the loop
-                let ly = S::load(&like_y[gy]);
-                let g = lx.mul(ly);
+fn mixture_row2<S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 3], like_y: &[L; 3], af: &[L; 2]) {
 
-                let ((i, j), (k, l), iis_mode) = IIS_2[gx][gy];
+    let mut p_row: [S; 9] = std::array::from_fn(|_| S::zero());
+    let lx = std::array::from_fn(|i| S::load&(like_x));
+    let ly = std::array::from_fn(|i| S::load&(like_y));
 
-                // This will always be safe due to the construction of IIS_2
-                let pi = S::load( unsafe { af.get_unchecked(i) });
-                let pj = S::load( unsafe { af.get_unchecked(j) });
-                let pk = S::load( unsafe { af.get_unchecked(k) });
-                let pl = S::load( unsafe { af.get_unchecked(l) });
+    let p = S::load(&af[0]);
+    let q = S::load(&af[1]);
 
-                let m_row = iis::conditional_probabilities(pi, pj, pk, pl, iis_mode);
-                for a in 0..9 {
-                    p[a] = g.fma(m_row[a], p[a]);
-                }
+    // genotypes - gl vcf index - iis mode
+    // (0, 0) (0, 0) - 0, 0 - M1
+
+    for gx in 0..3 {
+        let lx = S::load(&like_x[gx]);
+        for gy in 0..3 {
+            // For architectures with enough registers this will get hoisted
+            // out of the loop
+            let ly = S::load(&like_y[gy]);
+            let g = lx.mul(ly);
+
+            let ((i, j), (k, l), iis_mode) = IIS_2[gx][gy];
+
+            // This will always be safe due to the construction of IIS_2
+            let pi = S::load( unsafe { af.get_unchecked(i) });
+            let pj = S::load( unsafe { af.get_unchecked(j) });
+            let pk = S::load( unsafe { af.get_unchecked(k) });
+            let pl = S::load( unsafe { af.get_unchecked(l) });
+
+            let m_row = iis::conditional_probabilities(pi, pj, pk, pl, iis_mode);
+            for a in 0..9 {
+                p_row[a] = g.fma(m_row[a], p_row[a]);
             }
         }
+    }
 
-        for k in 0..9 {
-            p[k].store(&mut out[k]);
-        }
+    for k in 0..9 {
+        p_row[k].store(&mut out[k]);
     }
 }
 
