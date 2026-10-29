@@ -12,7 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::LaneVector, mixture::{LaneCompleteVector, LanePartialVector, MixtureMatrix}, quadratic::ClsQuadratic, simd::Lane, sqp::{self, Tuneables}, wrapper::GlAf,
+    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::LaneVector, mixture::{LaneCompleteVector, MixtureMatrix}, quadratic::ClsQuadratic, simd::Lane, sqp::{self, Tuneables}, wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {

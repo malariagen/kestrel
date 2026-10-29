@@ -8,7 +8,6 @@ use env_logger::{Builder, Env};
 
 use crate::algebra::dot;
 use crate::coefficients::Output;
-use crate::conditional::IIS_3;
 
 #[derive(Parser)]
 #[command(name = "kestrel", version, about)]
@@ -64,17 +63,6 @@ pub fn run_cli(args: &[String]) -> Result<()> {
         .format_timestamp(None)
         .format_target(false)
         .init();
-
-    for (gx, a) in IIS_3.iter().enumerate() {
-        for (gy, b) in a.iter().enumerate() {
-            let ((i, j), (k, l), iis) = b;
-
-                //accumulate_iis(&mut a, g, pi, pj, pk, pl, iis);
-            println!("accumulate_iis(&mut a, lx[{gx}].mul(ly[{gy}]), p[{i}], p[{j}], p[{k}], p[{l}], Iis::{iis:?});");
-        }
-    }
-
-    panic!();
 
     let args = Args::parse_from(args);
 

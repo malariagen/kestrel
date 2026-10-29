@@ -190,7 +190,7 @@ fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
 
     let pool = ThreadPoolBuilder {
         num_threads: ThreadCount::Count(threads),
-        range_strategy: RangeStrategy::Fixed,
+        range_strategy: RangeStrategy::WorkStealing,
         cpu_pinning: CpuPinningPolicy::No,
     }
     .build();

@@ -1,6 +1,4 @@
-use ndarray::ArrayView1;
-
-use crate::{iis::{self, Iis}, lanematrix::LaneM, simd::Lane};
+use crate::{iis::{self, Iis}};
 
 pub type Genotype = (usize, usize);
 pub type MIis<const G: usize> = [[(Genotype, Genotype, Iis); G]; G];
@@ -49,31 +47,4 @@ const fn calculate_joint_genotype_iis<const A: usize, const G: usize>() -> MIis<
     assert!(gx == G);
 
     table
-}
-
-pub fn calculate_conditional_probability_arrays<L: Lane, const A: usize, const G: usize>(
-    allele_frequencies: ArrayView1<[f64; A]>,
-) -> LaneM<L, G> {
-    let num_v = allele_frequencies.dim();
-
-    let all_joint_genotypes = calculate_joint_genotype_iis::<A, G>();
-
-    let iter = allele_frequencies.iter().map(|site_p| {
-        std::array::from_fn(|x| {
-            std::array::from_fn(|y| {
-                let ((i, j), (k, l), iis_mode) = all_joint_genotypes[x][y];
-                let pi = site_p[i];
-                let pj = site_p[j];
-                let pk = site_p[k];
-                let pl = site_p[l];
-
-                iis::conditional_probabilities(pi, pj, pk, pl, iis_mode)
-            })
-        })
-    });
-
-    let mut lanes = LaneM::new(num_v);
-    lanes.fill_from_iter(iter);
-
-    lanes
 }

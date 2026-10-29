@@ -1,5 +1,5 @@
 use crate::{
-    conditional::MIis, iis::{self, Iis, accumulate_iis}, lanematrix::M, simd::{Arith, Lane, LoadStore},
+    conditional::MIis, iis::accumulate_iis, simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -10,17 +10,12 @@ use crate::simd::avx512::Avx512Lane;
 use crate::simd::neon::NeonLane;
 
 pub trait MixtureMatrix: Lane {
-    fn partial_mixture_component_matrix<const G: usize>(
-        m_arrays: &[M<Self, G>],
-        likelihoods: &[[Self; G]],
-        partial_mat: &mut [[[Self; 9]; G]],
-    );
-    fn complete_mixture_component_matrix<const G: usize>(
-        partial_mat: &[[[Self; 9]; G]],
-        likelihoods: &[[Self; G]],
+    fn mixture_component_matrix2(
+        allele_frequencies: &[[Self; 2]],
+        likelihoods_x: &[[Self; 3]],
+        likelihoods_y: &[[Self; 3]],
         p_mat: &mut [[Self; 9]],
     );
-
     fn mixture_component_matrix<const A: usize, const G: usize>(
         all_joint_genotypes: &MIis<G>,
         allele_frequencies: &[[Self; A]],
@@ -28,69 +23,40 @@ pub trait MixtureMatrix: Lane {
         likelihoods_y: &[[Self; G]],
         p_mat: &mut [[Self; 9]],
     );
-
-    fn mixture_component_matrix2(
-        allele_frequencies: &[[Self; 2]],
-        likelihoods_x: &[[Self; 3]],
-        likelihoods_y: &[[Self; 3]],
-        p_mat: &mut [[Self; 9]],
-    );
 }
 
-pub fn test_2asm(
+// pub fn test_2asm(
         // all_joint_genotypes: &MIis<6>,
-        allele_frequencies: &[[Avx512Lane; 3]],
-        likelihoods_x: &[[Avx512Lane; 6]],
-        likelihoods_y: &[[Avx512Lane; 6]],
-        p_mat: &mut [[Avx512Lane; 9]],
-) {
-    use std::arch::x86_64::__m512d;
+        // allele_frequencies: &[[Avx512Lane; 3]],
+        // likelihoods_x: &[[Avx512Lane; 6]],
+        // likelihoods_y: &[[Avx512Lane; 6]],
+        // p_mat: &mut [[Avx512Lane; 9]],
+// ) {
+    // use std::arch::x86_64::__m512d;
     // return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 3, 6>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
-    return calculate_mixture_component_matrix3::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
-}
+    // return calculate_mixture_component_matrix3::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+// }
 
 
-pub fn test_asm_mix(
-out: &mut [Avx512Lane; 9], like_x: &[Avx512Lane; 3], like_y: &[Avx512Lane; 3], af: &[Avx512Lane; 2]
-) {
-    use std::arch::x86_64::__m512d;
-    mixture_row2::<Avx512Lane, __m512d>(out, like_x, like_y, af);
-}
+// pub fn test_asm_mix(
+// out: &mut [Avx512Lane; 9], like_x: &[Avx512Lane; 3], like_y: &[Avx512Lane; 3], af: &[Avx512Lane; 2]
+// ) {
+//     use std::arch::x86_64::__m512d;
+//     mixture_row2::<Avx512Lane, __m512d>(out, like_x, like_y, af);
+// }
 
-pub fn test_asm_bi(
-        allele_frequencies: &[[Avx512Lane; 2]],
-        likelihoods_x: &[[Avx512Lane; 3]],
-        likelihoods_y: &[[Avx512Lane; 3]],
-        p_mat: &mut [[Avx512Lane; 9]],
-) {
-    use std::arch::x86_64::__m512d;
-    return calculate_mixture_component_matrix2::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
-}
+// pub fn test_asm_bi(
+//         allele_frequencies: &[[Avx512Lane; 2]],
+//         likelihoods_x: &[[Avx512Lane; 3]],
+//         likelihoods_y: &[[Avx512Lane; 3]],
+//         p_mat: &mut [[Avx512Lane; 9]],
+// ) {
+//     use std::arch::x86_64::__m512d;
+//     return calculate_mixture_component_matrix2::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+// }
 
 #[cfg(target_arch = "x86_64")]
 impl MixtureMatrix for Avx512Lane {
-    fn partial_mixture_component_matrix<const G: usize>(
-        m_arrays: &[M<Self, G>],
-        likelihoods: &[[Self; G]],
-        partial_mat: &mut [[[Self; 9]; G]],
-    ) {
-        use std::arch::x86_64::__m512d;
-        return calculate_partial_mixture_component_matrix::<Avx512Lane, __m512d, G>(
-            m_arrays,
-            likelihoods,
-            partial_mat,
-        );
-    }
-
-    fn complete_mixture_component_matrix<const G: usize>(
-        partial_mat: &[[[Self; 9]; G]],
-        likelihoods: &[[Self; G]],
-        p_mat: &mut [[Self; 9]],
-    ) {
-        use std::arch::x86_64::__m512d;
-        return calculate_complete_mixture_component_matrix::<Avx512Lane, __m512d, G>(partial_mat, likelihoods, p_mat);
-    }
-
     fn mixture_component_matrix<const A: usize, const G: usize>(
         all_joint_genotypes: &MIis<G>,
         allele_frequencies: &[[Self; A]],
@@ -115,24 +81,6 @@ impl MixtureMatrix for Avx512Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl MixtureMatrix for Avx2Lane {
-    fn partial_mixture_component_matrix<const G: usize>(
-        m_arrays: &[M<Self, G>],
-        likelihoods: &[[Self; G]],
-        partial_mat: &mut [[[Self; 9]; G]],
-    ) {
-        use std::arch::x86_64::__m256d;
-        return calculate_partial_mixture_component_matrix::<Avx2Lane, __m256d, G>(m_arrays, likelihoods, partial_mat);
-    }
-
-    fn complete_mixture_component_matrix<const G: usize>(
-        partial_mat: &[[[Self; 9]; G]],
-        likelihoods: &[[Self; G]],
-        p_mat: &mut [[Self; 9]],
-    ) {
-        use std::arch::x86_64::__m256d;
-        return calculate_complete_mixture_component_matrix::<Avx2Lane, __m256d, G>(partial_mat, likelihoods, p_mat);
-    }
-
     fn mixture_component_matrix<const A: usize, const G: usize>(
         all_joint_genotypes: &MIis<G>,
         allele_frequencies: &[[Self; A]],
@@ -151,38 +99,13 @@ impl MixtureMatrix for Avx2Lane {
         p_mat: &mut [[Self; 9]],
     )
     {
-        unimplemented!()
+        use std::arch::x86_64::__m256d;
+        calculate_mixture_component_matrix2::<Self, __m256d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl MixtureMatrix for NeonLane {
-    fn partial_mixture_component_matrix<const G: usize>(
-        m_arrays: &[M<Self, G>],
-        likelihoods: &[[Self; G]],
-        partial_mat: &mut [[[Self; 9]; G]],
-    ) {
-        use std::arch::aarch64::float64x2_t;
-        return calculate_partial_mixture_component_matrix::<NeonLane, float64x2_t, G>(
-            m_arrays,
-            likelihoods,
-            partial_mat,
-        );
-    }
-
-    fn complete_mixture_component_matrix<const G: usize>(
-        partial_mat: &[[[Self; 9]; G]],
-        likelihoods: &[[Self; G]],
-        p_mat: &mut [[Self; 9]],
-    ) {
-        use std::arch::aarch64::float64x2_t;
-        return calculate_complete_mixture_component_matrix::<NeonLane, float64x2_t, G>(
-            partial_mat,
-            likelihoods,
-            p_mat,
-        );
-    }
-
     fn mixture_component_matrix<const A: usize, const G: usize>(
         all_joint_genotypes: &MIis<G>,
         allele_frequencies: &[[Self; A]],
@@ -193,25 +116,20 @@ impl MixtureMatrix for NeonLane {
         use std::arch::aarch64::float64x2_t;
         calculate_mixture_component_matrix::<float64x2_t, __m256d, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
     }
+
+    fn mixture_component_matrix2(
+        allele_frequencies: &[[Self; 2]],
+        likelihoods_x: &[[Self; 3]],
+        likelihoods_y: &[[Self; 3]],
+        p_mat: &mut [[Self; 9]],
+    )
+    {
+        use std::arch::aarch64::float64x2_t;
+        calculate_mixture_component_matrix2::<Self, float64x2_t>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat)
+    }
 }
 
 impl MixtureMatrix for f64 {
-    fn partial_mixture_component_matrix<const G: usize>(
-        m_arrays: &[M<Self, G>],
-        likelihoods: &[[Self; G]],
-        partial_mat: &mut [[[Self; 9]; G]],
-    ) {
-        return calculate_partial_mixture_component_matrix::<f64, f64, G>(m_arrays, likelihoods, partial_mat);
-    }
-
-    fn complete_mixture_component_matrix<const G: usize>(
-        partial_mat: &[[[Self; 9]; G]],
-        likelihoods: &[[Self; G]],
-        p_mat: &mut [[Self; 9]],
-    ) {
-        return calculate_complete_mixture_component_matrix::<f64, f64, G>(partial_mat, likelihoods, p_mat);
-    }
-
     fn mixture_component_matrix<const A: usize, const G: usize>(
         all_joint_genotypes: &MIis<G>,
         allele_frequencies: &[[Self; A]],
@@ -232,7 +150,7 @@ impl MixtureMatrix for f64 {
     }
 }
 
-#[inline(always)]
+#[inline]
 fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A: usize, const G: usize>(
     all_joint_genotypes: &MIis<G>,
     allele_frequencies: &[[L; A]],
@@ -284,7 +202,7 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A:
     }
 }
 
-#[inline(always)]
+#[inline]
 fn calculate_mixture_component_matrix2<L: Lane, S: Arith + LoadStore<L>>(
     allele_frequencies: &[[L; 2]],
     likelihoods_x: &[[L; 3]],
@@ -313,7 +231,12 @@ fn calculate_mixture_component_matrix2<L: Lane, S: Arith + LoadStore<L>>(
 // 2 for the allele frequencies. Furthermore, once you have loaded that matrix M, it takes
 // 3 x 3 = 9 muls to get g, and 9 x 9 = 81 FMAs. The function below takes 9 muls to get g, 18 mul/adds to get
 // the M entries, and then 45 FMAs. Even if you were to store only the 45 non-zero entries of M in memory, you
-// are loading 45 elements vs. computing 18 multiplications. The latter is faster.
+// are loading 45 elements vs. computing 18 multiplications. The latter is faster. Another option would be to
+// do a partial contraction of M against the genotype likelihoods of x, write that to memory, and then load that
+// to do a partial contraction against y. If you store the non-zero entries that might compete ... but it's very
+// complicated and not a sure winner.
+// We don't have analogous mixture_row3 and mixture_row4 functions since those have 36 and 100 cases respectively,
+// and the compiler struggles to optimize that. Hence leave those to the general function.
 fn mixture_row2<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 3], like_y: &[L; 3], af: &[L; 2]) {
     // 15 registers
     let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
@@ -444,148 +367,6 @@ fn mixture_row2<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L;
 
     for k in 0..9 {
         a[k].store(&mut out[k]);
-    }
-}
-
-// #[inline(always)]
-// fn calculate_mixture_component_matrix3<L: Lane, S: Arith + LoadStore<L>>(
-//     allele_frequencies: &[[L; 3]],
-//     likelihoods_x: &[[L; 6]],
-//     likelihoods_y: &[[L; 6]],
-//     p_mat: &mut [[L; 9]],
-// ) {
-//     let len = allele_frequencies.len();
-//     assert!(likelihoods_x.len() == len);
-//     assert!(likelihoods_y.len() == len);
-//     assert!(p_mat.len() == len);
-
-//     // p = lx * ly * M
-//     for locus in 0..len {
-//         let out = unsafe { p_mat.get_unchecked_mut(locus) };
-//         let like_x = unsafe { likelihoods_x.get_unchecked(locus) };
-//         let like_y = unsafe { likelihoods_y.get_unchecked(locus) };
-//         let af = unsafe { allele_frequencies.get_unchecked(locus) };
-
-//         // 9 registers
-//         mixture_row3::<L, S>(out, like_x, like_y, af);
-//     }
-// }
-
-// fn mixture_row3<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 6], like_y: &[L; 6], af: &[L; 3]) {
-//     // 21 registers
-//     let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
-//     let lx: [S; 6] = std::array::from_fn(|i| S::load(&like_x[i]));
-//     let ly: [S; 6] = std::array::from_fn(|i| S::load(&like_y[i]));
-//     let p: [S; 3] = std::array::from_fn(|i| S::load(&af[i]));
-
-//     accumulate_iis(&mut a, lx[0].mul(ly[0]), p[0], p[0], p[0], p[0], Iis::M1);
-//     accumulate_iis(&mut a, lx[0].mul(ly[1]), p[0], p[0], p[0], p[1], Iis::M3);
-//     accumulate_iis(&mut a, lx[0].mul(ly[2]), p[0], p[0], p[1], p[1], Iis::M2);
-//     accumulate_iis(&mut a, lx[0].mul(ly[3]), p[0], p[0], p[0], p[2], Iis::M3);
-//     accumulate_iis(&mut a, lx[0].mul(ly[4]), p[0], p[0], p[1], p[2], Iis::M5);
-//     accumulate_iis(&mut a, lx[0].mul(ly[5]), p[0], p[0], p[2], p[2], Iis::M2);
-//     accumulate_iis(&mut a, lx[1].mul(ly[0]), p[0], p[1], p[0], p[0], Iis::M6);
-//     accumulate_iis(&mut a, lx[1].mul(ly[1]), p[0], p[1], p[0], p[1], Iis::M9);
-//     accumulate_iis(&mut a, lx[1].mul(ly[2]), p[0], p[1], p[1], p[1], Iis::M7);
-//     accumulate_iis(&mut a, lx[1].mul(ly[3]), p[0], p[1], p[0], p[2], Iis::M11);
-//     accumulate_iis(&mut a, lx[1].mul(ly[4]), p[0], p[1], p[1], p[2], Iis::M13);
-//     accumulate_iis(&mut a, lx[1].mul(ly[5]), p[0], p[1], p[2], p[2], Iis::M8);
-//     accumulate_iis(&mut a, lx[2].mul(ly[0]), p[1], p[1], p[0], p[0], Iis::M2);
-//     accumulate_iis(&mut a, lx[2].mul(ly[1]), p[1], p[1], p[0], p[1], Iis::M4);
-//     accumulate_iis(&mut a, lx[2].mul(ly[2]), p[1], p[1], p[1], p[1], Iis::M1);
-//     accumulate_iis(&mut a, lx[2].mul(ly[3]), p[1], p[1], p[0], p[2], Iis::M5);
-//     accumulate_iis(&mut a, lx[2].mul(ly[4]), p[1], p[1], p[1], p[2], Iis::M3);
-//     accumulate_iis(&mut a, lx[2].mul(ly[5]), p[1], p[1], p[2], p[2], Iis::M2);
-//     accumulate_iis(&mut a, lx[3].mul(ly[0]), p[0], p[2], p[0], p[0], Iis::M6);
-//     accumulate_iis(&mut a, lx[3].mul(ly[1]), p[0], p[2], p[0], p[1], Iis::M11);
-//     accumulate_iis(&mut a, lx[3].mul(ly[2]), p[0], p[2], p[1], p[1], Iis::M8);
-//     accumulate_iis(&mut a, lx[3].mul(ly[3]), p[0], p[2], p[0], p[2], Iis::M9);
-//     accumulate_iis(&mut a, lx[3].mul(ly[4]), p[0], p[2], p[1], p[2], Iis::M14);
-//     accumulate_iis(&mut a, lx[3].mul(ly[5]), p[0], p[2], p[2], p[2], Iis::M7);
-//     accumulate_iis(&mut a, lx[4].mul(ly[0]), p[1], p[2], p[0], p[0], Iis::M8);
-//     accumulate_iis(&mut a, lx[4].mul(ly[1]), p[1], p[2], p[0], p[1], Iis::M12);
-//     accumulate_iis(&mut a, lx[4].mul(ly[2]), p[1], p[2], p[1], p[1], Iis::M6);
-//     accumulate_iis(&mut a, lx[4].mul(ly[3]), p[1], p[2], p[0], p[2], Iis::M14);
-//     accumulate_iis(&mut a, lx[4].mul(ly[4]), p[1], p[2], p[1], p[2], Iis::M9);
-//     accumulate_iis(&mut a, lx[4].mul(ly[5]), p[1], p[2], p[2], p[2], Iis::M7);
-//     accumulate_iis(&mut a, lx[5].mul(ly[0]), p[2], p[2], p[0], p[0], Iis::M2);
-//     accumulate_iis(&mut a, lx[5].mul(ly[1]), p[2], p[2], p[0], p[1], Iis::M5);
-//     accumulate_iis(&mut a, lx[5].mul(ly[2]), p[2], p[2], p[1], p[1], Iis::M2);
-//     accumulate_iis(&mut a, lx[5].mul(ly[3]), p[2], p[2], p[0], p[2], Iis::M4);
-//     accumulate_iis(&mut a, lx[5].mul(ly[4]), p[2], p[2], p[1], p[2], Iis::M4);
-//     accumulate_iis(&mut a, lx[5].mul(ly[5]), p[2], p[2], p[2], p[2], Iis::M1);
-
-//     for k in 0..9 {
-//         a[k].store(&mut out[k]);
-//     }
-// }
-
-// We have K x G x 9 x G
-// And K x G
-// Need to turn it into K x G x 9
-#[inline]
-fn calculate_partial_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const G: usize>(
-    m_arrays: &[M<L, G>],
-    likelihoods: &[[L; G]],
-    partial_mat: &mut [[[L; 9]; G]],
-) {
-    let len = m_arrays.len();
-    assert!(likelihoods.len() == len);
-    assert!(partial_mat.len() == len);
-
-    for l in 0..len {
-        let out = unsafe { partial_mat.get_unchecked_mut(l) };
-        let like = unsafe { likelihoods.get_unchecked(l) };
-        let m = unsafe { m_arrays.get_unchecked(l) };
-
-        for j in 0..G {
-            // 9 registers
-            let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
-
-            for i in 0..G {
-                // This will get hoisted outside the loop
-                let li = S::load(&like[i]);
-
-                for k in 0..9 {
-                    p[k] = li.fma(S::load(&m[j][i][k]), p[k]);
-                }
-            }
-
-            for k in 0..9 {
-                p[k].store(&mut out[j][k]);
-            }
-        }
-    }
-}
-
-#[inline]
-fn calculate_complete_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const G: usize>(
-    partial_mat: &[[[L; 9]; G]],
-    likelihoods: &[[L; G]],
-    p_mat: &mut [[L; 9]],
-) {
-    let len = partial_mat.len();
-    assert!(likelihoods.len() == len);
-    assert!(p_mat.len() == len);
-
-    for l in 0..len {
-        let out = unsafe { p_mat.get_unchecked_mut(l) };
-        let like = unsafe { likelihoods.get_unchecked(l) };
-        let partial = unsafe { partial_mat.get_unchecked(l) };
-
-        let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
-
-        for j in 0..G {
-            let lj = S::load(&like[j]);
-
-            for k in 0..9 {
-                p[k] = lj.fma(S::load(&partial[j][k]), p[k]);
-            }
-        }
-
-        for k in 0..9 {
-            p[k].store(&mut out[k]);
-        }
     }
 }
 

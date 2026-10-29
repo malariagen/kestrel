@@ -15,7 +15,6 @@ mod simd;
 mod iis;
 mod jacquard;
 mod lanearray2;
-mod lanematrix;
 mod lanevector;
 mod log;
 pub mod mixture;
