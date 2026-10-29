@@ -65,9 +65,12 @@ pub fn run_cli(args: &[String]) -> Result<()> {
         .format_target(false)
         .init();
 
-    for (i, a) in IIS_3.iter().enumerate() {
-        for (j, b) in a.iter().enumerate() {
-            println!("{:?} {:?} - {i} {j} - {:?}", b.0, b.1, b.2);
+    for (gx, a) in IIS_3.iter().enumerate() {
+        for (gy, b) in a.iter().enumerate() {
+            let ((i, j), (k, l), iis) = b;
+
+                //accumulate_iis(&mut a, g, pi, pj, pk, pl, iis);
+            println!("accumulate_iis(&mut a, lx[{gx}].mul(ly[{gy}]), p[{i}], p[{j}], p[{k}], p[{l}], Iis::{iis:?});");
         }
     }
 

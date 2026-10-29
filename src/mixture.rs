@@ -1,5 +1,5 @@
 use crate::{
-    conditional::{MIis}, iis, lanematrix::M, simd::{Arith, Lane, LoadStore},
+    conditional::MIis, iis::{self, Iis, accumulate_iis}, lanematrix::M, simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -37,15 +37,16 @@ pub trait MixtureMatrix: Lane {
     );
 }
 
-pub fn test_asm(
-        all_joint_genotypes: &MIis<3>,
-        allele_frequencies: &[[Avx512Lane; 2]],
-        likelihoods_x: &[[Avx512Lane; 3]],
-        likelihoods_y: &[[Avx512Lane; 3]],
+pub fn test_2asm(
+        // all_joint_genotypes: &MIis<6>,
+        allele_frequencies: &[[Avx512Lane; 3]],
+        likelihoods_x: &[[Avx512Lane; 6]],
+        likelihoods_y: &[[Avx512Lane; 6]],
         p_mat: &mut [[Avx512Lane; 9]],
 ) {
     use std::arch::x86_64::__m512d;
-    return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 2, 3>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+    // return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 3, 6>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+    return calculate_mixture_component_matrix3::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
 }
 
 
@@ -252,7 +253,7 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A:
         let af = unsafe { allele_frequencies.get_unchecked(locus) };
 
         // 9 registers
-        let mut p: [S; 9] = std::array::from_fn(|_| S::zero());
+        let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
 
         // G x G multiplications
         // G x G x 9 FMA
@@ -265,7 +266,7 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A:
                 let ly = S::load(&like_y[gy]);
                 let g = lx.mul(ly);
 
-                let ((i, j), (k, l), iis_mode) = all_joint_genotypes[gx][gy];
+                let ((i, j), (k, l), iis) = all_joint_genotypes[gx][gy];
 
                 // This will always be safe due to the construction all_joint_genotypes
                 let pi = S::load( unsafe { af.get_unchecked(i) });
@@ -273,15 +274,12 @@ fn calculate_mixture_component_matrix<L: Lane, S: Arith + LoadStore<L>, const A:
                 let pk = S::load( unsafe { af.get_unchecked(k) });
                 let pl = S::load( unsafe { af.get_unchecked(l) });
 
-                let m_row = iis::conditional_probabilities(pi, pj, pk, pl, iis_mode);
-                for a in 0..9 {
-                    p[a] = g.fma(m_row[a], p[a]);
-                }
+                accumulate_iis(&mut a, g, pi, pj, pk, pl, iis);
             }
         }
 
         for k in 0..9 {
-            p[k].store(&mut out[k]);
+            a[k].store(&mut out[k]);
         }
     }
 }
@@ -449,139 +447,78 @@ fn mixture_row2<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L;
     }
 }
 
-fn mixture_row3<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 6], like_y: &[L; 6], af: &[L; 3]) {
-    // 21 registers
-    let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
-    let lx: [S; 6] = std::array::from_fn(|i| S::load(&like_x[i]));
-    let ly: [S; 6] = std::array::from_fn(|i| S::load(&like_y[i]));
+// #[inline(always)]
+// fn calculate_mixture_component_matrix3<L: Lane, S: Arith + LoadStore<L>>(
+//     allele_frequencies: &[[L; 3]],
+//     likelihoods_x: &[[L; 6]],
+//     likelihoods_y: &[[L; 6]],
+//     p_mat: &mut [[L; 9]],
+// ) {
+//     let len = allele_frequencies.len();
+//     assert!(likelihoods_x.len() == len);
+//     assert!(likelihoods_y.len() == len);
+//     assert!(p_mat.len() == len);
 
-    // 3
-    let p = S::load(&af[0]);
-    let q = S::load(&af[1]);
-    let r = S::load(&af[2]);
+//     // p = lx * ly * M
+//     for locus in 0..len {
+//         let out = unsafe { p_mat.get_unchecked_mut(locus) };
+//         let like_x = unsafe { likelihoods_x.get_unchecked(locus) };
+//         let like_y = unsafe { likelihoods_y.get_unchecked(locus) };
+//         let af = unsafe { allele_frequencies.get_unchecked(locus) };
 
-    // 10
-    let p2 = p.mul(p);
-    let p3 = p2.mul(p);
-    let q2 = q.mul(q);
-    let q3 = q2.mul(q);
+//         // 9 registers
+//         mixture_row3::<L, S>(out, like_x, like_y, af);
+//     }
+// }
 
-    let pq = p.mul(q);
-    let p2q = p2.mul(q);
-    let pq2 = p.mul(q2);
-    let p2q2 = p2.mul(q2);
+// fn mixture_row3<L: Lane, S: Arith + LoadStore<L>>(out: &mut [L; 9], like_x: &[L; 6], like_y: &[L; 6], af: &[L; 3]) {
+//     // 21 registers
+//     let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
+//     let lx: [S; 6] = std::array::from_fn(|i| S::load(&like_x[i]));
+//     let ly: [S; 6] = std::array::from_fn(|i| S::load(&like_y[i]));
+//     let p: [S; 3] = std::array::from_fn(|i| S::load(&af[i]));
 
-    let p3q = p3.mul(q);
-    let pq3 = p.mul(q3);
+//     accumulate_iis(&mut a, lx[0].mul(ly[0]), p[0], p[0], p[0], p[0], Iis::M1);
+//     accumulate_iis(&mut a, lx[0].mul(ly[1]), p[0], p[0], p[0], p[1], Iis::M3);
+//     accumulate_iis(&mut a, lx[0].mul(ly[2]), p[0], p[0], p[1], p[1], Iis::M2);
+//     accumulate_iis(&mut a, lx[0].mul(ly[3]), p[0], p[0], p[0], p[2], Iis::M3);
+//     accumulate_iis(&mut a, lx[0].mul(ly[4]), p[0], p[0], p[1], p[2], Iis::M5);
+//     accumulate_iis(&mut a, lx[0].mul(ly[5]), p[0], p[0], p[2], p[2], Iis::M2);
+//     accumulate_iis(&mut a, lx[1].mul(ly[0]), p[0], p[1], p[0], p[0], Iis::M6);
+//     accumulate_iis(&mut a, lx[1].mul(ly[1]), p[0], p[1], p[0], p[1], Iis::M9);
+//     accumulate_iis(&mut a, lx[1].mul(ly[2]), p[0], p[1], p[1], p[1], Iis::M7);
+//     accumulate_iis(&mut a, lx[1].mul(ly[3]), p[0], p[1], p[0], p[2], Iis::M11);
+//     accumulate_iis(&mut a, lx[1].mul(ly[4]), p[0], p[1], p[1], p[2], Iis::M13);
+//     accumulate_iis(&mut a, lx[1].mul(ly[5]), p[0], p[1], p[2], p[2], Iis::M8);
+//     accumulate_iis(&mut a, lx[2].mul(ly[0]), p[1], p[1], p[0], p[0], Iis::M2);
+//     accumulate_iis(&mut a, lx[2].mul(ly[1]), p[1], p[1], p[0], p[1], Iis::M4);
+//     accumulate_iis(&mut a, lx[2].mul(ly[2]), p[1], p[1], p[1], p[1], Iis::M1);
+//     accumulate_iis(&mut a, lx[2].mul(ly[3]), p[1], p[1], p[0], p[2], Iis::M5);
+//     accumulate_iis(&mut a, lx[2].mul(ly[4]), p[1], p[1], p[1], p[2], Iis::M3);
+//     accumulate_iis(&mut a, lx[2].mul(ly[5]), p[1], p[1], p[2], p[2], Iis::M2);
+//     accumulate_iis(&mut a, lx[3].mul(ly[0]), p[0], p[2], p[0], p[0], Iis::M6);
+//     accumulate_iis(&mut a, lx[3].mul(ly[1]), p[0], p[2], p[0], p[1], Iis::M11);
+//     accumulate_iis(&mut a, lx[3].mul(ly[2]), p[0], p[2], p[1], p[1], Iis::M8);
+//     accumulate_iis(&mut a, lx[3].mul(ly[3]), p[0], p[2], p[0], p[2], Iis::M9);
+//     accumulate_iis(&mut a, lx[3].mul(ly[4]), p[0], p[2], p[1], p[2], Iis::M14);
+//     accumulate_iis(&mut a, lx[3].mul(ly[5]), p[0], p[2], p[2], p[2], Iis::M7);
+//     accumulate_iis(&mut a, lx[4].mul(ly[0]), p[1], p[2], p[0], p[0], Iis::M8);
+//     accumulate_iis(&mut a, lx[4].mul(ly[1]), p[1], p[2], p[0], p[1], Iis::M12);
+//     accumulate_iis(&mut a, lx[4].mul(ly[2]), p[1], p[2], p[1], p[1], Iis::M6);
+//     accumulate_iis(&mut a, lx[4].mul(ly[3]), p[1], p[2], p[0], p[2], Iis::M14);
+//     accumulate_iis(&mut a, lx[4].mul(ly[4]), p[1], p[2], p[1], p[2], Iis::M9);
+//     accumulate_iis(&mut a, lx[4].mul(ly[5]), p[1], p[2], p[2], p[2], Iis::M7);
+//     accumulate_iis(&mut a, lx[5].mul(ly[0]), p[2], p[2], p[0], p[0], Iis::M2);
+//     accumulate_iis(&mut a, lx[5].mul(ly[1]), p[2], p[2], p[0], p[1], Iis::M5);
+//     accumulate_iis(&mut a, lx[5].mul(ly[2]), p[2], p[2], p[1], p[1], Iis::M2);
+//     accumulate_iis(&mut a, lx[5].mul(ly[3]), p[2], p[2], p[0], p[2], Iis::M4);
+//     accumulate_iis(&mut a, lx[5].mul(ly[4]), p[2], p[2], p[1], p[2], Iis::M4);
+//     accumulate_iis(&mut a, lx[5].mul(ly[5]), p[2], p[2], p[2], p[2], Iis::M1);
 
-    // 5
-    let twopq = pq.add(pq);
-    let twop2q = p2q.add(p2q);
-    let twop3q = p3q.add(p3q);
-    let twopq2 = pq2.add(pq2);
-    let twopq3 = pq3.add(pq3);
-
-    // We have 32 registers exactly! The compiler needs a few
-    // more for the intermediate multiplications. However due
-    // to non-overlapping lifetimes for the constants it will
-    // be able to fit everything without spilling to the stack.
-
-    // genotypes - gl vcf index - iis mode
-    // (0, 0) (0, 0) - 0 0 - M1
-    {
-        let g = lx[0].mul(ly[0]);
-
-        a[0] = g.fma(p, a[0]);
-        a[1] = g.fma(p2, a[1]);
-        a[2] = g.fma(p2, a[2]);
-        a[3] = g.fma(p3, a[3]);
-        a[4] = g.fma(p2, a[4]);
-        a[5] = g.fma(p3, a[5]);
-        a[6] = g.fma(p2, a[6]);
-        a[7] = g.fma(p3, a[7]);
-        a[8] = g.fma(p2.mul(p2), a[8]);
-    }
-    // (0, 0) (0, 1) - 0 1 - M3
-    {
-        let g = lx[0].mul(ly[1]);
-
-        a[2] = g.fma(pq, a[2]);
-        a[3] = g.fma(twop2q, a[3]);
-        a[7] = g.fma(p2q, a[7]);
-        a[8] = g.fma(twop3q, a[8]);
-    }
-    // (0, 0) (1, 1) - 0 2 - M2
-    {
-        let g = lx[0].mul(ly[2]);
-
-        a[1] = g.fma(pq, a[1]);
-        a[3] = g.fma(pq2, a[3]);
-        a[5] = g.fma(p2q, a[5]);
-        a[8] = g.fma(p2q2, a[8]);
-    }
-    // (0, 1) (0, 0) - 1 0 - M6
-    {
-        let g = lx[1].mul(ly[0]);
-
-        a[4] = g.fma(pq, a[4]);
-        a[5] = g.fma(twop2q, a[5]);
-        a[7] = g.fma(p2q, a[7]);
-        a[8] = g.fma(twop3q, a[8]);
-    }
-    // (0, 1) (0, 1) - 1 1 - M9
-    {
-        let g = lx[1].mul(ly[1]);
-
-        a[6] = g.fma(twopq, a[6]);
-        a[7] = g.fma(pq, a[7]);
-        a[8] = g.fma(twopq.mul(twopq), a[8]);
-    }
-    // (0, 1) (1, 1) - 1 2 - M7
-    {
-        let g = lx[1].mul(ly[2]);
-
-        a[4] = g.fma(pq, a[4]);
-        a[5] = g.fma(twopq2, a[5]);
-        a[7] = g.fma(pq2, a[7]);
-        a[8] = g.fma(twopq3, a[8]);
-    }
-    // (1, 1) (0, 0) - 2 0 - M2
-    {
-        let g = lx[2].mul(ly[0]);
-
-        a[1] = g.fma(pq, a[1]);
-        a[3] = g.fma(p2q, a[3]);
-        a[5] = g.fma(pq2, a[5]);
-        a[8] = g.fma(p2q2, a[8]);
-    }
-    // (1, 1) (0, 1) - 2 1 - M4
-    {
-        let g = lx[2].mul(ly[1]);
-
-        a[2] = g.fma(pq, a[2]);
-        a[3] = g.fma(twopq2, a[3]);
-        a[7] = g.fma(pq2, a[7]);
-        a[8] = g.fma(twopq3, a[8]);
-    }
-    // (1, 1) (1, 1) - 2 2 - M1
-    {
-        let g = lx[2].mul(ly[2]);
-
-        a[0] = g.fma(q, a[0]);
-        a[1] = g.fma(q2, a[1]);
-        a[2] = g.fma(q2, a[2]);
-        a[3] = g.fma(q3, a[3]);
-        a[4] = g.fma(q2, a[4]);
-        a[5] = g.fma(q3, a[5]);
-        a[6] = g.fma(q2, a[6]);
-        a[7] = g.fma(q3, a[7]);
-        a[8] = g.fma(q2.mul(q2), a[8]);
-    }
-
-    for k in 0..9 {
-        a[k].store(&mut out[k]);
-    }
-}
+//     for k in 0..9 {
+//         a[k].store(&mut out[k]);
+//     }
+// }
 
 // We have K x G x 9 x G
 // And K x G
