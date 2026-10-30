@@ -57,7 +57,7 @@ fn compute_obj_generic<L: Lane, S: Arith + Log + LoadStore<L>>(
     let b = compute_obj_lane::<L, S>(blocks, x, eps);
     let r = compute_obj_lane::<f64, f64>(remainder, x, eps);
 
-    let n = (L::N * blocks.len() + remainder.len()) as f64;
+    let n = likelihood_mats.len() as f64;
 
     -(b + r) / n
 }

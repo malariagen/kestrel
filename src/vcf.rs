@@ -123,7 +123,7 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
     let mut allele_frequencies = Vec::<f64>::new(); // V x 4
     let mut af_buf = Vec::<f64>::with_capacity(4);
 
-    'variant: for result in reader.records() {
+    for result in reader.records() {
         let record = result.context("Error reading record")?;
 
         total_variants += 1;
@@ -148,12 +148,8 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
                         // If a site hasn't been sequenced then the GL data will be missing
                         // e.g. vcfgl produces 0:.,.,.,.,.,.,.,.,.,. when this happens
                         // It behooves us for it to becometh a NaN
-                        match option_gl {
-                            None => continue 'variant,
-                            Some(gl) => gl_buf.push(gl.into())
-                        }
-                        // let gl = option_gl.unwrap_or(f32::NAN);
-                        // gl_buf.push(gl.into());
+                        let gl = option_gl.unwrap_or(f32::NAN);
+                        gl_buf.push(gl.into());
                     }
 
                     // We checked that this site is a SNP, so at most 10 GLs

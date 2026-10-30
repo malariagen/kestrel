@@ -4,8 +4,7 @@ use ndarray::{Array2, ArrayView1, ArrayView2, ArrayView3, Axis};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    coefficients::{Output, calculate_allele_frequencies},
-    simd::simd::Simd,
+    coefficients::{Output, calculate_allele_frequencies}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -158,24 +157,24 @@ pub fn calculate_relatedness_coefficients_gl(
     // TODO in theory we could do some checks here that the af are non-negative, sum to one
     // Indexing will work, etc.
 
-    let glaf = split_gl_af(genotype_likelihoods.view(), allele_frequencies.view());
-
     let outputs = match simd {
         #[cfg(target_arch = "x86_64")]
-        Simd::Avx512 => crate::coefficients::calculate_relatedness_coefficients_gl::<Avx512Lane>(
-            &glaf,
-            &mut thread_pool,
-            iterations,
-        ),
+        Simd::Avx512 => {
+            let glaf = split_gl_af(genotype_likelihoods.view(), allele_frequencies.view());
+            crate::coefficients::calculate_relatedness_coefficients_gl::<Avx512Lane>(&glaf, &mut thread_pool, iterations)
+        },
         #[cfg(target_arch = "x86_64")]
         Simd::Avx2 => {
+            let glaf = split_gl_af(genotype_likelihoods.view(), allele_frequencies.view());
             crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(&glaf, &mut thread_pool, iterations)
         }
         #[cfg(target_arch = "aarch64")]
         Simd::Neon => {
+            let glaf = split_gl_af(genotype_likelihoods.view(), allele_frequencies.view());
             crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(&glaf, &mut thread_pool, iterations)
         }
         Simd::Scalar => {
+            let glaf = split_gl_af(genotype_likelihoods.view(), allele_frequencies.view());
             crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(&glaf, &mut thread_pool, iterations)
         }
     };
@@ -198,22 +197,26 @@ fn build_thread_pool(threads: Option<NonZeroUsize>) -> ThreadPool {
     pool
 }
 
-pub struct GlAf {
-    pub af2: Vec<[f64; 2]>,
-    pub af3: Vec<[f64; 3]>,
-    pub af4: Vec<[f64; 4]>,
+pub struct GlAf<L: Lane> {
+    pub af2: LaneVector<L, 2>,
+    pub af3: LaneVector<L, 3>,
+    pub af4: LaneVector<L, 4>,
     pub gl2: Array2<[f64; 3]>,
     pub gl3: Array2<[f64; 6]>,
     pub gl4: Array2<[f64; 10]>,
 }
 
 // Multi-allelic sites ... never again
-fn split_gl_af(genotype_likelihoods: ArrayView2<[f64; 10]>, allele_frequencies: ArrayView1<[f64; 4]>) -> GlAf {
+fn split_gl_af<L: Lane>(genotype_likelihoods: ArrayView2<[f64; 10]>, allele_frequencies: ArrayView1<[f64; 4]>) -> GlAf<L> {
     let (num_variants, num_samples) = genotype_likelihoods.dim();
 
-    let mut af2 = Vec::<[f64; 2]>::new();
-    let mut af3 = Vec::<[f64; 3]>::new();
-    let mut af4 = Vec::<[f64; 4]>::new();
+    let mut af2 = LaneVector::<L, 2>::empty();
+    let mut af3 = LaneVector::<L, 3>::empty();
+    let mut af4 = LaneVector::<L, 4>::empty();
+
+    let mut af2b = LaneVectorBuilder::<L, 2>::new(&mut af2);
+    let mut af3b = LaneVectorBuilder::<L, 3>::new(&mut af3);
+    let mut af4b = LaneVectorBuilder::<L, 4>::new(&mut af4);
 
     let mut gl2 = Vec::<[f64; 3]>::new();
     let mut gl3 = Vec::<[f64; 6]>::new();
@@ -239,15 +242,15 @@ fn split_gl_af(genotype_likelihoods: ArrayView2<[f64; 10]>, allele_frequencies: 
             }
 
             if let Some(af_arr) = af_buf.as_array::<2>() {
-                af2.push(*af_arr);
+                af2b.push(af_arr);
             }
 
             if let Some(af_arr) = af_buf.as_array::<3>() {
-                af3.push(*af_arr);
+                af3b.push(af_arr);
             }
 
             if let Some(af_arr) = af_buf.as_array::<4>() {
-                af4.push(*af_arr);
+                af4b.push(af_arr);
             }
 
             nonzero_gl_indices.clear();
@@ -279,6 +282,10 @@ fn split_gl_af(genotype_likelihoods: ArrayView2<[f64; 10]>, allele_frequencies: 
                 }
             }
         });
+
+    af2b.finish();
+    af3b.finish();
+    af4b.finish();
 
     let di = af2.len();
     let tri = af3.len();

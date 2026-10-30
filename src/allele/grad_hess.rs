@@ -68,7 +68,7 @@ fn compute_grad_hess_generic<L: Lane, S: Arith + LoadStore<L>>(
     let (bg, bh) = compute_grad_hess_lane::<L, S>(blocks, x, eps);
     let (rg, rh) = compute_grad_hess_lane::<f64, f64>(remainder, x, eps);
 
-    let n = (L::N * blocks.len() + remainder.len()) as f64;
+    let n = likelihood_mats.len() as f64;
 
     let mut g = [0.0f64; 4];
     let mut h = [[0.0f64; 4]; 4];
