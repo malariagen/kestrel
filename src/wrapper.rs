@@ -91,16 +91,9 @@ pub fn calculate_relatedness_coefficients_gl(
 
     let tracker = ResourceTracker::new();
 
-    let (num_v2, num_s2) = genotype_likelihoods.gl2.dim();
-    let (num_v3, num_s3) = genotype_likelihoods.gl3.dim();
-    let (num_v4, num_s4) = genotype_likelihoods.gl4.dim();
-
-    assert!(num_v2 + num_v3 + num_v4 > 0, "Must have at least one variant");
-    assert!(num_s2 == num_s3 && num_s3 == num_s4 && num_s2 > 0, "Must have at least one sample");
-
     // This is the smallest allele frequency possible given our sample size
     // Anything lower than this is just noise
-    let maf = minimum_allele_frequency.unwrap_or(1.0 / (2.0 * num_s2 as f64));
+    let maf = minimum_allele_frequency.unwrap_or(1.0 / (2.0 * genotype_likelihoods.samples as f64));
 
     assert!(
         0.0 <= maf && maf <= 1.0,
@@ -118,7 +111,8 @@ pub fn calculate_relatedness_coefficients_gl(
             // assert!(anum_v == num_v, "Must have same dimension");
             // assert!(num_a == 4, "Must have all four alleles");
 
-            af.af4
+            unimplemented!()
+            // af.af4
             // af.map_axis(Axis(1), |lane| std::array::from_fn(|i| lane[i]))
         }
         None => {
@@ -164,21 +158,21 @@ pub fn calculate_relatedness_coefficients_gl(
     let outputs = match simd {
         #[cfg(target_arch = "x86_64")]
         Simd::Avx512 => {
-            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies.af4);
             crate::coefficients::calculate_relatedness_coefficients_gl::<Avx512Lane>(&glaf, &mut thread_pool, iterations)
         },
         #[cfg(target_arch = "x86_64")]
         Simd::Avx2 => {
-            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies.af4);
             crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(&glaf, &mut thread_pool, iterations)
         }
         #[cfg(target_arch = "aarch64")]
         Simd::Neon => {
-            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies.af4);
             crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(&glaf, &mut thread_pool, iterations)
         }
         Simd::Scalar => {
-            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies.af4);
             crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(&glaf, &mut thread_pool, iterations)
         }
     };

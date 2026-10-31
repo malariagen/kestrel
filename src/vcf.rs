@@ -130,6 +130,23 @@ pub struct GenotypeLikelihoods {
     pub gl2: Array2<[f64; 3]>,
     pub gl3: Array2<[f64; 6]>,
     pub gl4: Array2<[f64; 10]>,
+    pub samples: usize,
+    pub variants: usize,
+}
+
+impl GenotypeLikelihoods {
+    fn new(gl2: Array2<[f64; 3]>, gl3: Array2<[f64; 6]>, gl4: Array2<[f64; 10]>) -> Self {
+        let (num_v2, num_s2) = gl2.dim();
+        let (num_v3, num_s3) = gl3.dim();
+        let (num_v4, num_s4) = gl4.dim();
+
+        let variants = num_v2 + num_v3 + num_v4;
+
+        assert!(variants > 0, "Must have at least one variant");
+        assert!(num_s2 == num_s3 && num_s3 == num_s4 && num_s2 > 0, "Must have at least one sample");
+
+        Self { gl2, gl3, gl4, variants, samples: num_s2 }
+    }
 }
 
 pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
@@ -228,7 +245,7 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
         None
     };
 
-    let gl = GenotypeLikelihoods {gl2, gl3, gl4 };
+    let gl = GenotypeLikelihoods::new(gl2, gl3, gl4);
 
     let parse_gl = ParseGL { samples, gl, af };
 

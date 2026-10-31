@@ -3,9 +3,9 @@ mod objective;
 
 use std::num::NonZeroU64;
 
-use lockfree_progress_bar::ProgressBar;
-use ndarray::{Array1};
+use lockfree_progress_bar::{ProgressBar, ProgressHandle};
 
+use ndarray::Array2;
 use paralight::{
     iter::{
         ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelRefSource, ParallelIteratorExt,
@@ -15,21 +15,23 @@ use paralight::{
 };
 
 use crate::{
-    algebra::{Vector, sum_to_one}, allele::{grad_hess::AlleleGradHess, objective::AlleleObjective}, lanevector::LaneVector, sqp::{self, Tuneables}, vcf::GenotypeLikelihoods,
+    algebra::{Vector, sum_to_one}, allele::{grad_hess::AlleleGradHess, objective::AlleleObjective}, lanevector::LaneVector,  sqp::{self, Tuneables}, vcf::{AlleleFrequencies, GenotypeLikelihoods},
 };
 
-pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
+pub fn calculate_allele_frequencies<L>(
     genotype_likelihoods: &GenotypeLikelihoods,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
     maf: f64,
-) -> Vec<[f64; 4]> {
+) -> AlleleFrequencies
+// Fun fun fun
+where L : AlleleObjective<2, 3> + AlleleGradHess<2, 3>
+        + AlleleObjective<3, 6> + AlleleGradHess<3, 6>
+        + AlleleObjective<4, 10> + AlleleGradHess<4, 10>
+{
 
-    let (num_v2, num_samples) = genotype_likelihoods.gl2.dim();
-    let (num_v3, _) = genotype_likelihoods.gl3.dim();
-    let (num_v4, _) = genotype_likelihoods.gl4.dim();
-
-    let num_variants = num_v2 + num_v3 + num_v4;
+    let num_variants = genotype_likelihoods.variants;
+    let num_samples = genotype_likelihoods.samples;
 
     log::info!(
         "Calculating allele frequencies for {} sites using {} samples",
@@ -45,26 +47,43 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
 
     let handle = bar.clone_handle();
 
-    let tune = Tuneables::new(iterations, NonZeroU64::new(5).unwrap());
+    let af2 = calc_frequencies::<L, 2, 3>(&genotype_likelihoods.gl2, thread_pool, &handle, maf, iterations);
+    let af3 = calc_frequencies::<L, 3, 6>(&genotype_likelihoods.gl3, thread_pool, &handle, maf, iterations);
+    let af4 = calc_frequencies::<L, 4, 10>(&genotype_likelihoods.gl4, thread_pool, &handle, maf, iterations);
 
-    // TODO maybe better way
-    let var_likelihoods: Vec<_> = genotype_likelihoods.gl4.outer_iter().collect();
+    bar.done();
 
-    let mut outputs = vec![[0.0; 4]; num_variants];
-    (outputs.par_iter_mut(), var_likelihoods.par_iter())
+    AlleleFrequencies { af2, af3, af4 }
+}
+
+fn calc_frequencies<L, const A: usize, const G: usize>(
+    gl: &Array2<[f64; G]>,
+    thread_pool: &mut ThreadPool, handle: &ProgressHandle,
+    maf: f64, iterations: NonZeroU64) -> Vec<[f64; A]>
+where L: AlleleObjective<A, G> + AlleleGradHess<A, G>
+{
+    let num_samples = gl.dim().1;
+
+    // TODO replace this array with a better type
+    let gl: Vec<_> = gl.outer_iter().collect();
+
+    let tune = Tuneables::new(iterations, NonZeroU64::new(A as u64 + 1).unwrap());
+
+    let mut af = vec![[0.0; A]; gl.len()];
+    (af.par_iter_mut(), gl.par_iter())
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each_init(
-            || LaneVector::<L, 10>::new(num_samples),
+            || LaneVector::<L, G>::new(num_samples),
             |buffer, (out, variant_likelihood)| {
                 let sample_likelihoods = variant_likelihood.as_slice().unwrap();
 
                 buffer.fill_from_slice(sample_likelihoods);
 
-                let x0 = [0.25; 4];
+                let x0 = [1.0f64 / A as f64; A];
 
-                let obj = |x: &Vector<4>, eps| L::compute_objective(buffer, &x, eps);
-                let grad_hess = |x: &Vector<4>, eps| L::compute_grad_hess(buffer, &x, eps);
+                let obj = |x: &Vector<A>, eps| L::compute_objective(buffer, &x, eps);
+                let grad_hess = |x: &Vector<A>, eps| L::compute_grad_hess(buffer, &x, eps);
 
                 let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
@@ -76,7 +95,7 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
                 }
 
                 // More rigourous test is LRT
-                for i in 0..4 {
+                for i in 0..A {
                     if x[i] > 0.0 && x[i] < maf {
                         x[i] = 0.0;
                     }
@@ -89,8 +108,5 @@ pub fn calculate_allele_frequencies<L: AlleleGradHess + AlleleObjective>(
                 handle.inc();
             },
         );
-
-    bar.done();
-
-    outputs
+    af
 }
