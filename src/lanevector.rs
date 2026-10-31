@@ -91,6 +91,8 @@ impl<'a, L: Lane, const R: usize> LaneVectorBuilder<'a, L, R> {
     }
 
     pub fn push(&mut self, row: &[f64; R]) {
+        // Sometimes an individual hasn't been sequenced at a site, which
+        // we represent as NaNs. This filters them out when it happens.
         if row.iter().any(|f| f.is_nan()) {
             return;
         }

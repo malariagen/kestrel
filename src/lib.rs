@@ -21,6 +21,7 @@ pub mod mixture;
 mod sqp;
 mod vcf;
 mod wrapper;
+mod util;
 
 #[pyo3::pymodule]
 mod kestrel {

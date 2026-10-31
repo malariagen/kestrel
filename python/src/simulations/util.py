@@ -22,4 +22,4 @@ class ResourceTracker:
 
         memory = usage.ru_maxrss / 1024
 
-        print(f"User Time {total_user:.2f} s, Kernel Time {total_kernel:.2f} s, Wall Time {total_wall:.2f} s, Peak Memory {memory:.2f} MiB")
+        print(f"Wall Time {total_wall:.2f} s, User Time {total_user:.2f} s, Kernel Time {total_kernel:.2f} s, Peak Memory {memory:.2f} MiB")
