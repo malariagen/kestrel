@@ -31,7 +31,7 @@ mod kestrel {
     use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3, PyReadonlyArray2, PyReadonlyArray3};
     use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
-    use crate::{build_arrays, cli};
+    use crate::{build_arrays, cli, vcf::GenotypeLikelihoods};
 
     #[pyfunction]
     #[pyo3(signature = (genotypes, allele_frequencies = None, threads = None, iterations = NonZeroU64::new(100).unwrap()))]
@@ -77,21 +77,26 @@ mod kestrel {
         let gl_view = genotype_likelihoods.as_array();
         let af_view = allele_frequencies.as_ref().map(|a| a.as_array());
 
-        let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(
-            gl_view,
-            af_view,
-            threads,
-            iterations,
-            minimum_allele_frequency,
-        );
+        // TODO finish this
+        unimplemented!()
 
-        let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
+        // let gl = GenotypeLikelihoods { gl}
 
-        (
-            jacquard.into_pyarray(py),
-            kinship.into_pyarray(py),
-            inbreeding.into_pyarray(py),
-        )
+        // let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(
+        //     gl_view,
+        //     af_view,
+        //     threads,
+        //     iterations,
+        //     minimum_allele_frequency,
+        // );
+
+        // let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
+
+        // (
+        //     jacquard.into_pyarray(py),
+        //     kinship.into_pyarray(py),
+        //     inbreeding.into_pyarray(py),
+        // )
     }
 
     // https://www.maturin.rs/bindings.html#both-binary-and-library

@@ -1,10 +1,10 @@
 use std::num::{NonZeroU64, NonZeroUsize};
 
-use ndarray::{Array1, Array2, ArrayView1, ArrayView2, ArrayView3, Axis};
+use ndarray::{Array1, Array2, ArrayView2, ArrayView3, Axis};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    coefficients::{Output, calculate_allele_frequencies}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker,
+    coefficients::{Output, calculate_allele_frequencies}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker, vcf::{AlleleFrequencies, GenotypeLikelihoods},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -82,8 +82,8 @@ pub fn calculate_relatedness_coefficients_gt(
 }
 
 pub fn calculate_relatedness_coefficients_gl(
-    genotype_likelihoods: ArrayView3<f64>,
-    allele_frequencies: Option<ArrayView2<f64>>,
+    genotype_likelihoods: GenotypeLikelihoods,
+    allele_frequencies: Option<AlleleFrequencies>,
     threads: Option<NonZeroUsize>,
     iterations: NonZeroU64,
     minimum_allele_frequency: Option<f64>,
@@ -91,18 +91,16 @@ pub fn calculate_relatedness_coefficients_gl(
 
     let tracker = ResourceTracker::new();
 
-    let (num_v, num_s, num_l) = genotype_likelihoods.dim();
+    let (num_v2, num_s2) = genotype_likelihoods.gl2.dim();
+    let (num_v3, num_s3) = genotype_likelihoods.gl3.dim();
+    let (num_v4, num_s4) = genotype_likelihoods.gl4.dim();
 
-    assert!(num_v > 0, "Must have at least one variant");
-    assert!(num_s > 0, "Must have at least one sample");
-    assert!(num_l == 10, "Must have exactly 10 GLs per sample");
-
-    let genotype_likelihoods: Array2<[f64; 10]> =
-        genotype_likelihoods.map_axis(Axis(2), |lane| std::array::from_fn(|i| lane[i]));
+    assert!(num_v2 + num_v3 + num_v4 > 0, "Must have at least one variant");
+    assert!(num_s2 == num_s3 && num_s3 == num_s4 && num_s2 > 0, "Must have at least one sample");
 
     // This is the smallest allele frequency possible given our sample size
     // Anything lower than this is just noise
-    let maf = minimum_allele_frequency.unwrap_or(1.0 / (2.0 * num_s as f64));
+    let maf = minimum_allele_frequency.unwrap_or(1.0 / (2.0 * num_s2 as f64));
 
     assert!(
         0.0 <= maf && maf <= 1.0,
@@ -116,37 +114,38 @@ pub fn calculate_relatedness_coefficients_gl(
     let calculated_af;
     let allele_frequencies = match allele_frequencies {
         Some(af) => {
-            let (anum_v, num_a) = af.dim();
-            assert!(anum_v == num_v, "Must have same dimension");
-            assert!(num_a == 4, "Must have all four alleles");
+            // let (anum_v, num_a) = af.dim();
+            // assert!(anum_v == num_v, "Must have same dimension");
+            // assert!(num_a == 4, "Must have all four alleles");
 
-            af.map_axis(Axis(1), |lane| std::array::from_fn(|i| lane[i]))
+            af.af4
+            // af.map_axis(Axis(1), |lane| std::array::from_fn(|i| lane[i]))
         }
         None => {
             calculated_af = match simd {
                 #[cfg(target_arch = "x86_64")]
                 Simd::Avx512 => crate::allele::calculate_allele_frequencies::<Avx512Lane>(
-                    genotype_likelihoods.view(),
+                    &genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
                     maf,
                 ),
                 #[cfg(target_arch = "x86_64")]
                 Simd::Avx2 => crate::allele::calculate_allele_frequencies::<Avx2Lane>(
-                    genotype_likelihoods.view(),
+                    &genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
                     maf,
                 ),
                 #[cfg(target_arch = "aarch64")]
                 Simd::Neon => crate::allele::calculate_allele_frequencies::<NeonLane>(
-                    genotype_likelihoods.view(),
+                    &genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
                     maf,
                 ),
                 Simd::Scalar => crate::allele::calculate_allele_frequencies::<f64>(
-                    genotype_likelihoods.view(),
+                    &genotype_likelihoods,
                     &mut thread_pool,
                     iterations,
                     maf,
@@ -165,21 +164,21 @@ pub fn calculate_relatedness_coefficients_gl(
     let outputs = match simd {
         #[cfg(target_arch = "x86_64")]
         Simd::Avx512 => {
-            let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
             crate::coefficients::calculate_relatedness_coefficients_gl::<Avx512Lane>(&glaf, &mut thread_pool, iterations)
         },
         #[cfg(target_arch = "x86_64")]
         Simd::Avx2 => {
-            let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
             crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(&glaf, &mut thread_pool, iterations)
         }
         #[cfg(target_arch = "aarch64")]
         Simd::Neon => {
-            let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
             crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(&glaf, &mut thread_pool, iterations)
         }
         Simd::Scalar => {
-            let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
+            let glaf = split_gl_af(genotype_likelihoods.gl4, allele_frequencies);
             crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(&glaf, &mut thread_pool, iterations)
         }
     };
@@ -216,7 +215,7 @@ pub struct GlAf<L: Lane> {
 // Multi-allelic sites ... never again
 // This function takes ownership of the input arrays so that they are dropped at the end of the function
 // (They take up a lot of memory and we don't need them anymore)
-fn split_gl_af<L: Lane>(genotype_likelihoods: Array2<[f64; 10]>, allele_frequencies: Array1<[f64; 4]>) -> GlAf<L> {
+fn split_gl_af<L: Lane>(genotype_likelihoods: Array2<[f64; 10]>, allele_frequencies: Vec<[f64; 4]>) -> GlAf<L> {
     let (num_variants, num_samples) = genotype_likelihoods.dim();
 
     let mut af2 = LaneVector::<L, 2>::empty();
@@ -227,6 +226,8 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: Array2<[f64; 10]>, allele_frequenc
     let mut af3b = LaneVectorBuilder::<L, 3>::new(&mut af3);
     let mut af4b = LaneVectorBuilder::<L, 4>::new(&mut af4);
 
+    // TODO convert this to lanes here? Will avoid using more memory
+    // (Similar to af using a builder)
     let mut gl2 = Vec::<[f64; 3]>::new();
     let mut gl3 = Vec::<[f64; 6]>::new();
     let mut gl4 = Vec::<[f64; 10]>::new();

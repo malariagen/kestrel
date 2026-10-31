@@ -77,18 +77,16 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     let (samples, outputs) = match args.tag {
         Tag::GL => {
-            let (samples, gl, af) = crate::vcf::parse_vcf_gl(vcf_file, parse_af)?;
-            let af = af.as_ref().map(|a| a.view());
+            let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, true)?;
             let outputs =
-                crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
-            (samples, outputs)
+                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf);
+            (result.samples, outputs)
         }
         Tag::PL => {
-            let (samples, gl, af) = crate::vcf::parse_vcf_pl(vcf_file, parse_af)?;
-            let af = af.as_ref().map(|a| a.view());
+            let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, false)?;
             let outputs =
-                crate::wrapper::calculate_relatedness_coefficients_gl(gl.view(), af, args.threads, iters, maf);
-            (samples, outputs)
+                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf);
+            (result.samples, outputs)
         }
         Tag::GT => {
             let (samples, gt, af) = crate::vcf::parse_vcf_gt(vcf_file, parse_af)?;
@@ -111,15 +109,15 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
         "sample1",
         "sample2",
         "kinship",
-        "delta1",
-        "delta2",
-        "delta3",
-        "delta4",
-        "delta5",
-        "delta6",
-        "delta7",
-        "delta8",
-        "delta9",
+        "jacquard1",
+        "jacquard2",
+        "jacquard3",
+        "jacquard4",
+        "jacquard5",
+        "jacquard6",
+        "jacquard7",
+        "jacquard8",
+        "jacquard9",
         "iterations",
         "objective",
     ])?;

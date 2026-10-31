@@ -110,7 +110,7 @@ def simulate(rep, seed, out_dir, ne, recomb, mu):
 
     kinship_vec = np.array([1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0])
 
-    columns = np.array([f"delta{i}" for i in range(1, 10)])
+    columns = np.array([f"jacquard{i}" for i in range(1, 10)])
     df = pd.DataFrame.from_dict(deltas, orient="index", columns=columns)
     df.index.name = "rel"
     df.reset_index(inplace=True)
