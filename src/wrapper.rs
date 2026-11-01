@@ -4,11 +4,7 @@ use ndarray::{Array2, ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    coefficients::{Output, calculate_allele_frequencies},
-    lanevector::{LaneVector, LaneVectorBuilder},
-    simd::{Lane, simd::Simd},
-    util::ResourceTracker,
-    vcf::{AlleleFrequencies, GenotypeLikelihoods},
+    coefficients::{Output, calculate_allele_frequencies}, lanearray2::{LaneArray2, convert_to_lanes}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker, vcf::{AlleleFrequencies, GenotypeLikelihoods},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -208,9 +204,9 @@ pub struct GlAf<L: Lane> {
     pub af2: LaneVector<L, 2>,
     pub af3: LaneVector<L, 3>,
     pub af4: LaneVector<L, 4>,
-    pub gl2: Array2<[f64; 3]>,
-    pub gl3: Array2<[f64; 6]>,
-    pub gl4: Array2<[f64; 10]>,
+    pub gl2: LaneArray2<L, 3>,
+    pub gl3: LaneArray2<L, 6>,
+    pub gl4: LaneArray2<L, 10>,
 }
 
 // Multi-allelic sites ... never again
@@ -253,6 +249,9 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
         &mut nonzero_gl_indices,
         &mut gl_buf,
     );
+    drop(genotype_likelihoods.gl2);
+    drop(allele_frequencies.af2);
+
     remove_zero_frequencies(
         genotype_likelihoods.gl3.view(),
         &allele_frequencies.af3,
@@ -267,6 +266,9 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
         &mut nonzero_gl_indices,
         &mut gl_buf,
     );
+    drop(genotype_likelihoods.gl3);
+    drop(allele_frequencies.af3);
+
     remove_zero_frequencies(
         genotype_likelihoods.gl4.view(),
         &allele_frequencies.af4,
@@ -282,6 +284,9 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
         &mut gl_buf,
     );
 
+    drop(genotype_likelihoods.gl4);
+    drop(allele_frequencies.af4);
+
     af2b.finish();
     af3b.finish();
     af4b.finish();
@@ -296,9 +301,18 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
     log::info!("Kept {tetra} tetra-allelic sites");
     log::info!("Discarded {mono} non-segregating sites");
 
-    let gl2 = Array2::from_shape_vec((di, num_samples), gl2).unwrap();
-    let gl3 = Array2::from_shape_vec((tri, num_samples), gl3).unwrap();
-    let gl4 = Array2::from_shape_vec((tetra, num_samples), gl4).unwrap();
+    let gl2a = Array2::from_shape_vec((di, num_samples), gl2).unwrap();
+    let gl3a = Array2::from_shape_vec((tri, num_samples), gl3).unwrap();
+    let gl4a = Array2::from_shape_vec((tetra, num_samples), gl4).unwrap();
+
+    // This transposes the arrays and converts them to lanes
+
+    let gl2 = convert_to_lanes::<L, 3>(gl2a.view());
+    drop(gl2a);
+    let gl3 = convert_to_lanes::<L, 6>(gl3a.view());
+    drop(gl3a);
+    let gl4 = convert_to_lanes::<L, 10>(gl4a.view());
+    drop(gl4a);
 
     GlAf {
         af2,

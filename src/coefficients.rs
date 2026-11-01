@@ -83,10 +83,6 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
 
     let num_v = n2 + n3 + n4;
 
-    let likelihoods2 = convert_to_lanes::<L, 3>(glaf.gl2.view());
-    let likelihoods3 = convert_to_lanes::<L, 6>(glaf.gl3.view());
-    let likelihoods4 = convert_to_lanes::<L, 10>(glaf.gl4.view());
-
     // let num_samples = likelihoods2.rows;
     let num_samples = 100;
 
@@ -116,9 +112,9 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
         .for_each_init(
             || LaneVector::new(num_v),
             |buffer, (x, out)| {
-                let like2_x = likelihoods2.sample(x);
-                let like3_x = likelihoods3.sample(x);
-                let like4_x = likelihoods4.sample(x);
+                let like2_x = glaf.gl2.sample(x);
+                let like3_x = glaf.gl3.sample(x);
+                let like4_x = glaf.gl4.sample(x);
 
                 let iter = (x..num_samples).map(|y| {
                     let delta = if x == y {
@@ -127,9 +123,9 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                         [1.0 / 9.0; 9]
                     };
 
-                    let like2_y = likelihoods2.sample(y);
-                    let like3_y = likelihoods3.sample(y);
-                    let like4_y = likelihoods4.sample(y);
+                    let like2_y = glaf.gl2.sample(y);
+                    let like3_y = glaf.gl3.sample(y);
+                    let like4_y = glaf.gl4.sample(y);
 
                     let mut builder = LaneVectorBuilder::new(buffer);
 
