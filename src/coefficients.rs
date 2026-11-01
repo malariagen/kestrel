@@ -215,7 +215,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
     log::info!(
-        "Calculating Jacquard coefficients for {} pairs using {} variants",
+        "Calculating Jacquard coefficients for {} pairs using {} sites",
         num_pairs,
         num_v
     );

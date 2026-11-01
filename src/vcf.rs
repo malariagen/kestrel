@@ -97,10 +97,10 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
         // }
     }
 
-    log::info!("Parsed {} total variants", total_variants);
-    log::info!("Skipped {} variants that were not SNPs", not_snp);
-    log::info!("Skipped {} variants with missing data", skipped_missing);
-    log::info!("Kept {} final variants", num_variants);
+    log::info!("Parsed {} total sites", total_variants);
+    log::info!("Skipped {} sites that were not SNPs", not_snp);
+    log::info!("Skipped {} sites with missing data", skipped_missing);
+    log::info!("Kept {} final sites", num_variants);
 
     let gts = Array3::<u8>::from_shape_vec((num_variants, num_samples, 2), genotypes).unwrap();
 
@@ -142,7 +142,7 @@ impl GenotypeLikelihoods {
 
         let variants = num_v2 + num_v3 + num_v4;
 
-        assert!(variants > 0, "Must have at least one variant");
+        assert!(variants > 0, "Must have at least one site");
         assert!(num_s2 == num_s3 && num_s3 == num_s4 && num_s2 > 0, "Must have at least one sample");
 
         Self { gl2, gl3, gl4, variants, samples: num_s2 }
@@ -229,11 +229,11 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
 
     }
 
-    log::info!("Parsed {} total variants", total_variants);
-    log::info!("Skipped {} variants that were not SNPs", not_snp);
-    log::info!("Kept {} di-allelic variants", num_variants2);
-    log::info!("Kept {} tri-allelic variants", num_variants3);
-    log::info!("Kept {} tetra-allelic variants", num_variants4);
+    log::info!("Parsed {} total sites", total_variants);
+    log::info!("Skipped {} sites that were not SNPs", not_snp);
+    log::info!("Kept {} di-allelic sites", num_variants2);
+    log::info!("Kept {} tri-allelic sites", num_variants3);
+    log::info!("Kept {} tetra-allelic sites", num_variants4);
 
     let gl2 = Array2::from_shape_vec((num_variants2, num_samples), gl2).unwrap();
     let gl3 = Array2::from_shape_vec((num_variants3, num_samples), gl3).unwrap();
