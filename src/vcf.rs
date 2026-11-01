@@ -117,7 +117,7 @@ pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<
 pub struct ParseGL {
     pub samples: Vec<String>,
     pub gl: GenotypeLikelihoods,
-    pub af: Option<AlleleFrequencies>
+    pub af: Option<AlleleFrequencies>,
 }
 
 pub struct AlleleFrequencies {
@@ -143,9 +143,18 @@ impl GenotypeLikelihoods {
         let variants = num_v2 + num_v3 + num_v4;
 
         assert!(variants > 0, "Must have at least one site");
-        assert!(num_s2 == num_s3 && num_s3 == num_s4 && num_s2 > 0, "Must have at least one sample");
+        assert!(
+            num_s2 == num_s3 && num_s3 == num_s4 && num_s2 > 0,
+            "Must have at least one sample"
+        );
 
-        Self { gl2, gl3, gl4, variants, samples: num_s2 }
+        Self {
+            gl2,
+            gl3,
+            gl4,
+            variants,
+            samples: num_s2,
+        }
     }
 }
 
@@ -192,7 +201,7 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
                         af2.push(af);
                     }
                     num_variants2 += 1;
-                },
+                }
                 3 => {
                     if gl {
                         parse_samples_gl(&header, &record, &mut gl3)?;
@@ -204,7 +213,7 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
                         af3.push(af);
                     }
                     num_variants3 += 1;
-                },
+                }
                 4 => {
                     if gl {
                         parse_samples_gl(&header, &record, &mut gl4)?;
@@ -216,7 +225,7 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
                         af4.push(af);
                     }
                     num_variants4 += 1;
-                },
+                }
                 _ => {
                     not_snp += 1;
                     continue;
@@ -226,7 +235,6 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
             not_snp += 1;
             continue;
         }
-
     }
 
     log::info!("Parsed {} total sites", total_variants);
@@ -252,13 +260,7 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
     Ok(parse_gl)
 }
 
-
-fn parse_samples_gl<const G: usize>(
-    header: &Header,
-    record: &Record,
-    gl_vec: &mut Vec<[f64; G]>,
-) -> Result<()> {
-
+fn parse_samples_gl<const G: usize>(header: &Header, record: &Record, gl_vec: &mut Vec<[f64; G]>) -> Result<()> {
     let samples = record.samples();
     let gl_series = samples.select("GL").context("No GL data found")?;
 
@@ -304,12 +306,7 @@ fn parse_samples_gl<const G: usize>(
     Ok(())
 }
 
-fn parse_samples_pl<const G: usize>(
-    header: &Header,
-    record: &Record,
-    gl_vec: &mut Vec<[f64; G]>,
-) -> Result<()> {
-
+fn parse_samples_pl<const G: usize>(header: &Header, record: &Record, gl_vec: &mut Vec<[f64; G]>) -> Result<()> {
     let samples = record.samples();
     let pl_series = samples.select("PL").context("No PL data found")?;
 
@@ -332,7 +329,7 @@ fn parse_samples_pl<const G: usize>(
                     bail!("Not enough genotype likelihoods!")
                 }
 
-                let prob = std::array::from_fn(|i| 10.0f64.powf(-pl_arr[i]/ 10.0));
+                let prob = std::array::from_fn(|i| 10.0f64.powf(-pl_arr[i] / 10.0));
 
                 // If parsing any of the samples fails we will abort, so it's ok
                 // to push straight to the output vector.
@@ -371,10 +368,7 @@ fn count_snp_bases(record: &Record) -> Result<Option<usize>> {
     Ok(Some(num_bases))
 }
 
-fn parse_variant_af<const A: usize>(
-    header: &Header,
-    record: &Record,
-) -> Result<[f64; A]> {
+fn parse_variant_af<const A: usize>(header: &Header, record: &Record) -> Result<[f64; A]> {
     let info = record.info();
     let af_info = info
         .get(header, "AF")
@@ -404,7 +398,6 @@ fn parse_variant_af<const A: usize>(
             af_arr[0] = ref_af;
 
             Ok(af_arr)
-
         } else {
             bail!("Array {:?} is does not contain floats", af_array);
         }
@@ -412,4 +405,3 @@ fn parse_variant_af<const A: usize>(
         bail!("Value {:?} is not an array", af_info);
     }
 }
-

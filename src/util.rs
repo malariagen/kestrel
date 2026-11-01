@@ -1,11 +1,14 @@
 use std::time::{Duration, Instant};
 
 use bytesize::ByteSize;
-use nix::sys::{resource::{Usage, UsageWho, getrusage}, time::TimeVal};
+use nix::sys::{
+    resource::{Usage, UsageWho, getrusage},
+    time::TimeVal,
+};
 
 pub struct ResourceTracker {
     time: Instant,
-    usage: Usage
+    usage: Usage,
 }
 
 impl ResourceTracker {
@@ -28,7 +31,9 @@ impl ResourceTracker {
         let memory_kib = max_rss_to_kib(usage.max_rss());
         let memory = ByteSize::kib(memory_kib);
 
-        log::info!("Wall Time {duration:.2?}, User Time {user_duration:.2?}, Kernel Time {system_duration:.2?}, Peak Memory {memory:.2}");
+        log::info!(
+            "Wall Time {duration:.2?}, User Time {user_duration:.2?}, Kernel Time {system_duration:.2?}, Peak Memory {memory:.2}"
+        );
     }
 }
 

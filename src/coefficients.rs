@@ -12,7 +12,16 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanearray2::convert_to_lanes, lanevector::{LaneVector, LaneVectorBuilder}, mixture::{MixtureMatrix}, quadratic::ClsQuadratic, sqp::{self, Tuneables}, wrapper::GlAf,
+    algebra::{Vector, dot, mul},
+    cls::{self},
+    conditional::{IIS_3, IIS_4},
+    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
+    lanearray2::convert_to_lanes,
+    lanevector::{LaneVector, LaneVectorBuilder},
+    mixture::MixtureMatrix,
+    quadratic::ClsQuadratic,
+    sqp::{self, Tuneables},
+    wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -135,8 +144,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                     builder.finish();
 
                     let obj = |x: &Vector<9>, eps| L::compute_obj(&buffer, x, eps);
-                    let grad_hess =
-                        |x: &Vector<9>, eps| L::compute_grad_hess(&buffer, x, eps);
+                    let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffer, x, eps);
                     let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                     if iters >= tune.sqp_max_iter.get() {

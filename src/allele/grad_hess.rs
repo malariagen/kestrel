@@ -21,11 +21,7 @@ pub trait AlleleGradHess<const A: usize, const G: usize>: Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<2, 3> for Avx512Lane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 3>,
-        x: &Vector<2>,
-        eps: f64,
-    ) -> (Vector<2>, Matrix<2>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
         use std::arch::x86_64::__m512d;
         compute_grad_hess_generic2::<Self, __m512d>(likelihood_mats, x, eps)
     }
@@ -33,11 +29,7 @@ impl AlleleGradHess<2, 3> for Avx512Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<3, 6> for Avx512Lane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 6>,
-        x: &Vector<3>,
-        eps: f64,
-    ) -> (Vector<3>, Matrix<3>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
         use std::arch::x86_64::__m512d;
         compute_grad_hess_generic3::<Self, __m512d>(likelihood_mats, x, eps)
     }
@@ -45,11 +37,7 @@ impl AlleleGradHess<3, 6> for Avx512Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<4, 10> for Avx512Lane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 10>,
-        x: &Vector<4>,
-        eps: f64,
-    ) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
         use std::arch::x86_64::__m512d;
         compute_grad_hess_generic4::<Self, __m512d>(likelihood_mats, x, eps)
     }
@@ -61,11 +49,7 @@ impl AlleleGradHess<4, 10> for Avx512Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<2, 3> for Avx2Lane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 3>,
-        x: &Vector<2>,
-        eps: f64,
-    ) -> (Vector<2>, Matrix<2>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
         use std::arch::x86_64::__m256d;
         compute_grad_hess_generic2::<Self, __m256d>(likelihood_mats, x, eps)
     }
@@ -73,11 +57,7 @@ impl AlleleGradHess<2, 3> for Avx2Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<3, 6> for Avx2Lane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 6>,
-        x: &Vector<3>,
-        eps: f64,
-    ) -> (Vector<3>, Matrix<3>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
         use std::arch::x86_64::__m256d;
         compute_grad_hess_generic3::<Self, __m256d>(likelihood_mats, x, eps)
     }
@@ -85,11 +65,7 @@ impl AlleleGradHess<3, 6> for Avx2Lane {
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<4, 10> for Avx2Lane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 10>,
-        x: &Vector<4>,
-        eps: f64,
-    ) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
         use std::arch::x86_64::__m256d;
         compute_grad_hess_generic4::<Self, __m256d>(likelihood_mats, x, eps)
     }
@@ -101,11 +77,7 @@ impl AlleleGradHess<4, 10> for Avx2Lane {
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleGradHess<2, 3> for NeonLane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 3>,
-        x: &Vector<2>,
-        eps: f64,
-    ) -> (Vector<2>, Matrix<2>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
         use std::arch::aarch64::float64x2_t;
         compute_grad_hess_generic2::<Self, float64x2_t>(likelihood_mats, x, eps)
     }
@@ -113,11 +85,7 @@ impl AlleleGradHess<2, 3> for NeonLane {
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleGradHess<3, 6> for NeonLane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 6>,
-        x: &Vector<3>,
-        eps: f64,
-    ) -> (Vector<3>, Matrix<3>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
         use std::arch::aarch64::float64x2_t;
         compute_grad_hess_generic3::<Self, float64x2_t>(likelihood_mats, x, eps)
     }
@@ -125,11 +93,7 @@ impl AlleleGradHess<3, 6> for NeonLane {
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleGradHess<4, 10> for NeonLane {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 10>,
-        x: &Vector<4>,
-        eps: f64,
-    ) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
         use std::arch::aarch64::float64x2_t;
         compute_grad_hess_generic4::<Self, float64x2_t>(likelihood_mats, x, eps)
     }
@@ -140,31 +104,19 @@ impl AlleleGradHess<4, 10> for NeonLane {
 // ==========================================
 
 impl AlleleGradHess<2, 3> for f64 {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 3>,
-        x: &Vector<2>,
-        eps: f64,
-    ) -> (Vector<2>, Matrix<2>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
         compute_grad_hess_generic2::<Self, f64>(likelihood_mats, x, eps)
     }
 }
 
 impl AlleleGradHess<3, 6> for f64 {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 6>,
-        x: &Vector<3>,
-        eps: f64,
-    ) -> (Vector<3>, Matrix<3>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
         compute_grad_hess_generic3::<Self, f64>(likelihood_mats, x, eps)
     }
 }
 
 impl AlleleGradHess<4, 10> for f64 {
-    fn compute_grad_hess(
-        likelihood_mats: &LaneVector<Self, 10>,
-        x: &Vector<4>,
-        eps: f64,
-    ) -> (Vector<4>, Matrix<4>) {
+    fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
         compute_grad_hess_generic4::<Self, f64>(likelihood_mats, x, eps)
     }
 }
@@ -183,7 +135,6 @@ fn compute_grad_hess_generic2<L: Lane, S: Arith + LoadStore<L>>(
 
     (g, h)
 }
-
 
 fn compute_grad_hess_generic3<L: Lane, S: Arith + LoadStore<L>>(
     likelihood_mats: &LaneVector<L, 6>,
@@ -215,7 +166,13 @@ fn compute_grad_hess_generic4<L: Lane, S: Arith + LoadStore<L>>(
     (g, h)
 }
 
-fn build_grad_hess<const A: usize, const G: usize>(bg: [f64; A], bh: [f64; G], rg: [f64; A], rh: [f64; G], n: f64) -> ([f64; A], [[f64; A]; A]) {
+fn build_grad_hess<const A: usize, const G: usize>(
+    bg: [f64; A],
+    bh: [f64; G],
+    rg: [f64; A],
+    rh: [f64; G],
+    n: f64,
+) -> ([f64; A], [[f64; A]; A]) {
     let mut g = [0.0f64; A];
     let mut h = [[0.0f64; A]; A];
 
@@ -294,15 +251,10 @@ fn compute_grad_hess_lane2<L: Lane, S: Arith + LoadStore<L>>(
 
     let g = [zg0.radd(), zg1.radd()];
 
-    let h = [
-        zh0.radd(),
-        zh1.radd(),
-        zh2.radd(),
-    ];
+    let h = [zh0.radd(), zh1.radd(), zh2.radd()];
 
     (g, h)
 }
-
 
 fn compute_grad_hess_lane3<L: Lane, S: Arith + LoadStore<L>>(
     blocks: &[[L; 6]],
@@ -389,18 +341,10 @@ fn compute_grad_hess_lane3<L: Lane, S: Arith + LoadStore<L>>(
 
     let g = [zg0.radd(), zg1.radd(), zg2.radd()];
 
-    let h = [
-        zh0.radd(),
-        zh1.radd(),
-        zh2.radd(),
-        zh3.radd(),
-        zh4.radd(),
-        zh5.radd(),
-    ];
+    let h = [zh0.radd(), zh1.radd(), zh2.radd(), zh3.radd(), zh4.radd(), zh5.radd()];
 
     (g, h)
 }
-
 
 fn compute_grad_hess_lane4<L: Lane, S: Arith + LoadStore<L>>(
     blocks: &[[L; 10]],

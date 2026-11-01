@@ -19,9 +19,9 @@ mod lanevector;
 mod log;
 pub mod mixture;
 mod sqp;
+mod util;
 mod vcf;
 mod wrapper;
-mod util;
 
 #[pyo3::pymodule]
 mod kestrel {

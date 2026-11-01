@@ -1,5 +1,8 @@
 use crate::{
-    conditional::MIis, iis::accumulate_iis, lanevector::LaneVectorBuilder, simd::{Arith, Lane, LoadStore},
+    conditional::MIis,
+    iis::accumulate_iis,
+    lanevector::LaneVectorBuilder,
+    simd::{Arith, Lane, LoadStore},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -26,17 +29,16 @@ pub trait MixtureMatrix: Lane {
 }
 
 // pub fn test_2asm(
-        // all_joint_genotypes: &MIis<6>,
-        // allele_frequencies: &[[Avx512Lane; 3]],
-        // likelihoods_x: &[[Avx512Lane; 6]],
-        // likelihoods_y: &[[Avx512Lane; 6]],
-        // p_mat: &mut [[Avx512Lane; 9]],
+// all_joint_genotypes: &MIis<6>,
+// allele_frequencies: &[[Avx512Lane; 3]],
+// likelihoods_x: &[[Avx512Lane; 6]],
+// likelihoods_y: &[[Avx512Lane; 6]],
+// p_mat: &mut [[Avx512Lane; 9]],
 // ) {
-    // use std::arch::x86_64::__m512d;
-    // return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 3, 6>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
-    // return calculate_mixture_component_matrix3::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+// use std::arch::x86_64::__m512d;
+// return calculate_mixture_component_matrix::<Avx512Lane, __m512d, 3, 6>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
+// return calculate_mixture_component_matrix3::<Avx512Lane, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, p_mat);
 // }
-
 
 // pub fn test_asm_mix(
 // out: &mut [Avx512Lane; 9], like_x: &[Avx512Lane; 3], like_y: &[Avx512Lane; 3], af: &[Avx512Lane; 2]
@@ -65,17 +67,28 @@ impl MixtureMatrix for Avx512Lane {
         builder: &mut LaneVectorBuilder<M, 9>,
     ) {
         use std::arch::x86_64::__m512d;
-        calculate_mixture_component_matrix::<Self, M, __m512d, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, builder)
+        calculate_mixture_component_matrix::<Self, M, __m512d, A, G>(
+            all_joint_genotypes,
+            allele_frequencies,
+            likelihoods_x,
+            likelihoods_y,
+            builder,
+        )
     }
 
-    fn mixture_component_matrix2<M : Lane>(
+    fn mixture_component_matrix2<M: Lane>(
         allele_frequencies: &[[Self; 2]],
         likelihoods_x: &[[Self; 3]],
         likelihoods_y: &[[Self; 3]],
         builder: &mut LaneVectorBuilder<M, 9>,
     ) {
         use std::arch::x86_64::__m512d;
-        calculate_mixture_component_matrix2::<Self, M, __m512d>(allele_frequencies, likelihoods_x, likelihoods_y, builder)
+        calculate_mixture_component_matrix2::<Self, M, __m512d>(
+            allele_frequencies,
+            likelihoods_x,
+            likelihoods_y,
+            builder,
+        )
     }
 }
 
@@ -89,18 +102,28 @@ impl MixtureMatrix for Avx2Lane {
         builder: &mut LaneVectorBuilder<M, 9>,
     ) {
         use std::arch::x86_64::__m256d;
-        calculate_mixture_component_matrix::<Self, M, __m256d, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, builder)
+        calculate_mixture_component_matrix::<Self, M, __m256d, A, G>(
+            all_joint_genotypes,
+            allele_frequencies,
+            likelihoods_x,
+            likelihoods_y,
+            builder,
+        )
     }
 
-    fn mixture_component_matrix2<M : Lane>(
+    fn mixture_component_matrix2<M: Lane>(
         allele_frequencies: &[[Self; 2]],
         likelihoods_x: &[[Self; 3]],
         likelihoods_y: &[[Self; 3]],
         builder: &mut LaneVectorBuilder<M, 9>,
-    )
-    {
+    ) {
         use std::arch::x86_64::__m256d;
-        calculate_mixture_component_matrix2::<Self, M, __m256d>(allele_frequencies, likelihoods_x, likelihoods_y, builder)
+        calculate_mixture_component_matrix2::<Self, M, __m256d>(
+            allele_frequencies,
+            likelihoods_x,
+            likelihoods_y,
+            builder,
+        )
     }
 }
 
@@ -114,7 +137,13 @@ impl MixtureMatrix for NeonLane {
         builder: &mut LaneVectorBuilder<M, 9>,
     ) {
         use std::arch::aarch64::float64x2_t;
-        calculate_mixture_component_matrix::<Self, M, __m256d, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, builder)
+        calculate_mixture_component_matrix::<Self, M, __m256d, A, G>(
+            all_joint_genotypes,
+            allele_frequencies,
+            likelihoods_x,
+            likelihoods_y,
+            builder,
+        )
     }
 
     fn mixture_component_matrix2(
@@ -122,25 +151,35 @@ impl MixtureMatrix for NeonLane {
         likelihoods_x: &[[Self; 3]],
         likelihoods_y: &[[Self; 3]],
         builder: &mut LaneVectorBuilder<M, 9>,
-    )
-    {
+    ) {
         use std::arch::aarch64::float64x2_t;
-        calculate_mixture_component_matrix2::<Self, M, float64x2_t>(allele_frequencies, likelihoods_x, likelihoods_y, builder)
+        calculate_mixture_component_matrix2::<Self, M, float64x2_t>(
+            allele_frequencies,
+            likelihoods_x,
+            likelihoods_y,
+            builder,
+        )
     }
 }
 
 impl MixtureMatrix for f64 {
-    fn mixture_component_matrix<M : Lane, const A: usize, const G: usize>(
+    fn mixture_component_matrix<M: Lane, const A: usize, const G: usize>(
         all_joint_genotypes: &MIis<G>,
         allele_frequencies: &[[Self; A]],
         likelihoods_x: &[[Self; G]],
         likelihoods_y: &[[Self; G]],
         builder: &mut LaneVectorBuilder<M, 9>,
     ) {
-        calculate_mixture_component_matrix::<Self, M, f64, A, G>(all_joint_genotypes, allele_frequencies, likelihoods_x, likelihoods_y, builder)
+        calculate_mixture_component_matrix::<Self, M, f64, A, G>(
+            all_joint_genotypes,
+            allele_frequencies,
+            likelihoods_x,
+            likelihoods_y,
+            builder,
+        )
     }
 
-    fn mixture_component_matrix2<M : Lane>(
+    fn mixture_component_matrix2<M: Lane>(
         allele_frequencies: &[[Self; 2]],
         likelihoods_x: &[[Self; 3]],
         likelihoods_y: &[[Self; 3]],
@@ -185,10 +224,10 @@ fn calculate_mixture_component_matrix<L: Lane, M: Lane, S: Arith + LoadStore<L>,
                 let ((i, j), (k, l), iis) = all_joint_genotypes[gx][gy];
 
                 // This will always be safe due to the construction all_joint_genotypes
-                let pi = S::load( unsafe { af.get_unchecked(i) });
-                let pj = S::load( unsafe { af.get_unchecked(j) });
-                let pk = S::load( unsafe { af.get_unchecked(k) });
-                let pl = S::load( unsafe { af.get_unchecked(l) });
+                let pi = S::load(unsafe { af.get_unchecked(i) });
+                let pj = S::load(unsafe { af.get_unchecked(j) });
+                let pk = S::load(unsafe { af.get_unchecked(k) });
+                let pl = S::load(unsafe { af.get_unchecked(l) });
 
                 accumulate_iis(&mut a, g, pi, pj, pk, pl, iis);
             }
@@ -237,7 +276,12 @@ fn calculate_mixture_component_matrix2<L: Lane, M: Lane, S: Arith + LoadStore<L>
 // complicated and not a sure winner.
 // We don't have analogous mixture_row3 and mixture_row4 functions since those have 36 and 100 cases respectively,
 // and the compiler struggles to optimize that. Hence leave those to the general function.
-fn mixture_row2<L: Lane, M: Lane, S: Arith + LoadStore<L>>(builder: &mut LaneVectorBuilder<M, 9>, like_x: &[L; 3], like_y: &[L; 3], af: &[L; 2]) {
+fn mixture_row2<L: Lane, M: Lane, S: Arith + LoadStore<L>>(
+    builder: &mut LaneVectorBuilder<M, 9>,
+    like_x: &[L; 3],
+    like_y: &[L; 3],
+    af: &[L; 2],
+) {
     // 15 registers
     let mut a: [S; 9] = std::array::from_fn(|_| S::zero());
     let lx: [S; 3] = std::array::from_fn(|i| S::load(&like_x[i]));

@@ -1,4 +1,4 @@
-use crate::{iis::{self, Iis}};
+use crate::iis::{self, Iis};
 
 pub type Genotype = (usize, usize);
 pub type MIis<const G: usize> = [[(Genotype, Genotype, Iis); G]; G];

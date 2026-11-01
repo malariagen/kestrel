@@ -6,7 +6,21 @@ const IIS_TABLE: IisTable = generate_iis_lookup_table();
 
 #[derive(Clone, Copy, Debug)]
 pub enum Iis {
-    M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15
+    M1,
+    M2,
+    M3,
+    M4,
+    M5,
+    M6,
+    M7,
+    M8,
+    M9,
+    M10,
+    M11,
+    M12,
+    M13,
+    M14,
+    M15,
 }
 
 const fn generate_iis_lookup_table() -> IisTable {
@@ -262,7 +276,6 @@ pub fn accumulate_iis<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, pl: S
 }
 
 pub fn conditional_probabilities<S: Arith>(pi: S, pj: S, pk: S, pl: S, iis: Iis) -> [S; 9] {
-
     let zero = S::zero();
     let two = S::set(2.0);
     let four = S::set(4.0);
@@ -274,45 +287,175 @@ pub fn conditional_probabilities<S: Arith>(pi: S, pj: S, pk: S, pl: S, iis: Iis)
 
     match iis {
         // case 1: ii-ii
-        Iis::M1 => [ pi, pi2, pi2, pi3, pi2, pi3, pi2, pi3, pi2.mul(pi2), ],
+        Iis::M1 => [pi, pi2, pi2, pi3, pi2, pi3, pi2, pi3, pi2.mul(pi2)],
 
         // case 2: ii-kk
-        Iis::M2 => [ zero, pi.mul(pk), zero, pi.mul(pk2), zero, pi2.mul(pk), zero, zero, pi2.mul(pk2), ],
+        Iis::M2 => [
+            zero,
+            pi.mul(pk),
+            zero,
+            pi.mul(pk2),
+            zero,
+            pi2.mul(pk),
+            zero,
+            zero,
+            pi2.mul(pk2),
+        ],
 
         // case 3: ii-il
-        Iis::M3 => [ zero, zero, pi.mul(pl), two.mul(pi2).mul(pl), zero, zero, zero, pi2.mul(pl), two.mul(pi3).mul(pl), ],
+        Iis::M3 => [
+            zero,
+            zero,
+            pi.mul(pl),
+            two.mul(pi2).mul(pl),
+            zero,
+            zero,
+            zero,
+            pi2.mul(pl),
+            two.mul(pi3).mul(pl),
+        ],
 
         // case 4: ii-ki
-        Iis::M4 => [ zero, zero, pi.mul(pk), two.mul(pi2).mul(pk), zero, zero, zero, pi2.mul(pk), two.mul(pi3).mul(pk), ],
+        Iis::M4 => [
+            zero,
+            zero,
+            pi.mul(pk),
+            two.mul(pi2).mul(pk),
+            zero,
+            zero,
+            zero,
+            pi2.mul(pk),
+            two.mul(pi3).mul(pk),
+        ],
 
         // case 5: ii-kl
-        Iis::M5 => [ zero, zero, zero, two.mul(pi).mul(pk).mul(pl), zero, zero, zero, zero, two.mul(pi2).mul(pk).mul(pl), ],
+        Iis::M5 => [
+            zero,
+            zero,
+            zero,
+            two.mul(pi).mul(pk).mul(pl),
+            zero,
+            zero,
+            zero,
+            zero,
+            two.mul(pi2).mul(pk).mul(pl),
+        ],
 
         // case 6: ij-ii
-        Iis::M6 => [ zero, zero, zero, zero, pi.mul(pj), two.mul(pi2).mul(pj), zero, pi2.mul(pj), two.mul(pi3).mul(pj), ],
+        Iis::M6 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            pi.mul(pj),
+            two.mul(pi2).mul(pj),
+            zero,
+            pi2.mul(pj),
+            two.mul(pi3).mul(pj),
+        ],
 
         // case 7: ij-jj
-        Iis::M7 => [ zero, zero, zero, zero, pi.mul(pj), two.mul(pj2).mul(pi), zero, pj2.mul(pi), two.mul(pj2.mul(pj)).mul(pi), ],
+        Iis::M7 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            pi.mul(pj),
+            two.mul(pj2).mul(pi),
+            zero,
+            pj2.mul(pi),
+            two.mul(pj2.mul(pj)).mul(pi),
+        ],
 
         // case 8: ij-kk
-        Iis::M8 => [ zero, zero, zero, zero, zero, two.mul(pi).mul(pj).mul(pk), zero, zero, two.mul(pk2).mul(pi).mul(pj), ],
+        Iis::M8 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            two.mul(pi).mul(pj).mul(pk),
+            zero,
+            zero,
+            two.mul(pk2).mul(pi).mul(pj),
+        ],
 
         // case 9 | 10: ij-ij and ij-ji
-        Iis::M9 | Iis::M10 => [ zero, zero, zero, zero, zero, zero, two.mul(pi).mul(pj), pi.mul(pj).mul(pi.add(pj)), four.mul(pi2).mul(pj2), ],
+        Iis::M9 | Iis::M10 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            two.mul(pi).mul(pj),
+            pi.mul(pj).mul(pi.add(pj)),
+            four.mul(pi2).mul(pj2),
+        ],
 
         // case 11: ij-il
-        Iis::M11 => [ zero, zero, zero, zero, zero, zero, zero, pi.mul(pj).mul(pl), four.mul(pi2).mul(pj).mul(pl), ],
+        Iis::M11 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            pi.mul(pj).mul(pl),
+            four.mul(pi2).mul(pj).mul(pl),
+        ],
 
         // case 12: ij-ki
-        Iis::M12 => [ zero, zero, zero, zero, zero, zero, zero, pi.mul(pj).mul(pk), four.mul(pi2).mul(pj).mul(pk), ],
+        Iis::M12 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            pi.mul(pj).mul(pk),
+            four.mul(pi2).mul(pj).mul(pk),
+        ],
 
         // case 13: ij-jl
-        Iis::M13 => [ zero, zero, zero, zero, zero, zero, zero, pi.mul(pj).mul(pl), four.mul(pi).mul(pj2).mul(pl), ],
+        Iis::M13 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            pi.mul(pj).mul(pl),
+            four.mul(pi).mul(pj2).mul(pl),
+        ],
 
         // case 14: ij-kj
-        Iis::M14 => [ zero, zero, zero, zero, zero, zero, zero, pi.mul(pj).mul(pk), four.mul(pi).mul(pj2).mul(pk), ],
+        Iis::M14 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            pi.mul(pj).mul(pk),
+            four.mul(pi).mul(pj2).mul(pk),
+        ],
 
         // case 15: ij-kl
-        Iis::M15 => [ zero, zero, zero, zero, zero, zero, zero, zero, four.mul(pi).mul(pj).mul(pk).mul(pl), ],
+        Iis::M15 => [
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            four.mul(pi).mul(pj).mul(pk).mul(pl),
+        ],
     }
 }

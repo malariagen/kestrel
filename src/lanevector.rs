@@ -6,7 +6,6 @@ pub struct LaneVector<L: Lane, const R: usize> {
 }
 
 impl<L: Lane, const R: usize> LaneVector<L, R> {
-
     pub fn empty() -> Self {
         let lane_buf = Vec::new();
         let rem_buf = Vec::with_capacity(L::N);
@@ -71,7 +70,10 @@ impl<L: Lane, const R: usize> LaneVector<L, R> {
             self.rem.push(row);
         }
 
-        assert!(!self.lanes.is_empty() || !self.rem.is_empty(), "Must have at least one row to analyze")
+        assert!(
+            !self.lanes.is_empty() || !self.rem.is_empty(),
+            "Must have at least one row to analyze"
+        )
     }
 }
 
@@ -83,11 +85,14 @@ pub struct LaneVectorBuilder<'a, L: Lane, const R: usize> {
 }
 
 impl<'a, L: Lane, const R: usize> LaneVectorBuilder<'a, L, R> {
-
     pub fn new(lv: &'a mut LaneVector<L, R>) -> Self {
         lv.lanes.clear();
         lv.rem.clear();
-        Self { lv, block: [L::default(); R], curr_row: 0}
+        Self {
+            lv,
+            block: [L::default(); R],
+            curr_row: 0,
+        }
     }
 
     pub fn push(&mut self, row: &[f64; R]) {
@@ -123,7 +128,9 @@ impl<'a, L: Lane, const R: usize> LaneVectorBuilder<'a, L, R> {
             self.lv.rem.push(row);
         }
 
-        assert!(!self.lv.lanes.is_empty() || !self.lv.rem.is_empty(), "Must have at least one row to analyze");
+        assert!(
+            !self.lv.lanes.is_empty() || !self.lv.rem.is_empty(),
+            "Must have at least one row to analyze"
+        );
     }
-
 }

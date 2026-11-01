@@ -122,7 +122,6 @@ impl AlleleObjective<4, 10> for f64 {
     }
 }
 
-
 fn compute_obj_generic2<L: Lane, S: Arith + Log + LoadStore<L>>(
     likelihood_mats: &LaneVector<L, 3>,
     x: &Vector<2>,
@@ -200,7 +199,6 @@ fn compute_obj_lane2<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 3]], 
     zs.radd()
 }
 
-
 fn compute_obj_lane3<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 6]], x: &Vector<3>, eps: f64) -> f64 {
     // 2
     let mut zs = S::zero();
@@ -241,7 +239,6 @@ fn compute_obj_lane3<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 6]], 
 
     zs.radd()
 }
-
 
 fn compute_obj_lane4<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64 {
     // 2

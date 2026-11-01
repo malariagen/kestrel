@@ -15,7 +15,11 @@ use paralight::{
 };
 
 use crate::{
-    algebra::{Vector, sum_to_one}, allele::{grad_hess::AlleleGradHess, objective::AlleleObjective}, lanevector::LaneVector,  sqp::{self, Tuneables}, vcf::{AlleleFrequencies, GenotypeLikelihoods},
+    algebra::{Vector, sum_to_one},
+    allele::{grad_hess::AlleleGradHess, objective::AlleleObjective},
+    lanevector::LaneVector,
+    sqp::{self, Tuneables},
+    vcf::{AlleleFrequencies, GenotypeLikelihoods},
 };
 
 pub fn calculate_allele_frequencies<L>(
@@ -25,11 +29,14 @@ pub fn calculate_allele_frequencies<L>(
     maf: f64,
 ) -> AlleleFrequencies
 // Fun fun fun
-where L : AlleleObjective<2, 3> + AlleleGradHess<2, 3>
-        + AlleleObjective<3, 6> + AlleleGradHess<3, 6>
-        + AlleleObjective<4, 10> + AlleleGradHess<4, 10>
+where
+    L: AlleleObjective<2, 3>
+        + AlleleGradHess<2, 3>
+        + AlleleObjective<3, 6>
+        + AlleleGradHess<3, 6>
+        + AlleleObjective<4, 10>
+        + AlleleGradHess<4, 10>,
 {
-
     let num_variants = genotype_likelihoods.variants;
     let num_samples = genotype_likelihoods.samples;
 
@@ -58,9 +65,13 @@ where L : AlleleObjective<2, 3> + AlleleGradHess<2, 3>
 
 fn calc_frequencies<L, const A: usize, const G: usize>(
     gl: &Array2<[f64; G]>,
-    thread_pool: &mut ThreadPool, handle: &ProgressHandle,
-    maf: f64, iterations: NonZeroU64) -> Vec<[f64; A]>
-where L: AlleleObjective<A, G> + AlleleGradHess<A, G>
+    thread_pool: &mut ThreadPool,
+    handle: &ProgressHandle,
+    maf: f64,
+    iterations: NonZeroU64,
+) -> Vec<[f64; A]>
+where
+    L: AlleleObjective<A, G> + AlleleGradHess<A, G>,
 {
     let num_samples = gl.dim().1;
 
