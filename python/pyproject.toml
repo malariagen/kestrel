@@ -12,6 +12,9 @@ dependencies = [
     "tqdm>=4.70.1",
     "msprime",
     "py-spy>=0.4.2",
+    "biopython>=1.88",
+    "matplotlib>=3.11.2",
+    "seaborn>=0.13.2",
 ]
 
 [project.scripts]

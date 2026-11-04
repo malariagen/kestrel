@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import stdpopsim
 import tskit
+from Bio import bgzf
 
 import ibd
 import ped
@@ -102,7 +103,7 @@ def simulate(rep, seed, out_dir, ne, recomb, mu):
 
     assert len(individuals) == len(individual_names)
 
-    with open(f"{rep_name}/sim.vcf", "w") as vcf:
+    with bgzf.open(f"{rep_name}/GT.vcf.gz", "wt") as vcf:
         ts_mut.write_vcf(vcf, individuals=individuals, individual_names=individual_names)
 
     for rel in deltas:
@@ -115,7 +116,7 @@ def simulate(rep, seed, out_dir, ne, recomb, mu):
     df.index.name = "rel"
     df.reset_index(inplace=True)
     df.insert(1, "kinship", df[columns] @ kinship_vec)
-    df.to_csv(f"{rep_name}/sim.tsv", sep="\t", index=False)
+    df.to_csv(f"{rep_name}/ibd.tsv", sep="\t", index=False)
 
 
 if __name__ == "__main__":
@@ -124,8 +125,8 @@ if __name__ == "__main__":
     random_seed = 0xcbc8bf613dc84639e312d7bca02a98cc
 
     p = argparse.ArgumentParser(
-        description="Hello"
-    )
+        description="ABC",
+        )
     p.add_argument("length", type=lambda x: int(float(x)), help="genome length in base pairs")
     p.add_argument("recomb", type=float, help="per-base recombination rate")
     p.add_argument("mu", type=float, help="per-base mutation rate")

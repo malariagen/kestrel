@@ -37,6 +37,12 @@ struct Args {
     /// Allele frequencies below this threshold are set to zero
     #[arg(short = 'm', long)]
     minimum_allele_frequency: Option<f64>,
+
+    /// Only calculate the Jacquard coefficients for the first n samples in the VCF file
+    /// This is useful if you have extra samples to be included when calculating allele
+    /// frequencies, but not their IBD relationships.
+    #[arg(short = 's', long)]
+    samples: Option<usize>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -74,18 +80,19 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     let iters = args.iterations;
     let maf = args.minimum_allele_frequency;
+    let num_samples = args.samples;
 
     let (samples, outputs) = match args.tag {
         Tag::GL => {
             let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, true)?;
             let outputs =
-                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf);
+                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf, num_samples);
             (result.samples, outputs)
         }
         Tag::PL => {
             let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, false)?;
             let outputs =
-                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf);
+                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf, num_samples);
             (result.samples, outputs)
         }
         Tag::GT => {
