@@ -1,8 +1,21 @@
 # Kestrel
 
-Kestrel estimates relatedness coefficients from genomic data. It was started during [GSoC 2026](https://summerofcode.withgoogle.com/programs/2026/projects/ar0jqOKO) and uses an SQP algorithm to calculate allele frequencies and Jacquard coefficients using a maximum likelihood estimator.
+Kestrel estimates relatedness coefficients from genomic data. It was started during [GSoC 2026](https://summerofcode.withgoogle.com/programs/2026/projects/ar0jqOKO). For hard-called genotypes it formulates the problem using. uses an SQP algorithm to calculate allele frequencies and Jacquard coefficients using a maximum likelihood estimator. It includes a command line 
 
 ## Installation
+
+The command line tool can be installed using [pipx](https://pipx.pypa.io/stable/):
+
+```
+pipx install kestrel-popgen
+```
+
+The binaries on PyPI are built for certain minimum CPU features for better performance:
+
+- x86-64 binaries use [x86-64-v3](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels) (introduced in 2013)
+- aarch64 binaries use [Neoverse N1](https://en.wikipedia.org/wiki/ARM_Neoverse#Neoverse_N1) (introduced in 2019)
+
+These baselines are intended to be compatible with all widely-available hardware, but if you have something more esoteric the program will likely crash on startup. In that case I recommend building the program from source as follows.
 
 Install [Rust](https://rust-lang.org/tools/install/) (usually using `rustup` from your package manager). Then clone the repo and run
 
@@ -11,15 +24,6 @@ RUSTFLAGS='-C target-cpu=native' cargo build --release
 ```
 
 The binary will be built in `target/release/kestrel`.
-
-### SIMD
-
-The algorithms use SIMD intrinsics to accelerate the calculations on common platforms (AVX2, AVX-512, and NEON), and will use a scalar fallback if none is compatible. Furthermore, the binaries on PyPI are built for certain minimum CPU features for better performance:
-
-- x86-64 binaries use [x86-64-v3](https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels) (introduced in 2013)
-- aarch64 binaries use [Neoverse N1](https://en.wikipedia.org/wiki/ARM_Neoverse#Neoverse_N1) (introduced in 2019)
-
-These baselines are intended to be compatible with all widely-available hardware, but if you have something more esoteric the program will likely crash on startup. In that case I recommend building the program from source, which will always work.
 
 ## Usage
 
@@ -64,6 +68,11 @@ See `pedigrees.py` for available relationships (e.g. `full_sib`, `half_sib`, `fi
 
 **Why simulate across genome sizes / recombination rates?** Two individuals with the same pedigree relationship (e.g. full siblings, both expected kinship = 0.25) don't inherit *exactly* the same fraction of shared genome every time -- recombination is stochastic, so realised IBD sharing varies around the pedigree expectation, and that variance shrinks as the genome (and the number of independent recombining segments) grows. This is explored in detail in [Visscher et al. 2006, *Assumption-Free Estimation of Heritability from Genome-Wide Identity-by-Descent Sharing*, PLoS Genetics](https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.0020041). Simulating over a range of `genome_size`/`recomb` values lets you characterise how much this realised-vs-expected variance affects Kestrel's estimates, and how much genome coverage is needed before its kinship estimates reliably resolve close relationships.
 
-# Citation
+### A Note on Performance
+
+Perhaps surprisingly, the bottleneck for many algorithms today is not the time spent doing calculations in the CPU, but the time [reading data from memory](https://pivotlake.io/blog/its-the-memory-latency-stupid/). As such, it's important to make the most of each the algorithms in kestrel use SIMD intrinsics to accelerate the calculations to on common platforms (AVX2, AVX-512, NEON, and a scalar fallback otherwise). For example, a Zen 5 CPU can execute four AVX-512 instructions every two cycles, which running at 4. 
+
+
+## Citation
 
 Preprint in progress, please link to the GitHub repo for now :)

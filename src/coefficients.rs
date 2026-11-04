@@ -16,7 +16,6 @@ use crate::{
     cls::{self},
     conditional::{IIS_3, IIS_4},
     jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
-    lanearray2::convert_to_lanes,
     lanevector::{LaneVector, LaneVectorBuilder},
     mixture::MixtureMatrix,
     quadratic::ClsQuadratic,
@@ -76,6 +75,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     glaf: &GlAf<L>,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
+    num_samples: Option<usize>
 ) -> Vec<Vec<Output>> {
     let n2 = glaf.af2.len();
     let n3 = glaf.af3.len();
@@ -83,8 +83,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
 
     let num_v = n2 + n3 + n4;
 
-    // let num_samples = likelihoods2.rows;
-    let num_samples = 100;
+    let num_samples = num_samples.unwrap_or(glaf.num_samples);
 
     let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
@@ -137,7 +136,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                     f64::mixture_component_matrix(&IIS_3, glaf.af3.rem(), like3_x.1, like3_y.1, &mut builder);
                     f64::mixture_component_matrix(&IIS_4, glaf.af4.rem(), like4_x.1, like4_y.1, &mut builder);
 
-                    builder.finish();
+                    builder.finish(true);
 
                     let obj = |x: &Vector<9>, eps| L::compute_obj(&buffer, x, eps);
                     let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffer, x, eps);

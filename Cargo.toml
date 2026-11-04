@@ -45,7 +45,7 @@ panic = "abort"
 codegen-units = 1
 #overflow-checks = true
 lto = true
-debug = true
+#debug = true
 
 # inherits from release profile
 #[profile.bench]
