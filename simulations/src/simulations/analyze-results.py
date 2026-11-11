@@ -77,6 +77,16 @@ def process_reps(base_dir):
             kkin = np.array([kinship(kjac[rel]) for rel in rels])
 
             for rel in rels:
+                records.append({
+                    "rep": rep_dir.name,
+                    "depth": depth,
+                    "rel": rel,
+                    "tool": "true",
+                    "kinship": tkin[rel],
+                    "jac_tvd": 0.0,
+                    "kin_abs_err": 0.0
+                } | {f"jac{i+1}": tjac[rel][i] for i in range(9)}
+                               )
 
                 ngs_kin = kinship(njac[rel])
                 records.append({
@@ -84,9 +94,11 @@ def process_reps(base_dir):
                     "depth": depth,
                     "rel": rel,
                     "tool": "ngsrelate",
+                    "kinship": ngs_kin,
                     "jac_tvd": tvd(tjac[rel], njac[rel]),
                     "kin_abs_err":  np.abs(tkin[rel] - ngs_kin)
-                })
+                } | {f"jac{i+1}": njac[rel][i] for i in range(9)}
+                               )
 
                 kestrel_kin = kinship(kjac[rel])
                 records.append({
@@ -94,9 +106,11 @@ def process_reps(base_dir):
                     "depth": depth,
                     "rel": rel,
                     "tool": "kestrel",
+                    "kinship": kestrel_kin,
                     "jac_tvd": tvd(tjac[rel], kjac[rel]),
                     "kin_abs_err":  np.abs(tkin[rel] - kestrel_kin)
-                })
+                } | {f"jac{i+1}": kjac[rel][i] for i in range(9)}
+                               )
 
     return pd.DataFrame(records)
 
@@ -151,10 +165,48 @@ if __name__ == '__main__':
     print_tables(df, "ngsrelate")
     print_tables(df, "kestrel")
 
+    df = df.sort_values(by="depth")
+    df["depth_str"] = df["depth"].astype(str) + "x"
 
     sns.set_theme(style="whitegrid", font_scale=1.1)
 
-# Okabe-Ito Color-Blind Friendly Palette
+    # Color palette including true, kestrel, and ngsrelate
+    cb_palette = {
+        "true": "#E69F00",       # Black for ground truth
+        "kestrel": "#56B4E9",    # High-contrast Blue
+        "ngsrelate": "#009E73"   # High-contrast Vermilion
+    }
+
+    rel_order = ["ifs", "ihs", "ifc", "iur", "ofs", "ohs", "ofc", "our"]
+
+    g = sns.catplot(
+        data=df,
+        x="depth_str",
+        y="kinship",
+        hue="tool",
+        hue_order=["true", "kestrel", "ngsrelate"],
+        palette=cb_palette,
+        col="rel",
+        col_order=rel_order,
+        col_wrap=4,
+        kind="box",
+        #inner="quartile",
+        #cut=0,
+        #height=3.5,
+        #aspect=1.2
+)
+
+    g.set_axis_labels("Coverage", "Kinship")
+    g.set_titles(col_template="Relationship: {col_name}")
+    g.fig.suptitle("Kinship Coefficient Distributions Across Depths", y=1.03, fontsize=16, fontweight="bold")
+
+    plt.savefig("kinship_distribution_violin.pdf", bbox_inches="tight")
+
+    raise
+
+    sns.set_theme(style="whitegrid", font_scale=1.1)
+
+    # Okabe-Ito Color-Blind Friendly Palette
     cb_palette = {
         "kestrel": "#0072B2",    # High-contrast Blue
         "ngsrelate": "#D55E00"   # High-contrast Vermilion (Red-Orange)
@@ -189,47 +241,3 @@ if __name__ == '__main__':
 
     plt.savefig("kinship_error_colorblind.pdf", bbox_inches="tight")
 
-    summary_df = (
-        df.groupby(["rel", "depth", "tool"])["kin_abs_err"]
-        .mean()
-        .reset_index()
-    )
-
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8), sharex=True, sharey=True)
-    axes = axes.flatten()
-
-    rel_order = ["ifs", "ihs", "ifc", "iur", "ofs", "ohs", "ofc", "our"]
-
-# Okabe-Ito colorblind palette + distinct markers/styles
-    styles = {
-        "kestrel": {"color": "#0072B2", "marker": "o", "linestyle": "-"},    # Blue, circle, solid
-        "ngsrelate": {"color": "#D55E00", "marker": "s", "linestyle": "--"}  # Vermilion, square, dashed
-    }
-
-    for i, rel in enumerate(rel_order):
-        ax = axes[i]
-        rel_data = summary_df[summary_df["rel"] == rel]
-        
-        for tool in ["kestrel", "ngsrelate"]:
-            tool_data = rel_data[rel_data["tool"] == tool].sort_values("depth")
-            ax.plot(
-                tool_data["depth"],
-                tool_data["kin_abs_err"],
-                label=tool,
-                linewidth=2.5,
-                markersize=6,
-                **styles[tool]
-            )
-        
-        ax.set_title(rel.upper(), fontweight="bold")
-        ax.grid(True, linestyle=":", alpha=0.6)
-
-    fig.supxlabel("Read Depth", fontsize=14, y=0.02)
-    fig.supylabel("Mean Kinship Absolute Error", fontsize=14, x=0.01)
-    fig.suptitle("Kinship Coefficient Error: Kestrel vs NGSrelate", fontsize=16, fontweight="bold")
-
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper right", bbox_to_anchor=(0.99, 0.98), frameon=True)
-
-    plt.tight_layout(rect=[0.02, 0.04, 1, 0.95])
-    plt.savefig("kinship_error_colorblind_mpl.pdf")

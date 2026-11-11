@@ -1,11 +1,8 @@
-import gzip
 import argparse
+import gzip
 import subprocess
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from pathlib import Path
-
-from tqdm import tqdm
 
 import numpy as np
 
@@ -57,9 +54,9 @@ if __name__ == '__main__':
         futures = [
             executor.submit(simulate, rep_dir, seed, args.depths, args.error_rate) for (rep_dir, seed) in zip(rep_dirs, seed_seq.spawn(num_reps))
         ]
-        results = [
-            f.result() for f in tqdm(as_completed(futures), total=len(futures), desc="Simulating")
-        ]
+
+        for f in futures:
+            f.result()
 
 
 # Q30 phred score is very accurate (standard), maybe Q20 to have some error (0.01)

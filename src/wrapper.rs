@@ -1,5 +1,3 @@
-#[cfg(target_arch = "x86_64")]
-use std::num;
 use std::num::{NonZeroU64, NonZeroUsize};
 
 use ndarray::{Array2, ArrayView2, ArrayView3};

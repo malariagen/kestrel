@@ -1,17 +1,15 @@
 import argparse
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-from tqdm import tqdm
 import msprime
 import numpy as np
 import pandas as pd
-import stdpopsim
 import tskit
 from Bio import bgzf
 
 import ibd
-import ped
+import pedigrees
 from util import ResourceTracker
 
 # A separate copy of this will be created for each subprocess (ugh, Python is gross)
@@ -23,7 +21,7 @@ def init_pedigree(panel_size: int, genome_length: int):
     global pedigree
     global pairs
     global base
-    pairs, base, pedigree = ped.create_pedigree(panel_size, genome_length)
+    pairs, base, pedigree = pedigrees.create_pedigree(panel_size, genome_length)
 
 # https://tskit.dev/tutorials/tables_and_editing.html#editing-tree-sequences
 def thin_tree(ts, min_distance):
@@ -45,6 +43,8 @@ def simulate(rep, seed, out_dir, ne, recomb, mu):
     global pedigree
     global pairs
     global base
+
+    print("Simulating rep", rep)
 
     rng = np.random.default_rng(seed)
 
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     random_seed = 0xcbc8bf613dc84639e312d7bca02a98cc
 
     p = argparse.ArgumentParser(
-        description="ABC",
+        description="Simulate pedigrees within a genome",
         )
     p.add_argument("length", type=lambda x: int(float(x)), help="genome length in base pairs")
     p.add_argument("recomb", type=float, help="per-base recombination rate")
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         futures = [
             executor.submit(simulate, rep, seed, args.out_dir, args.ne, args.recomb, args.mu) for (rep, seed) in enumerate(seed_seq.spawn(args.reps))
         ]
-        results = [
-            f.result() for f in tqdm(as_completed(futures), total=len(futures), desc="Simulating")
-        ]
-        # The list is needed to propagate exceptions
+
+        # This is needed to propogate exceptions
+        for f in futures:
+            f.result()
