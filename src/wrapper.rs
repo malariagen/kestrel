@@ -87,6 +87,7 @@ pub fn calculate_relatedness_coefficients_gl(
     threads: Option<NonZeroUsize>,
     iterations: NonZeroU64,
     minimum_allele_frequency: Option<f64>,
+    num_samples: Option<usize>
 ) -> Vec<Vec<Output>> {
     let tracker = ResourceTracker::new();
 
@@ -162,21 +163,22 @@ pub fn calculate_relatedness_coefficients_gl(
                 &glaf,
                 &mut thread_pool,
                 iterations,
+                num_samples,
             )
         }
         #[cfg(target_arch = "x86_64")]
         Simd::Avx2 => {
             let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
-            crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(&glaf, &mut thread_pool, iterations)
+            crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(&glaf, &mut thread_pool, iterations, num_samples)
         }
         #[cfg(target_arch = "aarch64")]
         Simd::Neon => {
             let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
-            crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(&glaf, &mut thread_pool, iterations)
+            crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(&glaf, &mut thread_pool, iterations, num_samples)
         }
         Simd::Scalar => {
             let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
-            crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(&glaf, &mut thread_pool, iterations)
+            crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(&glaf, &mut thread_pool, iterations, num_samples)
         }
     };
 
@@ -207,11 +209,12 @@ pub struct GlAf<L: Lane> {
     pub gl2: LaneArray2<L, 3>,
     pub gl3: LaneArray2<L, 6>,
     pub gl4: LaneArray2<L, 10>,
+    pub num_samples: usize
 }
 
 // Multi-allelic sites ... never again
-// This function takes ownership of the input arrays so that they are dropped at the end of the function
-// (They take up a lot of memory and we don't need them anymore)
+// This function takes ownership of the input arrays so that they are dropped as soon as we don't need them anymore
+// (They take up a lot of memory)
 fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_frequencies: AlleleFrequencies) -> GlAf<L> {
     let num_variants = genotype_likelihoods.variants;
     let num_samples = genotype_likelihoods.samples;
@@ -287,9 +290,9 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
     drop(genotype_likelihoods.gl4);
     drop(allele_frequencies.af4);
 
-    af2b.finish();
-    af3b.finish();
-    af4b.finish();
+    af2b.finish(false);
+    af3b.finish(false);
+    af4b.finish(false);
 
     let di = af2.len();
     let tri = af3.len();
@@ -321,6 +324,7 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
         gl2,
         gl3,
         gl4,
+        num_samples
     }
 }
 

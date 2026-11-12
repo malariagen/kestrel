@@ -121,16 +121,19 @@ impl<'a, L: Lane, const R: usize> LaneVectorBuilder<'a, L, R> {
         }
     }
 
-    pub fn finish(self) {
+    pub fn finish(self, non_empty: bool) {
         // Copy out the last few rows that didn't fit into a whole block
         for i in 0..self.curr_row {
             let row = std::array::from_fn(|r| self.block[r].get(i));
             self.lv.rem.push(row);
         }
 
-        assert!(
-            !self.lv.lanes.is_empty() || !self.lv.rem.is_empty(),
-            "Must have at least one row to analyze"
-        );
+        if non_empty {
+            assert!(
+                !self.lv.lanes.is_empty() || !self.lv.rem.is_empty(),
+                "Must have at least one row to analyze"
+            );
+        }
+
     }
 }
