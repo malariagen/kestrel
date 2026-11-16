@@ -11,7 +11,7 @@ mod coefficients;
 mod conditional;
 mod quadratic;
 mod simd;
-//mod eigenval;
+mod eigenval;
 mod iis;
 mod jacquard;
 mod lanearray2;

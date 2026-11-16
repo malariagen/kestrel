@@ -12,15 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul},
-    cls::{self},
-    conditional::{IIS_3, IIS_4},
-    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
-    lanevector::{LaneVector, LaneVectorBuilder},
-    mixture::MixtureMatrix,
-    quadratic::ClsQuadratic,
-    sqp::{self, Tuneables},
-    wrapper::GlAf,
+    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_3, IIS_4}, eigenval, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables}, wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -211,6 +203,8 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
 
     let num_v = allele_frequencies.shape()[0];
     let quadratic_q = L::compute_quadratic(&lv, num_v);
+
+    // let condition = eigenval::eigenvals_jacobi(&quadratic_q, 50).unwrap_or(f64::NAN);
 
     let num_samples = genotypes.dim().0;
 

@@ -1,9 +1,10 @@
 use crate::algebra::{Matrix, Vector};
 
+// A modified Cholesky factorization, based on GMW81.
+// This will add a small diagonal correction matrix to a
+// in order to make it positive definite.
 pub fn modify_gmw_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, d: &mut Vector<N>) {
     assert!(n <= N);
-
-    // We can get a lower bound on the condition number from d
 
     let mut gamma = 0.0f64;
     for i in 0..n {
@@ -63,6 +64,8 @@ pub fn modify_gmw_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, 
     }
 }
 
+// An unmodified Cholesky factorization of a symmetric matrix a.
+// This will succeed iff a is positive definite.
 pub fn unmodified_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, d: &mut Vector<N>) {
     // This removes the bounds checks in the assembly
     assert!(n <= N);
@@ -123,4 +126,9 @@ pub fn solve_ldl_mut_n<const N: usize>(n: usize, l: &Matrix<N>, d: &Vector<N>, b
         // Normally we also divide by m[i][i], but here we know that is 1
         b[i] -= s;
     }
+}
+
+// Practical Optimization, 8.3.3.2
+pub fn estimate_condition<const N: usize>(n: &Matrix<N>) -> f64 {
+
 }
