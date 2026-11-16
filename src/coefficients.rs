@@ -161,7 +161,6 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                 });
 
                 out.extend(iter);
-                // handle.add(out.len().try_into().unwrap());
             },
         );
 
@@ -258,6 +257,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
 
                 let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
+                // TODO check this too, we should be using Brier score
                 let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
 
                 if iters >= tune.qp_max_iter.get() {

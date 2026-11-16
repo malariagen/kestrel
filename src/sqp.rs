@@ -27,7 +27,9 @@ impl Tuneables {
             sqp_conv_tol: 1e-8,
             qp_max_iter,
             qp_conv_tol: 1e-10,
-            qp_zero_search_tol: 1e-14,
+            // This was originally 1e-14, but that caused cycling in the QP solver
+            // (likely due to floating point noise)
+            qp_zero_search_tol: 1e-12,
             bls_max_iter: NonZeroU64::new(10).unwrap(),
             bls_sufficient_decrease: 1e-4,
             bls_step_size_reduce: 0.9,
@@ -105,12 +107,6 @@ fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> 
     })
 }
 
-// Hmm, they use a pseudo-inverse for the constrained least squares problem. Perhaps we could too?
-// We already have Q = M^T M, where M is the big stacked matrix. Maybe we can do something with this
-// (an SVD?) and use that to our advantage. (Uhh prolly not, M is big boi and Q is not).
-// However, we may be able to regularize Q first and then use a standard Cholesky algorithm. Faster, perhaps.
-// Can do loop-unrolling for small matrices to calculate Cholesky of submatrices.
-
 // Minimize 1/2 y^T Q y + c^T y, subject to y >= 0 and sum(y) = 1
 pub fn solve_qp_active_set<const N: usize>(
     q_mat: &Matrix<N>,
@@ -168,6 +164,7 @@ pub fn solve_qp_active_set<const N: usize>(
         let mut sub_d = [0.0; N];
 
         if modify {
+            // Hmmmm, should we modify this here, or once at the start?
             cholesky::modify_gmw_n(free_count, &q_mat_free, &mut sub_l, &mut sub_d);
         } else {
             cholesky::unmodified_n(free_count, &q_mat_free, &mut sub_l, &mut sub_d);

@@ -17,7 +17,7 @@ mod jacquard;
 mod lanearray2;
 mod lanevector;
 mod log;
-pub mod mixture;
+mod mixture;
 mod sqp;
 mod util;
 mod vcf;
@@ -31,7 +31,17 @@ mod kestrel {
     use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3, PyReadonlyArray2, PyReadonlyArray3};
     use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
-    use crate::{build_arrays, cli, vcf::GenotypeLikelihoods};
+    use crate::{build_arrays, cli};
+
+    #[pyclass]
+    struct Coefficients {
+        #[pyo3(get)]
+        pub jacquard: Py<PyArray3<f64>>,
+        #[pyo3(get)]
+        pub kinship: Py<PyArray2<f64>>,
+        #[pyo3(get)]
+        pub inbreeding: Py<PyArray1<f64>>,
+    }
 
     #[pyfunction]
     #[pyo3(signature = (genotypes, allele_frequencies = None, threads = None, iterations = NonZeroU64::new(100).unwrap()))]
@@ -41,11 +51,7 @@ mod kestrel {
         allele_frequencies: Option<PyReadonlyArray2<'py, f64>>,
         threads: Option<NonZeroUsize>,
         iterations: NonZeroU64,
-    ) -> (
-        Bound<'py, PyArray3<f64>>,
-        Bound<'py, PyArray2<f64>>,
-        Bound<'py, PyArray1<f64>>,
-    ) {
+    ) -> Coefficients {
         let gt_view = genotypes.as_array();
         let af_view = allele_frequencies.as_ref().map(|a| a.as_array());
 
@@ -53,11 +59,11 @@ mod kestrel {
 
         let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
 
-        (
-            jacquard.into_pyarray(py),
-            kinship.into_pyarray(py),
-            inbreeding.into_pyarray(py),
-        )
+        Coefficients {
+            jacquard: jacquard.into_pyarray(py).unbind(),
+            kinship: kinship.into_pyarray(py).unbind(),
+            inbreeding: inbreeding.into_pyarray(py).unbind(),
+        }
     }
 
     #[pyfunction]
