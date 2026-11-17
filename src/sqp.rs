@@ -70,7 +70,7 @@ where
         // println!("{iter} {x:?} {g:?} {qp} {bl}");
 
         if check_convergence(&x, &g, tune.sqp_conv_tol) {
-            let cond = estimate_condition_number(&x, &h);
+            let cond = estimate_condition_number(&x, &g, &h, tune.sqp_conv_tol);
             return (f, x, iter, cond);
         }
 
@@ -92,13 +92,13 @@ where
 }
 
 fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> bool {
-    // This is the Lagrange multiplier
+    // This is the Lagrange multiplier for the sum-to-one constraint
     let lambda = dot(x, g);
 
     // If x == 0 then gx >= lambda
     // And if x > 0.0 then gx == lambda
 
-    x.iter().zip(g.iter()).all(|(&xi, &gi)| {
+    x.iter().zip(g).all(|(&xi, &gi)| {
         if xi == 0.0 {
             gi >= lambda - tol
         } else {
@@ -311,21 +311,25 @@ where
 }
 
 // Practical Optimization, 8.3.3.2
-pub fn estimate_condition_number<const N: usize>(x: &Vector<N>, q_mat: &Matrix<N>) -> f64 {
+pub fn estimate_condition_number<const N: usize>(x: &Vector<N>, g:& Vector<N>, h: &Matrix<N>, tol: f64) -> f64 {
 
     // We need to project the Hessian matrix along the active constraints
     // (a la the null space method) to get the condition number of the reduced Hessian.
-    // If a constraint has a positive Lagrange multiplier then the gradient is pushing
+    // If a constraint is in strict complementarity then the gradient is pushing
     // against the constraint, so that is unique even if the curvature is flat in that
     // direction (think about a downward sloping line).
-    // We should technically also include the sum-to-one constraint in this, but that
-    // isn't necessay for the log-likelihood Hessian since it's scale invariant.
+    // (In theory we could also reduce the Hessian for the sum-to-one constraint...)
+
+    // This is the Lagrange multiplier for the sum-to-one constraintt
+    let lambda = dot(x, g);
 
     // Find the free indices
     let mut free_indices = [0; N];
     let mut free_count = 0;
     for i in 0..N {
-        if x[i] != 0.0 {
+        // Strict complementarity holds if x == 0 and gx > lambda
+        let strict_complementarity = x[i] == 0.0 && g[i] >= lambda + tol;
+        if !strict_complementarity {
             free_indices[free_count] = i;
             free_count += 1;
         }
@@ -337,19 +341,19 @@ pub fn estimate_condition_number<const N: usize>(x: &Vector<N>, q_mat: &Matrix<N
     assert!(free_count <= N);
 
     // Extract the reduced Hessian
-    let mut q_mat_free = [[0.0; N]; N];
+    let mut h_free = [[0.0; N]; N];
     for i in 0..free_count {
         let free_i = free_indices[i];
         for j in 0..free_count {
             let free_j = free_indices[j];
-            q_mat_free[i][j] = q_mat[free_i][free_j];
+            h_free[i][j] = h[free_i][free_j];
         }
     }
 
     let mut sub_l = [[0.0; N]; N];
     let mut sub_d = [0.0; N];
 
-    unmodified_n(free_count, &q_mat_free, &mut sub_l, &mut sub_d);
+    unmodified_n(free_count, &h_free, &mut sub_l, &mut sub_d);
 
     // Any negative or zero entry along d indicates a zero eigenvalue, so not invertible
     let all_positive = sub_d.iter().take(free_count).all(|d| *d > 0.0);

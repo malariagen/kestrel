@@ -12,7 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_3, IIS_4}, eigenval, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables, estimate_condition_number}, wrapper::GlAf,
+    algebra::{Vector, add, dot, mul, sum}, cls::{self}, conditional::{IIS_3, IIS_4}, eigenval, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables, estimate_condition_number}, wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -252,7 +252,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
 
                 let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
-                // TODO check this too, we should be using Brier score
+                // TODO check this too, we should be using Brier score?
                 let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
 
                 if iters >= tune.qp_max_iter.get() {
@@ -262,7 +262,9 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
                     );
                 }
 
-                let cond = estimate_condition_number(&delta, &quadratic_q);
+                // Gradient of the QP
+                let g = add(&mul(&quadratic_q, &delta), &c);
+                let cond = estimate_condition_number(&delta, &g, &quadratic_q, tune.sqp_conv_tol);
 
                 Output {
                     x,
