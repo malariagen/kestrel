@@ -127,6 +127,7 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
         "jacquard9",
         "iterations",
         "objective",
+        "condition",
     ])?;
 
     let kinship_vec = [1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0];
@@ -149,11 +150,11 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
 
         let iterations = out.iters;
         let objective = out.obj;
-        // TODO condition number of matrix
+        let condition = out.cond.log10();
 
         writer.serialize((
             sample1, sample2, kinship, delta1, delta2, delta3, delta4, delta5, delta6, delta7, delta8, delta9,
-            iterations, objective,
+            iterations, objective, condition
         ))?;
     }
 

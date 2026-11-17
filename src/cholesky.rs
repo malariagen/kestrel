@@ -66,6 +66,9 @@ pub fn modify_gmw_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, 
 
 // An unmodified Cholesky factorization of a symmetric matrix a.
 // This will succeed iff a is positive definite.
+// In theory, one can use complete pivoting to handle the case when a is PSD,
+// which will give some zero d values.
+// For symmetric indefinite matrices, one can use an LBL^T factorization instead
 pub fn unmodified_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, d: &mut Vector<N>) {
     // This removes the bounds checks in the assembly
     assert!(n <= N);
@@ -102,33 +105,36 @@ pub fn unmodified_n<const N: usize>(n: usize, a: &Matrix<N>, l: &mut Matrix<N>, 
 pub fn solve_ldl_mut_n<const N: usize>(n: usize, l: &Matrix<N>, d: &Vector<N>, b: &mut Vector<N>) {
     assert!(n <= N);
 
-    // Forward substitution
-    for i in 0..n {
-        let mut s = 0.0;
-        for j in 0..i {
-            s = b[j].mul_add(l[i][j], s);
-        }
-        // Normally we also divide by m[i][i], but here we know that is 1
-        b[i] -= s;
-    }
+    forward_substitution(n, l, b);
 
     // Diagonal scaling
     for i in 0..n {
         b[i] /= d[i];
     }
 
-    // Backward substitution
+    backward_substitution(n, l, b);
+}
+
+// Solve L x = b and store it in b, where L is lower triangular and has 1 along diagonal
+pub fn forward_substitution<const N: usize>(n: usize, l: &Matrix<N>, b: &mut Vector<N>) {
+    for i in 0..n {
+        let mut s = 0.0;
+        for j in 0..i {
+            s = b[j].mul_add(l[i][j], s);
+        }
+        // Normally we also divide by l[i][i], but here we know that is 1
+        b[i] -= s;
+    }
+}
+
+// Solve L^T x = b and store it in b, where L is lower triangular and has 1 along diagonal
+pub fn backward_substitution<const N: usize>(n: usize, l: &Matrix<N>, b: &mut Vector<N>) {
     for i in (0..n).rev() {
         let mut s = 0.0;
         for j in (i + 1)..n {
             s = b[j].mul_add(l[j][i], s);
         }
-        // Normally we also divide by m[i][i], but here we know that is 1
+        // Normally we also divide by l[i][i], but here we know that is 1
         b[i] -= s;
     }
-}
-
-// Practical Optimization, 8.3.3.2
-pub fn estimate_condition<const N: usize>(n: &Matrix<N>) -> f64 {
-
 }

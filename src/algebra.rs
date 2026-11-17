@@ -1,3 +1,5 @@
+use crate::simd::Arith;
+
 pub type Vector<const N: usize> = [f64; N];
 pub type Matrix<const N: usize> = [[f64; N]; N];
 
@@ -32,6 +34,14 @@ pub fn sum_n<const N: usize>(n: usize, x: &Vector<N>) -> f64 {
         sum += x[i];
     }
     sum
+}
+
+pub fn l2_norm_n<const N: usize>(n: usize, x: &Vector<N>) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..n {
+        sum = x[i].mul_add(x[i], sum)
+    }
+    sum.sqrt()
 }
 
 pub fn mul<const N: usize>(m: &Matrix<N>, v: &Vector<N>) -> Vector<N> {

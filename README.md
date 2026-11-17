@@ -39,6 +39,7 @@ This iterates over all pairs of samples in the VCF file and calculations the fol
 - `jacquard1`, ..., `jacquard9`: The nine Jacquard coefficients Δ₁, ..., Δ₉.
 - `iterations`: The number of iterations in the minimization loop.
 - `objective`: The value of the objective function at the optimal Jacquard coefficients. Lower is better, 0 indicates a perfect match.
+- `condition`: An estimate of `log10` of the condition number of the Hessian matrix at the optimal coefficients. This indicates roughly how many trailing digits of the non-zero coefficients are lost due to non-identifiability. Values greater than 15 indicate the Jacquard coefficients are non-unique.
 
 There is also an experimental Python API that is subject to change based on its integration into MalariaGEN.
 

@@ -12,7 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_3, IIS_4}, eigenval, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables}, wrapper::GlAf,
+    algebra::{Vector, dot, mul}, cls::{self}, conditional::{IIS_3, IIS_4}, eigenval, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables, estimate_condition_number}, wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -132,7 +132,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
 
                     let obj = |x: &Vector<9>, eps| L::compute_obj(&buffer, x, eps);
                     let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffer, x, eps);
-                    let (f, delta, iters) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+                    let (f, delta, iters, cond) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                     if iters >= tune.sqp_max_iter.get() {
                         log::warn!(
@@ -149,6 +149,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                         jacquard: delta,
                         iters,
                         obj: f,
+                        cond
                     }
                 });
 
@@ -168,6 +169,7 @@ pub struct Output {
     pub jacquard: [f64; 9],
     pub obj: f64,
     pub iters: u64,
+    pub cond: f64,
 }
 
 impl Default for Output {
@@ -178,6 +180,7 @@ impl Default for Output {
             jacquard: [0.0; 9],
             iters: 0,
             obj: 0.0,
+            cond: 0.0,
         }
     }
 }
@@ -191,7 +194,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     let genotypes = reorder_genotypes(genotypes);
 
     // TODO calculate this across each locus to figure out how many alleles there are
-    // Then we can condense the stacked matrix to make it smaller
+    // Then we can condense the stacked matrix to make it smaller (and faster)
     let num_a = allele_frequencies.shape()[1];
 
     let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a);
@@ -203,8 +206,6 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
 
     let num_v = allele_frequencies.shape()[0];
     let quadratic_q = L::compute_quadratic(&lv, num_v);
-
-    // let condition = eigenval::eigenvals_jacobi(&quadratic_q, 50).unwrap_or(f64::NAN);
 
     let num_samples = genotypes.dim().0;
 
@@ -261,12 +262,15 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
                     );
                 }
 
+                let cond = estimate_condition_number(&delta, &quadratic_q);
+
                 Output {
                     x,
                     y,
                     jacquard: delta,
                     iters,
                     obj,
+                    cond
                 }
             });
 

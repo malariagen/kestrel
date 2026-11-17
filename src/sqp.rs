@@ -1,8 +1,7 @@
 use std::num::NonZeroU64;
 
 use crate::{
-    algebra::{Matrix, Vector, add, add_n, dot, mul, mul_n, scale_mul, sub, sum_n, sum_to_one},
-    cholesky,
+    algebra::{Matrix, Vector, add, add_n, dot, l2_norm_n, mul, mul_n, scale_mul, sub, sum_n, sum_to_one}, cholesky::{self, backward_substitution, unmodified_n},
 };
 
 pub struct Tuneables {
@@ -43,7 +42,7 @@ pub fn solve_sqp<const N: usize, Obj, GradHess>(
     grad_hess: GradHess,
     x0: &Vector<N>,
     tune: &Tuneables,
-) -> (f64, Vector<N>, u64)
+) -> (f64, Vector<N>, u64, f64)
 where
     Obj: Fn(&Vector<N>, f64) -> f64,
     GradHess: Fn(&Vector<N>, f64) -> (Vector<N>, Matrix<N>),
@@ -71,7 +70,8 @@ where
         // println!("{iter} {x:?} {g:?} {qp} {bl}");
 
         if check_convergence(&x, &g, tune.sqp_conv_tol) {
-            return (f, x, iter);
+            let cond = estimate_condition_number(&x, &h);
+            return (f, x, iter, cond);
         }
 
         // c = g - H x
@@ -88,7 +88,7 @@ where
         f = fnew;
     }
 
-    (f, x, tune.sqp_max_iter.into())
+    (f, x, tune.sqp_max_iter.into(), f64::NAN)
 }
 
 fn check_convergence<const N: usize>(x: &Vector<N>, g: &Vector<N>, tol: f64) -> bool {
@@ -308,4 +308,72 @@ where
 
         alpha *= tune.bls_step_size_reduce;
     }
+}
+
+// Practical Optimization, 8.3.3.2
+pub fn estimate_condition_number<const N: usize>(x: &Vector<N>, q_mat: &Matrix<N>) -> f64 {
+
+    // We need to project the Hessian matrix along the active constraints
+    // (a la the null space method) to get the condition number of the reduced Hessian.
+    // If a constraint has a positive Lagrange multiplier then the gradient is pushing
+    // against the constraint, so that is unique even if the curvature is flat in that
+    // direction (think about a downward sloping line).
+    // We should technically also include the sum-to-one constraint in this, but that
+    // isn't necessay for the log-likelihood Hessian since it's scale invariant.
+
+    // Find the free indices
+    let mut free_indices = [0; N];
+    let mut free_count = 0;
+    for i in 0..N {
+        if x[i] != 0.0 {
+            free_indices[free_count] = i;
+            free_count += 1;
+        }
+    }
+
+    // Should Never Happen(TM)
+    assert!(free_count != 0);
+    // Removes some bounds checks
+    assert!(free_count <= N);
+
+    // Extract the reduced Hessian
+    let mut q_mat_free = [[0.0; N]; N];
+    for i in 0..free_count {
+        let free_i = free_indices[i];
+        for j in 0..free_count {
+            let free_j = free_indices[j];
+            q_mat_free[i][j] = q_mat[free_i][free_j];
+        }
+    }
+
+    let mut sub_l = [[0.0; N]; N];
+    let mut sub_d = [0.0; N];
+
+    unmodified_n(free_count, &q_mat_free, &mut sub_l, &mut sub_d);
+
+    // Any negative or zero entry along d indicates a zero eigenvalue, so not invertible
+    let all_positive = sub_d.iter().take(free_count).all(|d| *d > 0.0);
+
+    if !all_positive {
+        return f64::INFINITY;
+    }
+
+    let (max_index, max) = sub_d.iter().enumerate().take(free_count).max_by(|a, b| a.1.total_cmp(b.1)).unwrap();
+    let (min_index, min) = sub_d.iter().enumerate().take(free_count).min_by(|a, b| a.1.total_cmp(b.1)).unwrap();
+
+    let mut e_max = [0.0; N];
+    e_max[max_index] = 1.0;
+
+    let mut e_min = [0.0; N];
+    e_min[min_index] = 1.0;
+
+    let w_max = mul_n(free_count, &sub_l, &e_max);
+    backward_substitution(free_count, &sub_l, &mut e_min);
+
+    let norm_max = l2_norm_n(free_count, &w_max);
+    let norm_min = l2_norm_n(free_count, &e_min);
+
+    // This is a lower bound on the condition number
+    // It should be approximately correct to the same order of magnitude
+    norm_max * norm_min * (max / min)
 }

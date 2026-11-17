@@ -96,7 +96,7 @@ where
                 let obj = |x: &Vector<A>, eps| L::compute_objective(buffer, &x, eps);
                 let grad_hess = |x: &Vector<A>, eps| L::compute_grad_hess(buffer, &x, eps);
 
-                let (_, mut x, iter) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
+                let (_, mut x, iter, _) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
 
                 if iter >= tune.sqp_max_iter.get() {
                     log::warn!(

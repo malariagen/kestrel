@@ -299,9 +299,9 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
     let tetra = af4.len();
     let mono = num_variants - di - tri - tetra;
 
-    log::info!("Kept {di} di-allelic sites");
-    log::info!("Kept {tri} tri-allelic sites");
-    log::info!("Kept {tetra} tetra-allelic sites");
+    log::info!("Identified {di} di-allelic sites");
+    log::info!("Identified {tri} tri-allelic sites");
+    log::info!("Identified {tetra} tetra-allelic sites");
     log::info!("Discarded {mono} non-segregating sites");
 
     let gl2a = Array2::from_shape_vec((di, num_samples), gl2).unwrap();
