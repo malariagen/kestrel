@@ -12,6 +12,8 @@ dependencies = [
     "biopython>=1.88",
     "matplotlib>=3.11.2",
     "seaborn>=0.13.2",
+    "ipykernel>=7.4.0",
+    "jupyterlab>=4.6.6",
 ]
 
 [project.scripts]
