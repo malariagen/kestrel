@@ -1,7 +1,8 @@
 use std::num::NonZeroU64;
 
 use crate::{
-    algebra::{Matrix, Vector, add, add_n, dot, l2_norm_n, mul, mul_n, scale_mul, sub, sum_n, sum_to_one}, cholesky::{self, backward_substitution, unmodified_n},
+    algebra::{Matrix, Vector, add, add_n, dot, l2_norm_n, mul, mul_n, scale_mul, sub, sum_n, sum_to_one},
+    cholesky::{self, backward_substitution, unmodified_n},
 };
 
 pub struct Tuneables {
@@ -311,8 +312,7 @@ where
 }
 
 // Practical Optimization, 8.3.3.2
-pub fn estimate_condition_number<const N: usize>(x: &Vector<N>, g:& Vector<N>, h: &Matrix<N>, tol: f64) -> f64 {
-
+pub fn estimate_condition_number<const N: usize>(x: &Vector<N>, g: &Vector<N>, h: &Matrix<N>, tol: f64) -> f64 {
     // We need to project the Hessian matrix along the active constraints
     // (a la the null space method) to get the condition number of the reduced Hessian.
     // If a constraint is in strict complementarity then the gradient is pushing
@@ -362,8 +362,18 @@ pub fn estimate_condition_number<const N: usize>(x: &Vector<N>, g:& Vector<N>, h
         return f64::INFINITY;
     }
 
-    let (max_index, max) = sub_d.iter().enumerate().take(free_count).max_by(|a, b| a.1.total_cmp(b.1)).unwrap();
-    let (min_index, min) = sub_d.iter().enumerate().take(free_count).min_by(|a, b| a.1.total_cmp(b.1)).unwrap();
+    let (max_index, max) = sub_d
+        .iter()
+        .enumerate()
+        .take(free_count)
+        .max_by(|a, b| a.1.total_cmp(b.1))
+        .unwrap();
+    let (min_index, min) = sub_d
+        .iter()
+        .enumerate()
+        .take(free_count)
+        .min_by(|a, b| a.1.total_cmp(b.1))
+        .unwrap();
 
     let mut e_max = [0.0; N];
     e_max[max_index] = 1.0;

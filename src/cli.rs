@@ -85,14 +85,26 @@ pub fn run_cli(args: &[String]) -> Result<()> {
     let (samples, outputs) = match args.tag {
         Tag::GL => {
             let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, true)?;
-            let outputs =
-                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf, num_samples);
+            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(
+                result.gl,
+                result.af,
+                args.threads,
+                iters,
+                maf,
+                num_samples,
+            );
             (result.samples, outputs)
         }
         Tag::PL => {
             let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, false)?;
-            let outputs =
-                crate::wrapper::calculate_relatedness_coefficients_gl(result.gl, result.af, args.threads, iters, maf, num_samples);
+            let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(
+                result.gl,
+                result.af,
+                args.threads,
+                iters,
+                maf,
+                num_samples,
+            );
             (result.samples, outputs)
         }
         Tag::GT => {
@@ -154,7 +166,7 @@ fn write_output(ofile: PathBuf, samples: &[String], outputs: &[Vec<Output>]) -> 
 
         writer.serialize((
             sample1, sample2, kinship, delta1, delta2, delta3, delta4, delta5, delta6, delta7, delta8, delta9,
-            iterations, objective, condition
+            iterations, objective, condition,
         ))?;
     }
 

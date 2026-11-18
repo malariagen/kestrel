@@ -134,6 +134,5 @@ impl<'a, L: Lane, const R: usize> LaneVectorBuilder<'a, L, R> {
                 "Must have at least one row to analyze"
             );
         }
-
     }
 }

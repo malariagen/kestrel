@@ -4,7 +4,12 @@ use ndarray::{Array2, ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    coefficients::{Output, calculate_allele_frequencies}, lanearray2::{LaneArray2, convert_to_lanes}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker, vcf::{AlleleFrequencies, GenotypeLikelihoods},
+    coefficients::{Output, calculate_allele_frequencies},
+    lanearray2::{LaneArray2, convert_to_lanes},
+    lanevector::{LaneVector, LaneVectorBuilder},
+    simd::{Lane, simd::Simd},
+    util::ResourceTracker,
+    vcf::{AlleleFrequencies, GenotypeLikelihoods},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -87,7 +92,7 @@ pub fn calculate_relatedness_coefficients_gl(
     threads: Option<NonZeroUsize>,
     iterations: NonZeroU64,
     minimum_allele_frequency: Option<f64>,
-    num_samples: Option<usize>
+    num_samples: Option<usize>,
 ) -> Vec<Vec<Output>> {
     let tracker = ResourceTracker::new();
 
@@ -169,16 +174,31 @@ pub fn calculate_relatedness_coefficients_gl(
         #[cfg(target_arch = "x86_64")]
         Simd::Avx2 => {
             let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
-            crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(&glaf, &mut thread_pool, iterations, num_samples)
+            crate::coefficients::calculate_relatedness_coefficients_gl::<Avx2Lane>(
+                &glaf,
+                &mut thread_pool,
+                iterations,
+                num_samples,
+            )
         }
         #[cfg(target_arch = "aarch64")]
         Simd::Neon => {
             let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
-            crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(&glaf, &mut thread_pool, iterations, num_samples)
+            crate::coefficients::calculate_relatedness_coefficients_gl::<NeonLane>(
+                &glaf,
+                &mut thread_pool,
+                iterations,
+                num_samples,
+            )
         }
         Simd::Scalar => {
             let glaf = split_gl_af(genotype_likelihoods, allele_frequencies);
-            crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(&glaf, &mut thread_pool, iterations, num_samples)
+            crate::coefficients::calculate_relatedness_coefficients_gl::<f64>(
+                &glaf,
+                &mut thread_pool,
+                iterations,
+                num_samples,
+            )
         }
     };
 
@@ -209,7 +229,7 @@ pub struct GlAf<L: Lane> {
     pub gl2: LaneArray2<L, 3>,
     pub gl3: LaneArray2<L, 6>,
     pub gl4: LaneArray2<L, 10>,
-    pub num_samples: usize
+    pub num_samples: usize,
 }
 
 // Multi-allelic sites ... never again
@@ -324,7 +344,7 @@ fn split_gl_af<L: Lane>(genotype_likelihoods: GenotypeLikelihoods, allele_freque
         gl2,
         gl3,
         gl4,
-        num_samples
+        num_samples,
     }
 }
 

@@ -12,7 +12,16 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, add, dot, mul, sum}, cls::{self}, conditional::{IIS_3, IIS_4}, eigenval, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables, estimate_condition_number}, wrapper::GlAf,
+    algebra::{Vector, add, dot, mul, sum},
+    cls::{self},
+    conditional::{IIS_3, IIS_4},
+    eigenval,
+    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
+    lanevector::{LaneVector, LaneVectorBuilder},
+    mixture::MixtureMatrix,
+    quadratic::ClsQuadratic,
+    sqp::{self, Tuneables, estimate_condition_number},
+    wrapper::GlAf,
 };
 
 pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
@@ -67,7 +76,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     glaf: &GlAf<L>,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
-    num_samples: Option<usize>
+    num_samples: Option<usize>,
 ) -> Vec<Vec<Output>> {
     let n2 = glaf.af2.len();
     let n3 = glaf.af3.len();
@@ -149,7 +158,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
                         jacquard: delta,
                         iters,
                         obj: f,
-                        cond
+                        cond,
                     }
                 });
 
@@ -272,7 +281,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
                     jacquard: delta,
                     iters,
                     obj,
-                    cond
+                    cond,
                 }
             });
 
