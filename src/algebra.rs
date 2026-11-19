@@ -1,5 +1,3 @@
-use crate::simd::Arith;
-
 pub type Vector<const N: usize> = [f64; N];
 pub type Matrix<const N: usize> = [[f64; N]; N];
 

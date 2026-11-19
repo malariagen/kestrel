@@ -9,7 +9,7 @@ pub mod cli;
 mod cls;
 mod coefficients;
 mod conditional;
-mod eigenval;
+// mod eigenval;
 mod iis;
 mod jacquard;
 mod lanearray2;

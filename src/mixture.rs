@@ -417,23 +417,3 @@ fn mixture_row2<L: Lane, M: Lane, S: Arith + LoadStore<L>>(
 
     builder.push_block(&out);
 }
-
-pub struct LanePartialVector<L: Lane, const G: usize> {
-    pub lanes: Vec<[[L; 9]; G]>,
-    pub rem: Vec<[[f64; 9]; G]>,
-}
-
-impl<L: Lane, const G: usize> LanePartialVector<L, G> {
-    pub fn new(len: usize) -> Self {
-        let lanes = len / L::N;
-        let rem = len % L::N;
-
-        let lane_buf = vec![[[L::default(); 9]; G]; lanes];
-        let rem_buf = vec![[[0.0; 9]; G]; rem];
-
-        LanePartialVector {
-            lanes: lane_buf,
-            rem: rem_buf,
-        }
-    }
-}

@@ -1,8 +1,6 @@
-#[cfg(target_arch = "x86_64")]
-use std::num;
 use std::num::{NonZeroU64, NonZeroUsize};
 
-use ndarray::{Array2, ArrayView2, ArrayView3};
+use ndarray::{Array2, ArrayView2};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{

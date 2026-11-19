@@ -1,7 +1,7 @@
-use crate::algebra::{Vector, add, scale_div, sub};
-use crate::conditional::{Genotype, MIis};
-use crate::iis::{self, Iis};
-use ndarray::{Array4, ArrayView1, ArrayView2};
+use crate::algebra::{Vector, add};
+use crate::conditional::MIis;
+use crate::iis::{self};
+use ndarray::ArrayView1;
 
 pub fn calculate_m_matrices<const A: usize, const G: usize>(
     all_joint_genotypes: &MIis<G>,
@@ -10,9 +10,9 @@ pub fn calculate_m_matrices<const A: usize, const G: usize>(
     allele_frequencies
         .iter()
         .map(|freq| {
-            std::array::from_fn(|g1| {
-                std::array::from_fn(|g2| {
-                    let ((i, j), (k, l), iis_mode) = all_joint_genotypes[g1][g2];
+            std::array::from_fn(|gx| {
+                std::array::from_fn(|gy| {
+                    let ((i, j), (k, l), iis_mode) = all_joint_genotypes[gx][gy];
                     let pi = freq[i];
                     let pj = freq[j];
                     let pk = freq[k];

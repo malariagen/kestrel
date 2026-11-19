@@ -44,6 +44,7 @@ impl<L: Lane, const G: usize> LaneArray2<L, G> {
     }
 }
 
+// TODO bounds checks
 pub fn convert_to_lanes<L: Lane, const G: usize>(genotype_likelihoods: ArrayView2<[f64; G]>) -> LaneArray2<L, G> {
     let (num_v, num_s) = genotype_likelihoods.dim();
 
