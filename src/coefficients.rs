@@ -12,7 +12,16 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
+    algebra::{Matrix, Vector, add, dot, mul, scale_div},
+    cls::{self},
+    conditional::{IIS_2, IIS_3, IIS_4},
+    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
+    lanevector::{LaneVector, LaneVectorBuilder},
+    mixture::MixtureMatrix,
+    quadratic::ClsQuadratic,
+    sqp::{self, Tuneables, estimate_condition_number},
+    vcf::{AlleleFrequencies, Genotypes},
+    wrapper::GlAf,
 };
 
 // We consume the input array so it gets dropped
@@ -204,20 +213,18 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each(|(out, x)| {
-
             let x2 = g2.index_axis(Axis(0), x);
             let x3 = g3.index_axis(Axis(0), x);
             let x4 = g4.index_axis(Axis(0), x);
 
             let iter = (x..num_samples).map(|y| {
-
                 let y2 = g2.index_axis(Axis(0), y);
                 let y3 = g3.index_axis(Axis(0), y);
                 let y4 = g4.index_axis(Axis(0), y);
 
-                let c2 = cls::calculate_quadratic_c( &m2, x2.view(), y2.view(),);
-                let c3 = cls::calculate_quadratic_c( &m3, x3.view(), y3.view(),);
-                let c4 = cls::calculate_quadratic_c( &m4, x4.view(), y4.view(),);
+                let c2 = cls::calculate_quadratic_c(&m2, x2.view(), y2.view());
+                let c3 = cls::calculate_quadratic_c(&m3, x3.view(), y3.view());
+                let c4 = cls::calculate_quadratic_c(&m4, x4.view(), y4.view());
 
                 let c = scale_div(-(num_variants as f64), &add(&c2, &add(&c3, &c4)));
 
@@ -265,7 +272,7 @@ fn compute_quadratic_matrix<L: ClsQuadratic>(
     num_variants: usize,
     m2: &Vec<[[[f64; 9]; 3]; 3]>,
     m3: &Vec<[[[f64; 9]; 6]; 6]>,
-    m4: &Vec<[[[f64; 9]; 10]; 10]>
+    m4: &Vec<[[[f64; 9]; 10]; 10]>,
 ) -> Matrix<9> {
     let mut lv = LaneVector::new(num_variants);
     let mut builder = LaneVectorBuilder::new(&mut lv);

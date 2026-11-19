@@ -6,7 +6,12 @@ use ndarray::{Array2, ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    coefficients::{Output}, lanearray2::{LaneArray2, convert_to_lanes}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker, vcf::{AlleleFrequencies, GenotypeLikelihoods, Genotypes},
+    coefficients::Output,
+    lanearray2::{LaneArray2, convert_to_lanes},
+    lanevector::{LaneVector, LaneVectorBuilder},
+    simd::{Lane, simd::Simd},
+    util::ResourceTracker,
+    vcf::{AlleleFrequencies, GenotypeLikelihoods, Genotypes},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -51,7 +56,7 @@ pub fn calculate_relatedness_coefficients_gt(
             allele_frequencies,
             &mut thread_pool,
             iterations,
-            num_samples
+            num_samples,
         ),
         #[cfg(target_arch = "x86_64")]
         Simd::Avx512 => crate::coefficients::calculate_coefficients_gt::<Avx512Lane>(
@@ -59,7 +64,7 @@ pub fn calculate_relatedness_coefficients_gt(
             allele_frequencies,
             &mut thread_pool,
             iterations,
-            num_samples
+            num_samples,
         ),
         #[cfg(target_arch = "aarch64")]
         Simd::Neon => crate::coefficients::calculate_coefficients_gt::<NeonLane>(
@@ -67,14 +72,14 @@ pub fn calculate_relatedness_coefficients_gt(
             allele_frequencies,
             &mut thread_pool,
             iterations,
-            num_samples
+            num_samples,
         ),
         Simd::Scalar => crate::coefficients::calculate_coefficients_gt::<f64>(
             genotypes,
             allele_frequencies,
             &mut thread_pool,
             iterations,
-            num_samples
+            num_samples,
         ),
     };
 
@@ -406,19 +411,20 @@ fn remove_zero_frequencies<L: Lane, const A: usize, const G: usize>(
     });
 }
 
-
 fn calculate_allele_frequencies<const A: usize>(genotypes: ArrayView2<[u8; 2]>) -> Vec<[f64; A]> {
-    genotypes.outer_iter().map(|samples| {
-        let mut f = [0u64; A];
+    genotypes
+        .outer_iter()
+        .map(|samples| {
+            let mut f = [0u64; A];
 
-        for gt in samples.iter() {
-            f[usize::from(gt[0])] += 1;
-            f[usize::from(gt[1])] += 1;
-        }
+            for gt in samples.iter() {
+                f[usize::from(gt[0])] += 1;
+                f[usize::from(gt[1])] += 1;
+            }
 
-        let total_alleles = 2 * samples.len();
+            let total_alleles = 2 * samples.len();
 
-        f.map(|c| (c as f64) / (total_alleles as f64))
-
-    }).collect()
+            f.map(|c| (c as f64) / (total_alleles as f64))
+        })
+        .collect()
 }

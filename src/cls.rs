@@ -7,19 +7,22 @@ pub fn calculate_m_matrices<const A: usize, const G: usize>(
     all_joint_genotypes: &MIis<G>,
     allele_frequencies: &[[f64; A]],
 ) -> Vec<[[Vector<9>; G]; G]> {
-    allele_frequencies.iter().map(|freq| {
-        std::array::from_fn(|g1| {
-            std::array::from_fn(|g2| {
-                let ((i, j), (k, l), iis_mode) = all_joint_genotypes[g1][g2];
-                let pi = freq[i];
-                let pj = freq[j];
-                let pk = freq[k];
-                let pl = freq[l];
+    allele_frequencies
+        .iter()
+        .map(|freq| {
+            std::array::from_fn(|g1| {
+                std::array::from_fn(|g2| {
+                    let ((i, j), (k, l), iis_mode) = all_joint_genotypes[g1][g2];
+                    let pi = freq[i];
+                    let pj = freq[j];
+                    let pk = freq[k];
+                    let pl = freq[l];
 
-                iis::conditional_probabilities(pi, pj, pk, pl, iis_mode)
+                    iis::conditional_probabilities(pi, pj, pk, pl, iis_mode)
+                })
             })
         })
-    }).collect()
+        .collect()
 }
 
 pub fn calculate_quadratic_c<const G: usize>(
