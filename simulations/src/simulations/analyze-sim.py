@@ -34,7 +34,12 @@ def parse_ngsrelate(infile):
         cols = [f'J{i}' for i in range(1, 10)]
         jac[rel] = df.loc[match, cols].to_numpy().flatten()
 
-    return jac
+    iters = dict()
+    for (rel, pair) in indices.items():
+        match = (df['a'] == pair[0]) & (df['b'] == pair[1])
+        iters[rel] = float(df.loc[match, 'nIter'].item())
+
+    return jac, iters
 
 def parse_kestrel(infile):
     df = pd.read_csv(infile, sep='\t')
@@ -45,7 +50,12 @@ def parse_kestrel(infile):
         cols = [f'jacquard{i}' for i in range(1, 10)]
         jac[rel] = df.loc[match, cols].to_numpy().flatten()
 
-    return jac
+    iters = dict()
+    for rel in rels:
+        match = (df['sample1'] == f"{rel}0") & (df['sample2'] == f"{rel}1")
+        iters[rel] = float(df.loc[match, "iterations"].item())
+
+    return jac, iters
 
 def frm(p, q):
     return 2*np.arccos(np.sum(np.sqrt(p*q)))
@@ -70,8 +80,8 @@ def process_reps(base_dir):
         for depth_dir in depth_dirs:
             depth = int(depth_dir.name.rstrip("x"))
 
-            njac = parse_ngsrelate(f"{depth_dir}/ngsrelate.tsv")
-            kjac = parse_kestrel(f"{depth_dir}/kestrel.tsv")
+            njac, ngs_iter = parse_ngsrelate(f"{depth_dir}/ngsrelate.tsv")
+            kjac, kes_iter = parse_kestrel(f"{depth_dir}/kestrel.tsv")
 
             nkin = np.array([kinship(njac[rel]) for rel in rels])
             kkin = np.array([kinship(kjac[rel]) for rel in rels])
@@ -82,6 +92,7 @@ def process_reps(base_dir):
                     "depth": depth,
                     "rel": rel,
                     "tool": "true",
+                    "iterations": 0,
                     "kinship": tkin[rel],
                     "jac_tvd": 0.0,
                     "kin_abs_err": 0.0
@@ -94,6 +105,7 @@ def process_reps(base_dir):
                     "depth": depth,
                     "rel": rel,
                     "tool": "ngsrelate",
+                    "iterations": ngs_iter[rel],
                     "kinship": ngs_kin,
                     "jac_tvd": tvd(tjac[rel], njac[rel]),
                     "kin_abs_err":  np.abs(tkin[rel] - ngs_kin)
@@ -106,6 +118,7 @@ def process_reps(base_dir):
                     "depth": depth,
                     "rel": rel,
                     "tool": "kestrel",
+                    "iterations": kes_iter[rel],
                     "kinship": kestrel_kin,
                     "jac_tvd": tvd(tjac[rel], kjac[rel]),
                     "kin_abs_err":  np.abs(tkin[rel] - kestrel_kin)
@@ -133,8 +146,16 @@ def print_tables(df, tool):
         aggfunc="mean"
     ).reindex(rels)
 
+    iter_table = df_tool.pivot_table(
+        index="rel",
+        columns="depth",
+        values="iterations",
+        aggfunc="mean"
+    ).reindex(rels)
+
     tvd_table = tvd_table.reindex(sorted(tvd_table.columns), axis=1)
     kin_table = kin_table.reindex(sorted(kin_table.columns), axis=1)
+    iter_table = iter_table.reindex(sorted(iter_table.columns), axis=1)
 
     print("Jacquard TVD")
     print(tvd_table.round(4))
@@ -142,18 +163,15 @@ def print_tables(df, tool):
     print("Kinship Err")
     print(kin_table.round(4))
 
+    print("Average iterations")
+    print(iter_table.round(4))
+
 # KL divergence
 # Jensen shannon distance - sqrt(JSD), metric
 # TVD - metric. Simple to understand.
 # Hellinger distance - chord length between points on sphere, squared HD is lower bound of KL
 # Bhattacharyaa Coefficient = dot product between two vectors
 # Fisher Rao Metric - path length between points on the sphere
-
-#nerr = np.array([np.abs(tjac[rel] - njac[rel]) for rel in rels])
-#kerr = np.array([np.abs(tjac[rel] - kjac[rel]) for rel in rels])
-
-#print(np.mean(nerr, axis=0))
-#print(np.mean(kerr, axis=0))
 
 if __name__ == '__main__':
 
@@ -182,14 +200,14 @@ if __name__ == '__main__':
     g = sns.catplot(
         data=df,
         x="depth_str",
-        y="kinship",
+        y="jac8",
         hue="tool",
         hue_order=["true", "kestrel", "ngsrelate"],
         palette=cb_palette,
         col="rel",
         col_order=rel_order,
         col_wrap=4,
-        kind="box",
+        kind="strip",
         #inner="quartile",
         #cut=0,
         #height=3.5,
@@ -198,11 +216,9 @@ if __name__ == '__main__':
 
     g.set_axis_labels("Coverage", "Kinship")
     g.set_titles(col_template="Relationship: {col_name}")
-    g.fig.suptitle("Kinship Coefficient Distributions Across Depths", y=1.03, fontsize=16, fontweight="bold")
+    g.fig.suptitle("Jac2 Coefficient Distributions Across Depths", y=1.03, fontsize=16, fontweight="bold")
 
     plt.savefig("kinship_distribution_violin.pdf", bbox_inches="tight")
-
-    raise
 
     sns.set_theme(style="whitegrid", font_scale=1.1)
 
@@ -217,6 +233,7 @@ if __name__ == '__main__':
     g = sns.relplot(
         data=df,
         x="depth",
+        #y="kin_abs_err",
         y="kin_abs_err",
         hue="tool",
         style="tool",            # Adds distinct line styles and markers per tool

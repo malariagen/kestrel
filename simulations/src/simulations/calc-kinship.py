@@ -2,8 +2,8 @@ import gzip
 import argparse
 import subprocess
 from pathlib import Path
+import shutil
 
-from tqdm import tqdm
 import numpy as np
 
 from util import ResourceTracker
@@ -20,14 +20,20 @@ def extract_freq(infile, outfile):
                 fout.write(f"{fields[em_idx]}\n")
 
 def extract_samples(infile, outfile, samples_keep, samples_total):
+    print("Extracting samples of interest from", infile)
+
+    # Shortcut if we keep everything
+    if samples_keep == samples_total:
+        shutil.copyfile(infile, outfile)
+        return
+
     BYTES_PER_SAMPLE = 3 * 8  # 3 doubles
     BLOCK_KEEP = samples_keep * BYTES_PER_SAMPLE
     BLOCK_TOTAL = samples_total * BYTES_PER_SAMPLE
 
     # Calculating all pairwise coeffs for pairs takes very long and is unnecessary
     # We only care about the family samples
-    print("Extracting samples of interest from", infile)
-    with gzip.open(infile, "rb") as fin, gzip.open(outfile, "wb") as fout:
+    with gzip.open(infile, "rb") as fin, gzip.open(outfile, "wb", compresslevel=1) as fout:
         while chunk := fin.read(BLOCK_TOTAL):
             fout.write(chunk[:BLOCK_KEEP])
 
@@ -54,7 +60,8 @@ def analyze(rep_dir, seed_seq, threads, samples_keep, samples_total):
         seed = rng.integers(low=1, high=2**31)
         ngsrelate = ["ngsRelate", "-g", f"{depth_dir}/GL-angsd-{samples_keep}.glf.gz", "-n", f"{samples_keep}", "-f", f"{depth_dir}/angsd-freq.txt", "-O", f"{depth_dir}/ngsrelate.tsv", "-l", "0.0", "-r", str(seed), "-p", f"{threads}"]
         print(" ".join(ngsrelate))
-        subprocess.run(ngsrelate, check=True, text=True, capture_output=True)
+        with open(f"{depth_dir}/ngsrelate.out", "w") as f:
+            subprocess.run(ngsrelate, check=True, text=True, stdout=f, stderr=f)
 
         kestrel = ["kestrel", "-s", f"{samples_keep}", "-p", f"{threads}", f"{depth_dir}/GL.vcf.gz", f"{depth_dir}/kestrel.tsv"]
         print(" ".join(kestrel))
