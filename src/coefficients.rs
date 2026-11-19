@@ -228,15 +228,14 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
                 };
                 let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
-                // TODO check this too, we should be using Brier score?
-                let obj = dot(&delta, &mul(&quadratic_q, &delta)) / 2.0 + dot(&c, &delta);
-
                 if iters >= tune.qp_max_iter.get() {
                     log::warn!(
                         "No convergence for Jacquard coefficients, max iterations {} exceeded",
                         tune.qp_max_iter
                     );
                 }
+
+                let brier = dot(&delta, &mul(&quadratic_q, &delta)) + 2.0 * dot(&c, &delta) + 1.0;
 
                 // Gradient of the QP
                 let g = add(&mul(&quadratic_q, &delta), &c);
@@ -247,7 +246,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
                     y,
                     jacquard: delta,
                     iters,
-                    obj,
+                    obj: brier,
                     cond,
                 }
             });
@@ -273,7 +272,7 @@ fn compute_quadratic_matrix<L: ClsQuadratic>(
 
     // Append all rows from all M matrices into the lane vector
     // to make one giant matrix A. Then we calculate A^T A and
-    // scale it
+    // scale it.
 
     for m in m2.iter() {
         for gx in 0..3 {
@@ -301,5 +300,5 @@ fn compute_quadratic_matrix<L: ClsQuadratic>(
 
     builder.finish(true);
 
-    L::compute_quadratic(&lv)
+    L::compute_quadratic(&lv, num_variants)
 }
