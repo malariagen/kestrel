@@ -17,52 +17,54 @@ use crate::simd::avx512::Avx512Lane;
 use crate::simd::neon::NeonLane;
 
 pub trait ClsQuadratic: Lane {
-    fn compute_quadratic(a_mat: &LaneVector<Self, 9>, n: usize) -> Matrix<9>;
+    fn compute_quadratic(a_mat: &LaneVector<Self, 9>) -> Matrix<9>;
 }
 
 #[cfg(target_arch = "x86_64")]
 impl ClsQuadratic for Avx512Lane {
-    fn compute_quadratic(a_mat: &LaneVector<Avx512Lane, 9>, n: usize) -> Matrix<9> {
+    fn compute_quadratic(a_mat: &LaneVector<Avx512Lane, 9>) -> Matrix<9> {
         use std::arch::x86_64::__m512d;
-        return compute_quadratic_generic::<Avx512Lane, __m512d>(a_mat, n);
+        return compute_quadratic_generic::<Avx512Lane, __m512d>(a_mat);
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl ClsQuadratic for Avx2Lane {
-    fn compute_quadratic(a_mat: &LaneVector<Avx2Lane, 9>, n: usize) -> Matrix<9> {
+    fn compute_quadratic(a_mat: &LaneVector<Avx2Lane, 9>) -> Matrix<9> {
         use std::arch::x86_64::__m256d;
-        return compute_quadratic_generic::<Avx2Lane, __m256d>(a_mat, n);
+        return compute_quadratic_generic::<Avx2Lane, __m256d>(a_mat);
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl ClsQuadratic for NeonLane {
-    fn compute_quadratic(a_mat: &LaneVector<NeonLane, 9>, n: usize) -> Matrix<9> {
+    fn compute_quadratic(a_mat: &LaneVector<NeonLane, 9>) -> Matrix<9> {
         use std::arch::aarch64::float64x2_t;
-        return compute_quadratic_generic::<NeonLane, float64x2_t>(a_mat, n);
+        return compute_quadratic_generic::<NeonLane, float64x2_t>(a_mat);
     }
 }
 
 impl ClsQuadratic for f64 {
-    fn compute_quadratic(a_mat: &LaneVector<f64, 9>, n: usize) -> Matrix<9> {
-        return compute_quadratic_generic::<f64, f64>(a_mat, n);
+    fn compute_quadratic(a_mat: &LaneVector<f64, 9>) -> Matrix<9> {
+        return compute_quadratic_generic::<f64, f64>(a_mat);
     }
 }
 
-fn compute_quadratic_generic<L: Lane, S: Arith + LoadStore<L>>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> {
+fn compute_quadratic_generic<L: Lane, S: Arith + LoadStore<L>>(a_mat: &LaneVector<L, 9>) -> Matrix<9> {
     let blocks = a_mat.lanes();
     let remainder = a_mat.rem();
 
     let ba = compute_quadratic_lane::<L, S>(blocks);
     let ra = compute_quadratic_lane::<f64, f64>(remainder);
 
+    let n = a_mat.len() as f64;
+
     let mut ata = [[0.0f64; 9]; 9];
 
     let mut a_id = 0;
     for i in 0..9 {
         for j in i..9 {
-            let val = (ba[a_id] + ra[a_id]) / n as f64;
+            let val = (ba[a_id] + ra[a_id]) / n;
             ata[i][j] = val;
             ata[j][i] = val;
             a_id += 1;

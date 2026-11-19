@@ -56,6 +56,6 @@ divan = "0.1.21"
 nalgebra = {version = "0.35.0", features = ["rand"] }
 rand = "0.10.2"
 
-[[bench]]
-name = "bench"
-harness = false
+#[[bench]]
+#name = "bench"
+#harness = false

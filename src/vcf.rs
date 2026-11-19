@@ -226,9 +226,6 @@ fn parse_samples_gt(header: &Header, record: &Record, gt_vec: &mut Vec<[u8; 2]>)
                 bail!("Genotype is not diploid!")
             }
 
-            // We always use unphased genotypes
-            gt_arr.sort_unstable();
-
             gt_vec.push(gt_arr);
         } else {
             bail!("Value {:?} is not a genotype", value);

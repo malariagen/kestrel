@@ -55,15 +55,18 @@ mod kestrel {
         let gt_view = genotypes.as_array();
         let af_view = allele_frequencies.as_ref().map(|a| a.as_array());
 
-        let outputs = crate::wrapper::calculate_relatedness_coefficients_gt(gt_view, af_view, threads, iterations);
+        // TODO finish this
+        unimplemented!();
 
-        let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
+        // let outputs = crate::wrapper::calculate_relatedness_coefficients_gt(gt_view, af_view, threads, iterations);
 
-        Coefficients {
-            jacquard: jacquard.into_pyarray(py).unbind(),
-            kinship: kinship.into_pyarray(py).unbind(),
-            inbreeding: inbreeding.into_pyarray(py).unbind(),
-        }
+        // let (jacquard, kinship, inbreeding) = build_arrays(&outputs);
+
+        // Coefficients {
+        //     jacquard: jacquard.into_pyarray(py).unbind(),
+        //     kinship: kinship.into_pyarray(py).unbind(),
+        //     inbreeding: inbreeding.into_pyarray(py).unbind(),
+        // }
     }
 
     #[pyfunction]

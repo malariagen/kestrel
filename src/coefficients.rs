@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use ndarray::{Array2, Array3, ArrayView2, ArrayView3, Axis};
+use ndarray::{Array2, Axis};
 use paralight::{
     iter::{
         ExactParallelSourceExt, IntoExactParallelRefMutSource, IntoExactParallelSource, ParallelIteratorExt,
@@ -12,66 +12,29 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Vector, add, dot, mul, sum},
-    cls::{self},
-    conditional::{IIS_3, IIS_4},
-    eigenval,
-    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
-    lanevector::{LaneVector, LaneVectorBuilder},
-    mixture::MixtureMatrix,
-    quadratic::ClsQuadratic,
-    sqp::{self, Tuneables, estimate_condition_number},
-    wrapper::GlAf,
+    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::ClsQuadratic, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
 };
 
-pub fn calculate_allele_frequencies<const A: usize>(genotypes: ArrayView2<[u8; 2]>) -> Vec<[f64; A]> {
-    let num_v = genotypes.shape()[0];
-    let num_s = genotypes.shape()[1];
+// We consume the input array so it gets dropped
+fn genotype_indices(genotypes: Array2<[u8; 2]>) -> Array2<u8> {
+    let (num_v, num_s) = genotypes.dim();
 
-    let mut freq = vec![[0.0; A]; num_v];
+    let mut indices = Vec::with_capacity(num_s * num_v);
 
-    genotypes.outer_iter().map(|samples| {
-        
+    for sample_gts in genotypes.columns() {
+        for [a, b] in sample_gts {
+            // We only use unphased genotypes
+            let i = a.min(b);
+            let j = a.max(b);
 
-    });
-
-    // TODO less bounds checks
-    for v in 0..num_v {
-        for s in 0..num_s {
-            for h in 0..num_h {
-                let allele = genotypes[(v, s, h)];
-                freq[(v, usize::from(allele))] += 1.0;
-            }
+            // The index of (i, j) where i <= j (see the VCF spec)
+            // For A <= 4 this will not overflow a u8
+            let index = j * (j + 1) / 2 + i;
+            indices.push(index);
         }
     }
 
-    for v in 0..num_v {
-        let mut total = 0.0;
-        for a in 0..max_a {
-            total += freq[(v, a)];
-        }
-
-        if total > 0.0 {
-            for a in 0..max_a {
-                freq[(v, a)] /= total;
-            }
-        }
-    }
-
-    freq
-}
-
-fn reorder_genotypes(mut genotypes: ArrayView3<u8>) -> Array3<u8> {
-    genotypes.swap_axes(0, 1);
-    let mut genotypes = genotypes.as_standard_layout().into_owned();
-
-    let (pairs, _) = genotypes.as_slice_mut().unwrap().as_chunks_mut::<2>();
-
-    for pair in pairs {
-        pair.sort_unstable();
-    }
-
-    genotypes
+    Array2::from_shape_vec((num_s, num_v), indices).unwrap()
 }
 
 pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjective + MixtureMatrix>(
@@ -197,35 +160,31 @@ impl Default for Output {
 }
 
 pub fn calculate_coefficients_gt<L: ClsQuadratic>(
-    genotypes: ArrayView3<u8>,
-    allele_frequencies: ArrayView2<f64>,
+    genotypes: Genotypes,
+    allele_frequencies: AlleleFrequencies,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
+    num_samples: Option<usize>,
 ) -> Vec<Vec<Output>> {
-    let genotypes = reorder_genotypes(genotypes);
+    let num_samples = num_samples.unwrap_or(genotypes.samples);
+    let num_variants = genotypes.variants;
 
-    // TODO calculate this across each locus to figure out how many alleles there are
-    // Then we can condense the stacked matrix to make it smaller (and faster)
-    let num_a = allele_frequencies.shape()[1];
+    let g2 = genotype_indices(genotypes.gt2);
+    let g3 = genotype_indices(genotypes.gt3);
+    let g4 = genotype_indices(genotypes.gt4);
 
-    let all_joint_genotypes = cls::calculate_all_joint_genotypes(num_a);
-    let stacked_m = cls::calculate_stacked_m(&all_joint_genotypes, allele_frequencies);
-    let lookup_table = cls::calculate_joint_genotype_lookup_table(&all_joint_genotypes, num_a);
+    let m2 = cls::calculate_m_matrices(&IIS_2, &allele_frequencies.af2);
+    let m3 = cls::calculate_m_matrices(&IIS_3, &allele_frequencies.af3);
+    let m4 = cls::calculate_m_matrices(&IIS_4, &allele_frequencies.af4);
 
-    let mut lv = LaneVector::new(stacked_m.len());
-    lv.fill_from_slice(&stacked_m);
-
-    let num_v = allele_frequencies.shape()[0];
-    let quadratic_q = L::compute_quadratic(&lv, num_v);
-
-    let num_samples = genotypes.dim().0;
+    let quadratic_q = compute_quadratic_matrix::<L>(num_variants, &m2, &m3, &m4);
 
     let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
     log::info!(
         "Calculating Jacquard coefficients for {} pairs using {} sites",
         num_pairs,
-        num_v
+        num_variants
     );
 
     let bar = ProgressBar::new(num_pairs.try_into().unwrap())
@@ -245,22 +204,28 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each(|(out, x)| {
-            let genotypes_x = genotypes.index_axis(Axis(0), x);
+
+            let x2 = g2.index_axis(Axis(0), x);
+            let x3 = g3.index_axis(Axis(0), x);
+            let x4 = g4.index_axis(Axis(0), x);
+
             let iter = (x..num_samples).map(|y| {
-                let genotypes_y = genotypes.index_axis(Axis(0), y);
+
+                let y2 = g2.index_axis(Axis(0), y);
+                let y3 = g3.index_axis(Axis(0), y);
+                let y4 = g4.index_axis(Axis(0), y);
+
+                let c2 = cls::calculate_quadratic_c( &m2, x2.view(), y2.view(),);
+                let c3 = cls::calculate_quadratic_c( &m3, x3.view(), y3.view(),);
+                let c4 = cls::calculate_quadratic_c( &m4, x4.view(), y4.view(),);
+
+                let c = scale_div(-(num_variants as f64), &add(&c2, &add(&c3, &c4)));
+
                 let delta = if x == y {
                     [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
                 } else {
                     [1.0 / 9.0; 9]
                 };
-                let c = cls::calculate_quadratic_c(
-                    &all_joint_genotypes,
-                    &stacked_m,
-                    genotypes_x,
-                    genotypes_y,
-                    &lookup_table,
-                );
-
                 let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
                 // TODO check this too, we should be using Brier score?
@@ -297,17 +262,44 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     nested_outputs
 }
 
-#[cfg(test)]
-mod test {
-    use crate::coefficients::reorder_genotypes;
-    use ndarray::array;
+fn compute_quadratic_matrix<L: ClsQuadratic>(
+    num_variants: usize,
+    m2: &Vec<[[[f64; 9]; 3]; 3]>,
+    m3: &Vec<[[[f64; 9]; 6]; 6]>,
+    m4: &Vec<[[[f64; 9]; 10]; 10]>
+) -> Matrix<9> {
+    let mut lv = LaneVector::new(num_variants);
+    let mut builder = LaneVectorBuilder::new(&mut lv);
 
-    #[test]
-    fn test_reorder_genotypes() {
-        let genotypes = array![[[1, 2], [1, 0], [4, 3]], [[3, 0], [1, 1], [1, 1]]];
+    // Append all rows from all M matrices into the lane vector
+    // to make one giant matrix A. Then we calculate A^T A and
+    // scale it
 
-        let expected_genotypes = array![[[1, 2], [0, 3]], [[1, 0], [1, 1]], [[3, 4], [1, 1]],];
-
-        assert_eq!(reorder_genotypes(genotypes.view()), expected_genotypes);
+    for m in m2.iter() {
+        for gx in 0..3 {
+            for gy in 0..3 {
+                builder.push(&m[gx][gy]);
+            }
+        }
     }
+
+    for m in m3.iter() {
+        for gx in 0..6 {
+            for gy in 0..6 {
+                builder.push(&m[gx][gy]);
+            }
+        }
+    }
+
+    for m in m4.iter() {
+        for gx in 0..10 {
+            for gy in 0..10 {
+                builder.push(&m[gx][gy]);
+            }
+        }
+    }
+
+    builder.finish(true);
+
+    L::compute_quadratic(&lv)
 }

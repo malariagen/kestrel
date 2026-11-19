@@ -1,10 +1,12 @@
+#[cfg(target_arch = "x86_64")]
+use std::num;
 use std::num::{NonZeroU64, NonZeroUsize};
 
 use ndarray::{Array2, ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    coefficients::{Output, calculate_allele_frequencies}, lanearray2::{LaneArray2, convert_to_lanes}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker, vcf::{AlleleFrequencies, GenotypeLikelihoods, Genotypes},
+    coefficients::{Output}, lanearray2::{LaneArray2, convert_to_lanes}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker, vcf::{AlleleFrequencies, GenotypeLikelihoods, Genotypes},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -25,12 +27,13 @@ pub fn calculate_relatedness_coefficients_gt(
     let tracker = ResourceTracker::new();
 
     // This works, suprisingly
-    let calculated_af;
     let allele_frequencies = match allele_frequencies {
         Some(af) => af,
         None => {
-            calculated_af = calculate_allele_frequencies(genotypes);
-            calculated_af.view()
+            let af2 = calculate_allele_frequencies::<2>(genotypes.gt2.view());
+            let af3 = calculate_allele_frequencies::<3>(genotypes.gt3.view());
+            let af4 = calculate_allele_frequencies::<4>(genotypes.gt4.view());
+            AlleleFrequencies { af2, af3, af4 }
         }
     };
 
@@ -48,6 +51,7 @@ pub fn calculate_relatedness_coefficients_gt(
             allele_frequencies,
             &mut thread_pool,
             iterations,
+            num_samples
         ),
         #[cfg(target_arch = "x86_64")]
         Simd::Avx512 => crate::coefficients::calculate_coefficients_gt::<Avx512Lane>(
@@ -55,6 +59,7 @@ pub fn calculate_relatedness_coefficients_gt(
             allele_frequencies,
             &mut thread_pool,
             iterations,
+            num_samples
         ),
         #[cfg(target_arch = "aarch64")]
         Simd::Neon => crate::coefficients::calculate_coefficients_gt::<NeonLane>(
@@ -62,12 +67,14 @@ pub fn calculate_relatedness_coefficients_gt(
             allele_frequencies,
             &mut thread_pool,
             iterations,
+            num_samples
         ),
         Simd::Scalar => crate::coefficients::calculate_coefficients_gt::<f64>(
             genotypes,
             allele_frequencies,
             &mut thread_pool,
             iterations,
+            num_samples
         ),
     };
 
@@ -148,7 +155,6 @@ pub fn calculate_relatedness_coefficients_gl(
     tracker.checkpoint();
 
     // TODO in theory we could do some checks here that the af are non-negative, sum to one
-    // Indexing will work, etc.
 
     let outputs = match simd {
         #[cfg(target_arch = "x86_64")]
@@ -398,4 +404,21 @@ fn remove_zero_frequencies<L: Lane, const A: usize, const G: usize>(
             }
         }
     });
+}
+
+
+fn calculate_allele_frequencies<const A: usize>(genotypes: ArrayView2<[u8; 2]>) -> Vec<[f64; A]> {
+    genotypes.outer_iter().map(|samples| {
+        let mut f = [0u64; A];
+
+        for gt in samples.iter() {
+            f[usize::from(gt[0])] += 1;
+            f[usize::from(gt[1])] += 1;
+        }
+
+        let total_alleles = 2 * samples.len();
+
+        f.map(|c| (c as f64) / (total_alleles as f64))
+
+    }).collect()
 }
