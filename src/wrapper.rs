@@ -4,12 +4,7 @@ use ndarray::{Array2, ArrayView2, ArrayView3};
 use paralight::threads::{CpuPinningPolicy, RangeStrategy, ThreadCount, ThreadPool, ThreadPoolBuilder};
 
 use crate::{
-    coefficients::{Output, calculate_allele_frequencies},
-    lanearray2::{LaneArray2, convert_to_lanes},
-    lanevector::{LaneVector, LaneVectorBuilder},
-    simd::{Lane, simd::Simd},
-    util::ResourceTracker,
-    vcf::{AlleleFrequencies, GenotypeLikelihoods},
+    coefficients::{Output, calculate_allele_frequencies}, lanearray2::{LaneArray2, convert_to_lanes}, lanevector::{LaneVector, LaneVectorBuilder}, simd::{Lane, simd::Simd}, util::ResourceTracker, vcf::{AlleleFrequencies, GenotypeLikelihoods, Genotypes},
 };
 
 #[cfg(target_arch = "x86_64")]
@@ -20,11 +15,15 @@ use crate::simd::avx512::Avx512Lane;
 use crate::simd::neon::NeonLane;
 
 pub fn calculate_relatedness_coefficients_gt(
-    genotypes: ArrayView3<u8>,
-    allele_frequencies: Option<ArrayView2<f64>>,
+    genotypes: Genotypes,
+    allele_frequencies: Option<AlleleFrequencies>,
     threads: Option<NonZeroUsize>,
     iterations: NonZeroU64,
+    // TODO maybe add maf support here too? And then remove entries that are zeroed out similar to GL
+    num_samples: Option<usize>,
 ) -> Vec<Vec<Output>> {
+    let tracker = ResourceTracker::new();
+
     // This works, suprisingly
     let calculated_af;
     let allele_frequencies = match allele_frequencies {
@@ -35,19 +34,8 @@ pub fn calculate_relatedness_coefficients_gt(
         }
     };
 
-    let num_v = genotypes.shape()[0];
-    let num_s = genotypes.shape()[1];
-    let num_h = genotypes.shape()[2];
-
-    assert!(num_v > 0, "Must have at least one variant");
-    assert!(num_s > 0, "Must have at least one sample");
-    assert!(num_h == 2, "Must have a ploidy of 2");
-
     // TODO in theory we could do some checks here that the af are non-negative, sum to one
     // Indexing will work, etc.
-
-    assert!(allele_frequencies.shape()[0] == num_v, "Must have same dimension");
-    assert!(allele_frequencies.shape()[1] == 4, "Must have all four alleles");
 
     let simd = Simd::detect();
 
@@ -82,6 +70,8 @@ pub fn calculate_relatedness_coefficients_gt(
             iterations,
         ),
     };
+
+    tracker.checkpoint();
 
     outputs
 }

@@ -108,11 +108,11 @@ pub fn run_cli(args: &[String]) -> Result<()> {
             (result.samples, outputs)
         }
         Tag::GT => {
-            let (samples, gt, af) = crate::vcf::parse_vcf_gt(vcf_file, parse_af)?;
+            let result = crate::vcf::parse_vcf_gt(vcf_file, parse_af)?;
             let af = af.as_ref().map(|a| a.view());
             let outputs =
                 crate::wrapper::calculate_relatedness_coefficients_gt(gt.view(), af, args.threads, args.iterations);
-            (samples, outputs)
+            (result.samples, outputs)
         }
     };
 

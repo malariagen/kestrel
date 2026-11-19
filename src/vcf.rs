@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use ndarray::{Array2, Array3};
+use ndarray::Array2;
 use noodles::vcf::Header;
 use noodles::vcf::Record;
 use noodles::vcf::variant::record::AlternateBases;
@@ -11,119 +11,12 @@ use noodles::vcf::variant::record::samples::Series;
 use noodles::vcf::variant::record::samples::series::value::Array as SeriesArray;
 use noodles::vcf::variant::record::samples::series::value::Value as SeriesValue;
 
-pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<(Vec<String>, Array3<u8>, Option<Array2<f64>>)> {
-    let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
-    let header = reader.read_header()?;
-
-    let samples = header.sample_names().iter().map(|s| s.to_owned()).collect::<Vec<_>>();
-
-    let num_samples = samples.len();
-
-    let mut skipped_missing = 0;
-    let mut not_snp = 0;
-    let mut total_variants = 0;
-    let mut num_variants = 0;
-
-    // TODO clean up this stuff too
-    // Perhaps for GT we can allow arbitrary number, not just 4 bases?
-    // I think that could work in future
-
-    let mut genotypes = Vec::<u8>::new(); // V x S x 2
-    let mut sample_gts = Vec::with_capacity(num_samples * 2);
-    let mut gt_buf = Vec::with_capacity(2);
-
-    let mut allele_frequencies = Vec::<f64>::new(); // V x 4
-    let mut af_buf = Vec::<f64>::with_capacity(4);
-
-    'variant: for result in reader.records() {
-        let record = result.context("Error reading record")?;
-
-        total_variants += 1;
-
-        let num_bases = count_snp_bases(&record)?;
-
-        if let Some(num_bases) = num_bases {
-            if num_bases < 2 || num_bases > 4 {
-                not_snp += 1;
-                continue;
-            }
-        } else {
-            not_snp += 1;
-            continue;
-        }
-
-        let record_samples = record.samples();
-        let gt_series = record_samples.select("GT").context("No GT data found")?;
-
-        sample_gts.clear();
-
-        for result in gt_series.iter(&header) {
-            let value = result?.context("No genotype for sample found")?;
-
-            if let SeriesValue::Genotype(gt) = value {
-                gt_buf.clear();
-
-                for result_allele in gt.iter() {
-                    let option_allele = result_allele.context("Error reading genotype")?;
-                    match option_allele.0 {
-                        Some(a) => {
-                            let allele = u8::try_from(a).context("Allele is greater than 255")?;
-                            gt_buf.push(allele);
-                        }
-                        // Skip this site if some of the data is missing
-                        None => {
-                            skipped_missing += 1;
-                            continue 'variant;
-                        }
-                    }
-                }
-
-                if gt_buf.len() == 2 {
-                    sample_gts.extend_from_slice(&gt_buf);
-                } else {
-                    bail!("Genotype {:?} is not diploid", gt);
-                }
-            } else {
-                bail!("Value {:?} is not a genotype", value);
-            }
-        }
-
-        num_variants += 1;
-        genotypes.extend_from_slice(&sample_gts);
-
-        // TODO fix later
-        // if parse_af {
-        //     parse_variant_af(&header, &record)?;
-        // }
-    }
-
-    log::info!("Parsed {} total sites", total_variants);
-    log::info!("Skipped {} sites that were not SNPs", not_snp);
-    log::info!("Skipped {} sites with missing data", skipped_missing);
-    log::info!("Kept {} final sites", num_variants);
-
-    let gts = Array3::<u8>::from_shape_vec((num_variants, num_samples, 2), genotypes).unwrap();
-
-    let afs = if parse_af {
-        let afs = Array2::<f64>::from_shape_vec((num_variants, 4), allele_frequencies).unwrap();
-        Some(afs)
-    } else {
-        None
-    };
-
-    Ok((samples, gts, afs))
-}
-
-pub struct ParseGL {
-    pub samples: Vec<String>,
-    pub gl: GenotypeLikelihoods,
-    pub af: Option<AlleleFrequencies>,
-}
-
-pub struct AlleleFrequencies {
-    pub af2: Vec<[f64; 2]>,
-    pub af3: Vec<[f64; 3]>,
-    pub af4: Vec<[f64; 4]>,
+pub struct Genotypes {
+    pub gt2: Array2<[u8; 2]>,
+    pub gt3: Array2<[u8; 2]>,
+    pub gt4: Array2<[u8; 2]>,
+    pub samples: usize,
+    pub variants: usize,
 }
 
 pub struct GenotypeLikelihoods {
@@ -132,6 +25,36 @@ pub struct GenotypeLikelihoods {
     pub gl4: Array2<[f64; 10]>,
     pub samples: usize,
     pub variants: usize,
+}
+
+pub struct AlleleFrequencies {
+    pub af2: Vec<[f64; 2]>,
+    pub af3: Vec<[f64; 3]>,
+    pub af4: Vec<[f64; 4]>,
+}
+
+impl Genotypes {
+    fn new(gt2: Array2<[u8; 2]>, gt3: Array2<[u8; 2]>, gt4: Array2<[u8; 2]>) -> Self {
+        let (num_v2, num_s2) = gt2.dim();
+        let (num_v3, num_s3) = gt3.dim();
+        let (num_v4, num_s4) = gt4.dim();
+
+        let variants = num_v2 + num_v3 + num_v4;
+
+        assert!(variants > 0, "Must have at least one site");
+        assert!(
+            num_s2 == num_s3 && num_s3 == num_s4 && num_s2 > 0,
+            "Must have at least one sample"
+        );
+
+        Self {
+            gt2,
+            gt3,
+            gt4,
+            variants,
+            samples: num_s2,
+        }
+    }
 }
 
 impl GenotypeLikelihoods {
@@ -156,6 +79,163 @@ impl GenotypeLikelihoods {
             samples: num_s2,
         }
     }
+}
+
+pub struct ParseGL {
+    pub samples: Vec<String>,
+    pub gl: GenotypeLikelihoods,
+    pub af: Option<AlleleFrequencies>,
+}
+
+pub struct ParseGT {
+    pub samples: Vec<String>,
+    pub gt: Genotypes,
+    pub af: Option<AlleleFrequencies>,
+}
+
+pub fn parse_vcf_gt(file: &Path, parse_af: bool) -> Result<ParseGT> {
+    let mut reader = noodles::vcf::io::reader::Builder::default().build_from_path(file)?;
+    let header = reader.read_header()?;
+
+    let samples = header.sample_names().iter().map(|s| s.to_owned()).collect::<Vec<_>>();
+
+    let num_samples = samples.len();
+
+    let mut not_snp = 0;
+    let mut total_variants = 0;
+    let mut skipped_missing = 0;
+
+    let mut num_variants2 = 0;
+    let mut num_variants3 = 0;
+    let mut num_variants4 = 0;
+
+    let mut gt2 = Vec::<[u8; 2]>::new(); // V2 x S
+    let mut gt3 = Vec::<[u8; 2]>::new(); // V3 x S
+    let mut gt4 = Vec::<[u8; 2]>::new(); // V4 x S
+
+    let mut af2 = Vec::<[f64; 2]>::new(); // V2
+    let mut af3 = Vec::<[f64; 3]>::new(); // V3
+    let mut af4 = Vec::<[f64; 4]>::new(); // V4
+
+    for result in reader.records() {
+        let record = result.context("Error reading record")?;
+
+        total_variants += 1;
+
+        let num_bases = count_snp_bases(&record)?;
+
+        if let Some(num_bases) = num_bases {
+            match num_bases {
+                2 => {
+                    if parse_samples_gt(&header, &record, &mut gt2)? {
+                        if parse_af {
+                            let af = parse_variant_af(&header, &record)?;
+                            af2.push(af);
+                        }
+                        num_variants2 += 1;
+                    } else {
+                        skipped_missing += 1;
+                    }
+                }
+                3 => {
+                    if parse_samples_gt(&header, &record, &mut gt3)? {
+                        if parse_af {
+                            let af = parse_variant_af(&header, &record)?;
+                            af3.push(af);
+                        }
+                        num_variants3 += 1;
+                    } else {
+                        skipped_missing += 1;
+                    }
+                }
+                4 => {
+                    if parse_samples_gt(&header, &record, &mut gt4)? {
+                        if parse_af {
+                            let af = parse_variant_af(&header, &record)?;
+                            af4.push(af);
+                        }
+                        num_variants4 += 1;
+                    } else {
+                        skipped_missing += 1;
+                    }
+                }
+                _ => {
+                    not_snp += 1;
+                }
+            }
+        } else {
+            not_snp += 1;
+        }
+    }
+
+    log::info!("Parsed {} total sites", total_variants);
+    log::info!("Skipped {} sites that were not SNPs", not_snp);
+    log::info!("Skipped {} sites with missing data", skipped_missing);
+    log::info!("Found {} di-allelic sites", num_variants2);
+    log::info!("Found {} tri-allelic sites", num_variants3);
+    log::info!("Found {} tetra-allelic sites", num_variants4);
+
+    let gt2 = Array2::from_shape_vec((num_variants2, num_samples), gt2).unwrap();
+    let gt3 = Array2::from_shape_vec((num_variants3, num_samples), gt3).unwrap();
+    let gt4 = Array2::from_shape_vec((num_variants4, num_samples), gt4).unwrap();
+
+    let af = if parse_af {
+        Some(AlleleFrequencies { af2, af3, af4 })
+    } else {
+        None
+    };
+
+    let gt = Genotypes::new(gt2, gt3, gt4);
+
+    let parse_gt = ParseGT { samples, gt, af };
+
+    Ok(parse_gt)
+}
+
+fn parse_samples_gt(header: &Header, record: &Record, gt_vec: &mut Vec<[u8; 2]>) -> Result<bool> {
+    let record_samples = record.samples();
+    let gt_series = record_samples.select("GT").context("No GT data found")?;
+
+    let original_len = gt_vec.len();
+
+    for result in gt_series.iter(header) {
+        let value = result?.context("No genotype for sample found")?;
+
+        if let SeriesValue::Genotype(gt) = value {
+            let mut gt_arr = [0u8; 2];
+            let mut num_gt = 0;
+
+            for result_allele in gt.iter() {
+                let (option_allele, _) = result_allele.context("Error reading genotype")?;
+                match option_allele {
+                    Some(a) => {
+                        let allele = u8::try_from(a).context("Allele is greater than 255")?;
+                        let index = gt_arr.get_mut(num_gt).context("Genotype is not diploid!")?;
+                        *index = allele;
+                        num_gt += 1;
+                    }
+                    // Skip this site if some of the data is missing
+                    None => {
+                        gt_vec.truncate(original_len);
+                        return Ok(false);
+                    }
+                }
+            }
+
+            if num_gt != 2 {
+                bail!("Genotype is not diploid!")
+            }
+
+            // We always use unphased genotypes
+            gt_arr.sort_unstable();
+
+            gt_vec.push(gt_arr);
+        } else {
+            bail!("Value {:?} is not a genotype", value);
+        }
+    }
+
+    Ok(true)
 }
 
 pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
@@ -228,20 +308,18 @@ pub fn parse_vcf_gl(file: &Path, parse_af: bool, gl: bool) -> Result<ParseGL> {
                 }
                 _ => {
                     not_snp += 1;
-                    continue;
                 }
             }
         } else {
             not_snp += 1;
-            continue;
         }
     }
 
     log::info!("Parsed {} total sites", total_variants);
     log::info!("Skipped {} sites that were not SNPs", not_snp);
-    log::info!("Kept {} di-allelic sites", num_variants2);
-    log::info!("Kept {} tri-allelic sites", num_variants3);
-    log::info!("Kept {} tetra-allelic sites", num_variants4);
+    log::info!("Found {} di-allelic sites", num_variants2);
+    log::info!("Found {} tri-allelic sites", num_variants3);
+    log::info!("Found {} tetra-allelic sites", num_variants4);
 
     let gl2 = Array2::from_shape_vec((num_variants2, num_samples), gl2).unwrap();
     let gl3 = Array2::from_shape_vec((num_variants3, num_samples), gl3).unwrap();
@@ -335,7 +413,7 @@ fn parse_samples_pl<const G: usize>(header: &Header, record: &Record, gl_vec: &m
                 // to push straight to the output vector.
                 gl_vec.push(prob)
             } else {
-                bail!("Array {:?} does not contain floats", pl_array);
+                bail!("Array {:?} does not contain integers", pl_array);
             }
         } else {
             bail!("Value {:?} is not an array", value);
@@ -399,7 +477,7 @@ fn parse_variant_af<const A: usize>(header: &Header, record: &Record) -> Result<
 
             Ok(af_arr)
         } else {
-            bail!("Array {:?} is does not contain floats", af_array);
+            bail!("Array {:?} does not contain floats", af_array);
         }
     } else {
         bail!("Value {:?} is not an array", af_info);

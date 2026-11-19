@@ -24,14 +24,16 @@ use crate::{
     wrapper::GlAf,
 };
 
-pub fn calculate_allele_frequencies(genotypes: ArrayView3<u8>) -> Array2<f64> {
+pub fn calculate_allele_frequencies<const A: usize>(genotypes: ArrayView2<[u8; 2]>) -> Vec<[f64; A]> {
     let num_v = genotypes.shape()[0];
     let num_s = genotypes.shape()[1];
-    let num_h = genotypes.shape()[2];
 
-    let max_a: usize = (genotypes.iter().max().unwrap() + 1).into();
+    let mut freq = vec![[0.0; A]; num_v];
 
-    let mut freq = Array2::<f64>::zeros((num_v, max_a));
+    genotypes.outer_iter().map(|samples| {
+        
+
+    });
 
     // TODO less bounds checks
     for v in 0..num_v {
