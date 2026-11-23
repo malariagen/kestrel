@@ -1,6 +1,6 @@
 [package]
 name = "kestrel"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Fast relatedness estimation from genomic data"
 repository = "https://github.com/malariagen/kestrel"
