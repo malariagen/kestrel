@@ -1,5 +1,5 @@
 <a href="https://pypi.python.org/pypi/kestrel-popgen"><img alt="Latest PyPI version" src="https://img.shields.io/pypi/v/kestrel-popgen.svg"></a>
-<a href="https://pypi.python.org/pypi/kestrel-popgen"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/kestre-popgen"></a>
+<a href="https://pypi.python.org/pypi/kestrel-popgen"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/kestrel-popgen"></a>
 <a href="https://deps.rs/repo/github/malariagen/kestrel"><img alt="Dependency status" src="https://deps.rs/repo/github/malariagen/kestrel/status.svg"></a>
 <a href="https://www.mozilla.org/en-US/MPL/2.0/"><img alt="License" src="https://img.shields.io/pypi/l/kestrel-popgen.svg"></a>
 
