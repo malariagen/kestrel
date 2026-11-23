@@ -1,3 +1,8 @@
+<a href="https://pypi.python.org/pypi/kestrel-popgen"><img alt="Latest PyPI version" src="https://img.shields.io/pypi/v/kestrel-popgen.svg"></a>
+<a href="https://pypi.python.org/pypi/kestrel-popgen"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/kestre-popgen"></a>
+<a href="https://deps.rs/repo/github/malariagen/kestrel"><img alt="Dependency status" src="https://deps.rs/repo/github/malariagen/kestrel/status.svg"></a>
+<a href="https://www.mozilla.org/en-US/MPL/2.0/"><img alt="License" src="https://img.shields.io/pypi/l/kestrel-popgen.svg"></a>
+
 # Kestrel
 
 Kestrel estimates relatedness coefficients from genomic data. It was started during [GSoC 2026](https://summerofcode.withgoogle.com/programs/2026/projects/ar0jqOKO) and uses an SQP algorithm to calculate allele frequencies and Jacquard coefficients using a maximum likelihood estimator.
