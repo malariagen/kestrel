@@ -59,6 +59,9 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
     let num_v = n2 + n3 + n4;
 
     let num_samples = num_samples.unwrap_or(glaf.num_samples);
+    if num_samples > glaf.num_samples {
+        panic!("Requested samples {} exceeds total samples {}", num_samples, glaf.num_samples);
+    }
 
     let num_pairs = (num_samples * (num_samples + 1)) / 2;
 
@@ -176,6 +179,10 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     num_samples: Option<usize>,
 ) -> Vec<Vec<Output>> {
     let num_samples = num_samples.unwrap_or(genotypes.samples);
+    if num_samples > genotypes.samples {
+        panic!("Requested samples {} exceeds total samples {}", num_samples, genotypes.samples);
+    }
+
     let num_variants = genotypes.variants;
 
     let g2 = genotype_indices(genotypes.gt2);

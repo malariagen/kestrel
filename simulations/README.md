@@ -29,7 +29,9 @@ For real AnoGam 3L
 ```
 python subsample-vcf.py gaard-3L.vcf.gz 100000 3L-GAARD-100k -r 5
 python simulate-gl.py 3L-GAARD-100k --depths=1,5,10,20,30
-python calc-kinship.py 3L-GAARD-100k -p 20 -k 666 -t 666
+#python calc-kinship-gl.py 3L-GAARD-100k -p 20 -k 666 -t 666
+python calc-kinship-gt.py 3L-GAARD-100k -p 20 -k 100 -t 666
+python calc-kinship-gl.py 3L-GAARD-100k -p 20 -k 100 -t 666
 python analyze-results 3L-GAARD-100k
 ```
 

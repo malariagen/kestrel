@@ -37,13 +37,14 @@ def extract_samples(infile, outfile, samples_keep, samples_total):
         while chunk := fin.read(BLOCK_TOTAL):
             fout.write(chunk[:BLOCK_KEEP])
 
-def analyze(rep_dir, seed_seq, threads, samples_keep, samples_total):
+def calculate(rep_dir, seed_seq, threads, samples_keep, samples_total):
 
     rng = np.random.default_rng(seed_seq)
 
     depth_dirs = [path for path in rep_dir.iterdir() if path.is_dir()]
 
     for depth_dir in depth_dirs:
+        print(f"Calculating {depth_dir}...")
 
         seed = rng.integers(low=1, high=2**31)
 
@@ -92,7 +93,7 @@ if __name__ == '__main__':
 
     with ResourceTracker():
         for (rep_dir, seq) in zip(rep_dirs, seed_seq.spawn(len(rep_dirs))):
-            analyze(rep_dir, seq, threads, args.samples_keep, args.samples_total)
+            calculate(rep_dir, seq, threads, args.samples_keep, args.samples_total)
 
 
 # angsd -vcf-gl AnoGam-2L-GL.vcf.gz -domajorminor 1 -domaf 1 -doGlf 3 -out sim
