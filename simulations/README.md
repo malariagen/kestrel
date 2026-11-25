@@ -36,3 +36,7 @@ python analyze-results 3L-GAARD-100k
 ```
 
 For real HomSap 22
+
+```
+wget https://storage.googleapis.com/gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.sites.chr22.vcf.bgz
+```

@@ -10,7 +10,7 @@ impl Log for __m256d {
 }
 
 #[inline]
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,fma")]
 fn log_avx2(mut d: __m256d) -> __m256d {
     // Normalize d if subnormal
     let maskd = _mm256_cmp_pd(d, _mm256_set1_pd(f64::MIN_POSITIVE), _CMP_LT_OQ);

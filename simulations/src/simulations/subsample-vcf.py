@@ -8,8 +8,6 @@ import numpy as np
 
 from util import ResourceTracker
 
-# TODO thinning by distance is better
-
 def subsample_vcf(input_path: str, out_dir: str, n_sites: int, rep: int, seed):
 
     print("Subsampling rep", rep)
