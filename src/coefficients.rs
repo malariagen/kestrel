@@ -12,16 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Matrix, Vector, add, dot, mul, scale_div},
-    cls::{self},
-    conditional::{IIS_2, IIS_3, IIS_4},
-    jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective},
-    lanevector::{LaneVector, LaneVectorBuilder},
-    mixture::MixtureMatrix,
-    quadratic::ClsQuadratic,
-    sqp::{self, Tuneables, estimate_condition_number},
-    vcf::{AlleleFrequencies, Genotypes},
-    wrapper::GlAf,
+    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::{self, ClsQuadratic}, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
 };
 
 // We consume the input array so it gets dropped
@@ -235,12 +226,21 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
 
                 let c = scale_div(-(num_variants as f64), &add(&c2, &add(&c3, &c4)));
 
-                let delta = if x == y {
-                    [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0]
+                let (delta, iters) = if x == y {
+                    // When comparing an individual to themselves, only Delta1 and Delta7
+                    // are possible, so we can solve for those and set the rest to zero
+                    let x0 = [0.5, 0.5];
+                    let c = [c[0], c[6]];
+                    let quadratic_q = [
+                        [quadratic_q[0][0], quadratic_q[0][6]],
+                        [quadratic_q[6][0], quadratic_q[6][6]]
+                    ];
+                    let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &x0, true, &tune);
+                    ([delta[0], 0.0, 0.0, 0.0, 0.0, 0.0, delta[1], 0.0, 0.0,], iters)
                 } else {
-                    [1.0 / 9.0; 9]
+                    let x0 = [1.0 / 9.0; 9];
+                    sqp::solve_qp_active_set(&quadratic_q, &c, &x0, true, &tune)
                 };
-                let (delta, iters) = sqp::solve_qp_active_set(&quadratic_q, &c, &delta, true, &tune);
 
                 if iters >= tune.qp_max_iter.get() {
                     log::warn!(
