@@ -3,7 +3,7 @@ use core::arch::aarch64::*;
 use super::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, D1_32, LOG_2_HI, LOG_2_LO, Log};
 
 impl Log for float64x2_t {
-    #[inline]
+    #[inline(always)]
     fn log(self) -> Self {
         unsafe { log_neon(self) }
     }

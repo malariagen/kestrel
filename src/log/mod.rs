@@ -28,7 +28,7 @@ pub trait Log {
 // Assumption: e_a >= e_b
 // https://en.wikipedia.org/wiki/2Sum
 // (a + b, (b - ((a + b) - a)))
-#[inline]
+#[inline(always)]
 fn fast_two_sum_ss<S: Arith>(a: S, b: S) -> (S, S) {
     let s = a.add(b);
     let z = s.sub(a);
@@ -36,14 +36,14 @@ fn fast_two_sum_ss<S: Arith>(a: S, b: S) -> (S, S) {
     (s, t)
 }
 
-#[inline]
+#[inline(always)]
 fn fast_two_sum_ds<S: Arith>(a: (S, S), b: S) -> (S, S) {
     let (s, t) = fast_two_sum_ss(a.0, b);
     let e = t.add(a.1);
     (s, e)
 }
 
-#[inline]
+#[inline(always)]
 fn fast_two_sum_dd<S: Arith>(a: (S, S), b: (S, S)) -> (S, S) {
     let (s, t) = fast_two_sum_ss(a.0, b.0);
     // The sleef code calculates (t + a.1) + b.1
@@ -55,21 +55,21 @@ fn fast_two_sum_dd<S: Arith>(a: (S, S), b: (S, S)) -> (S, S) {
     (s, e)
 }
 
-#[inline]
+#[inline(always)]
 fn fast_two_mult_ss<S: Arith>(a: S, b: S) -> (S, S) {
     let p = a.mul(b);
     let r = a.fms(b, p);
     (p, r)
 }
 
-#[inline]
+#[inline(always)]
 fn mul_ds<S: Arith>(a: (S, S), b: S) -> (S, S) {
     let (p, r) = fast_two_mult_ss(a.0, b);
     let e = a.1.fma(b, r);
     (p, e)
 }
 
-#[inline]
+#[inline(always)]
 fn div_sd<S: Arith>(a: S, b: (S, S)) -> (S, S) {
     let one = S::set(1.0);
 
@@ -84,17 +84,17 @@ fn div_sd<S: Arith>(a: S, b: (S, S)) -> (S, S) {
     (q0, q1)
 }
 
-#[inline]
+#[inline(always)]
 fn poly7<S: Arith>(x: S, x2: S, x4: S, c6: S, c5: S, c4: S, c3: S, c2: S, c1: S, c0: S) -> S {
     x4.fma(poly3(x, x2, c6, c5, c4), poly4(x, x2, c3, c2, c1, c0))
 }
 
-#[inline]
+#[inline(always)]
 fn poly3<S: Arith>(x: S, x2: S, c2: S, c1: S, c0: S) -> S {
     x2.fma(c2, x.fma(c1, c0))
 }
 
-#[inline]
+#[inline(always)]
 fn poly4<S: Arith>(x: S, x2: S, c3: S, c2: S, c1: S, c0: S) -> S {
     x2.fma(x.fma(c3, c2), x.fma(c1, c0))
 }

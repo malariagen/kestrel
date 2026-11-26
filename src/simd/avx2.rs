@@ -9,88 +9,90 @@ pub struct Avx2Lane([f64; 4]);
 impl Lane for Avx2Lane {
     const N: usize = 4;
 
-    #[inline]
+    type Reg = __m256d;
+
+    #[inline(always)]
     fn get(&self, i: usize) -> f64 {
         self.0[i]
     }
 
-    #[inline]
+    #[inline(always)]
     fn set(&mut self, i: usize, val: f64) {
         self.0[i] = val;
     }
 }
 
 impl Default for Avx2Lane {
-    #[inline]
+    #[inline(always)]
     fn default() -> Self {
         Self([0.0; Self::N])
     }
 }
 
 impl LoadStore<Avx2Lane> for __m256d {
-    #[inline]
+    #[inline(always)]
     fn load(val: &Avx2Lane) -> Self {
         unsafe { _mm256_load_pd(val.0.as_ptr()) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn store(self, val: &mut Avx2Lane) {
         unsafe { _mm256_store_pd(val.0.as_mut_ptr(), self) }
     }
 }
 
 impl Arith for __m256d {
-    #[inline]
+    #[inline(always)]
     fn zero() -> Self {
         unsafe { _mm256_setzero_pd() }
     }
 
-    #[inline]
+    #[inline(always)]
     fn set(val: f64) -> Self {
         unsafe { _mm256_set1_pd(val) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn mul(self, other: Self) -> Self {
         unsafe { _mm256_mul_pd(self, other) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn div(self, other: Self) -> Self {
         unsafe { _mm256_div_pd(self, other) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn add(self, other: Self) -> Self {
         unsafe { _mm256_add_pd(self, other) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn sub(self, other: Self) -> Self {
         unsafe { _mm256_sub_pd(self, other) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn fma(self, a: Self, b: Self) -> Self {
         unsafe { _mm256_fmadd_pd(self, a, b) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn fms(self, a: Self, b: Self) -> Self {
         unsafe { _mm256_fmsub_pd(self, a, b) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn fnma(self, a: Self, b: Self) -> Self {
         unsafe { _mm256_fnmadd_pd(self, a, b) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn fnms(self, a: Self, b: Self) -> Self {
         unsafe { _mm256_fnmsub_pd(self, a, b) }
     }
 
-    #[inline]
+    #[inline(always)]
     fn radd(self) -> f64 {
         // https://stackoverflow.com/a/49943540
         let low128 = unsafe { _mm256_castpd256_pd128(self) };

@@ -23,39 +23,49 @@ pub trait ClsQuadratic: Lane {
 #[cfg(target_arch = "x86_64")]
 impl ClsQuadratic for Avx512Lane {
     fn compute_quadratic(a_mat: &LaneVector<Avx512Lane, 9>, n: usize) -> Matrix<9> {
-        use std::arch::x86_64::__m512d;
-        return compute_quadratic_generic::<Avx512Lane, __m512d>(a_mat, n);
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(a_mat: &LaneVector<Avx512Lane, 9>, n: usize) -> Matrix<9> {
+            compute_quadratic_generic(a_mat, n)
+        }
+        unsafe { inner(a_mat, n)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl ClsQuadratic for Avx2Lane {
     fn compute_quadratic(a_mat: &LaneVector<Avx2Lane, 9>, n: usize) -> Matrix<9> {
-        use std::arch::x86_64::__m256d;
-        return compute_quadratic_generic::<Avx2Lane, __m256d>(a_mat, n);
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(a_mat: &LaneVector<Avx2Lane, 9>, n: usize) -> Matrix<9> {
+            compute_quadratic_generic(a_mat, n)
+        }
+        unsafe { inner(a_mat, n)}
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl ClsQuadratic for NeonLane {
     fn compute_quadratic(a_mat: &LaneVector<NeonLane, 9>, n: usize) -> Matrix<9> {
-        use std::arch::aarch64::float64x2_t;
-        return compute_quadratic_generic::<NeonLane, float64x2_t>(a_mat, n);
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(a_mat: &LaneVector<NeonLane, 9>, n: usize) -> Matrix<9> {
+            compute_quadratic_generic(a_mat, n)
+        }
+        unsafe { inner(a_mat, n)}
     }
 }
 
 impl ClsQuadratic for f64 {
     fn compute_quadratic(a_mat: &LaneVector<f64, 9>, n: usize) -> Matrix<9> {
-        return compute_quadratic_generic::<f64, f64>(a_mat, n);
+        return compute_quadratic_generic(a_mat, n);
     }
 }
 
-fn compute_quadratic_generic<L: Lane, S: Arith + LoadStore<L>>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> {
+#[inline(always)]
+fn compute_quadratic_generic<L: Lane>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> where L::Reg: Arith {
     let blocks = a_mat.lanes();
     let remainder = a_mat.rem();
 
-    let ba = compute_quadratic_lane::<L, S>(blocks);
-    let ra = compute_quadratic_lane::<f64, f64>(remainder);
+    let ba = compute_quadratic_lane(blocks);
+    let ra = compute_quadratic_lane(remainder);
 
     let mut ata = [[0.0f64; 9]; 9];
 
@@ -72,7 +82,8 @@ fn compute_quadratic_generic<L: Lane, S: Arith + LoadStore<L>>(a_mat: &LaneVecto
     ata
 }
 
-fn compute_quadratic_lane<L: Lane, S: Arith + LoadStore<L>>(blocks: &[[L; 9]]) -> [f64; 45] {
+#[inline(always)]
+fn compute_quadratic_lane<L: Lane>(blocks: &[[L; 9]]) -> [f64; 45] where L::Reg: Arith {
     // Hmm, in theory we could make individual variables for each h element
     // For 32 regs this could be done in two loops...
 
@@ -94,91 +105,92 @@ fn compute_quadratic_lane<L: Lane, S: Arith + LoadStore<L>>(blocks: &[[L; 9]]) -
     let (tiles, partial_tile) = blocks.as_chunks::<BLOCKS>();
 
     for tile in tiles.iter() {
-        tile_loop::<L, S>(tile, &mut h);
+        tile_loop(tile, &mut h);
     }
 
-    tile_loop::<L, S>(partial_tile, &mut h);
+    tile_loop(partial_tile, &mut h);
 
-    let ata = std::array::from_fn(|i| S::load(&h[i]).radd());
+    let ata = std::array::from_fn(|i| L::Reg::load(&h[i]).radd());
 
     ata
 }
 
-fn tile_loop<L: Lane, S: Arith + LoadStore<L>>(tile: &[[L; 9]], h: &mut [L; 45]) {
+#[inline(always)]
+fn tile_loop<L: Lane>(tile: &[[L; 9]], h: &mut [L; 45]) where L::Reg: Arith {
     // Compute first 15 elements
     {
         // Row 0
-        let mut z00 = S::zero();
-        let mut z01 = S::zero();
-        let mut z02 = S::zero();
-        let mut z03 = S::zero();
-        let mut z04 = S::zero();
-        let mut z05 = S::zero();
-        let mut z06 = S::zero();
-        let mut z07 = S::zero();
-        let mut z08 = S::zero();
+        let mut z00 = L::Reg::zero();
+        let mut z01 = L::Reg::zero();
+        let mut z02 = L::Reg::zero();
+        let mut z03 = L::Reg::zero();
+        let mut z04 = L::Reg::zero();
+        let mut z05 = L::Reg::zero();
+        let mut z06 = L::Reg::zero();
+        let mut z07 = L::Reg::zero();
+        let mut z08 = L::Reg::zero();
 
         // Row 1
-        let mut z11 = S::zero();
-        let mut z12 = S::zero();
-        let mut z13 = S::zero();
-        let mut z14 = S::zero();
-        let mut z15 = S::zero();
-        let mut z16 = S::zero();
+        let mut z11 = L::Reg::zero();
+        let mut z12 = L::Reg::zero();
+        let mut z13 = L::Reg::zero();
+        let mut z14 = L::Reg::zero();
+        let mut z15 = L::Reg::zero();
+        let mut z16 = L::Reg::zero();
 
         for block in tile.iter() {
             // 2 permanent + 1 temporary = 3 registers
-            let c0 = S::load(&block[0]);
-            let c1 = S::load(&block[1]);
+            let c0 = L::Reg::load(&block[0]);
+            let c1 = L::Reg::load(&block[1]);
 
             z00 = c0.fma(c0, z00);
 
             z01 = c0.fma(c1, z01);
             z11 = c1.fma(c1, z11);
 
-            let c2 = S::load(&block[2]);
+            let c2 = L::Reg::load(&block[2]);
             z02 = c0.fma(c2, z02);
             z12 = c1.fma(c2, z12);
 
-            let c3 = S::load(&block[3]);
+            let c3 = L::Reg::load(&block[3]);
             z03 = c0.fma(c3, z03);
             z13 = c1.fma(c3, z13);
 
-            let c4 = S::load(&block[4]);
+            let c4 = L::Reg::load(&block[4]);
             z04 = c0.fma(c4, z04);
             z14 = c1.fma(c4, z14);
 
-            let c5 = S::load(&block[5]);
+            let c5 = L::Reg::load(&block[5]);
             z05 = c0.fma(c5, z05);
             z15 = c1.fma(c5, z15);
 
-            let c6 = S::load(&block[6]);
+            let c6 = L::Reg::load(&block[6]);
             z06 = c0.fma(c6, z06);
             z16 = c1.fma(c6, z16);
 
-            let c7 = S::load(&block[7]);
+            let c7 = L::Reg::load(&block[7]);
             z07 = c0.fma(c7, z07);
 
-            let c8 = S::load(&block[8]);
+            let c8 = L::Reg::load(&block[8]);
             z08 = c0.fma(c8, z08);
         }
 
-        z00 = S::load(&h[0]).add(z00);
-        z01 = S::load(&h[1]).add(z01);
-        z02 = S::load(&h[2]).add(z02);
-        z03 = S::load(&h[3]).add(z03);
-        z04 = S::load(&h[4]).add(z04);
-        z05 = S::load(&h[5]).add(z05);
-        z06 = S::load(&h[6]).add(z06);
-        z07 = S::load(&h[7]).add(z07);
-        z08 = S::load(&h[8]).add(z08);
+        z00 = L::Reg::load(&h[0]).add(z00);
+        z01 = L::Reg::load(&h[1]).add(z01);
+        z02 = L::Reg::load(&h[2]).add(z02);
+        z03 = L::Reg::load(&h[3]).add(z03);
+        z04 = L::Reg::load(&h[4]).add(z04);
+        z05 = L::Reg::load(&h[5]).add(z05);
+        z06 = L::Reg::load(&h[6]).add(z06);
+        z07 = L::Reg::load(&h[7]).add(z07);
+        z08 = L::Reg::load(&h[8]).add(z08);
 
-        z11 = S::load(&h[9]).add(z11);
-        z12 = S::load(&h[10]).add(z12);
-        z13 = S::load(&h[11]).add(z13);
-        z14 = S::load(&h[12]).add(z14);
-        z15 = S::load(&h[13]).add(z15);
-        z16 = S::load(&h[14]).add(z16);
+        z11 = L::Reg::load(&h[9]).add(z11);
+        z12 = L::Reg::load(&h[10]).add(z12);
+        z13 = L::Reg::load(&h[11]).add(z13);
+        z14 = L::Reg::load(&h[12]).add(z14);
+        z15 = L::Reg::load(&h[13]).add(z15);
+        z16 = L::Reg::load(&h[14]).add(z16);
 
         // Row 0
         z00.store(&mut h[0]);
@@ -202,77 +214,77 @@ fn tile_loop<L: Lane, S: Arith + LoadStore<L>>(tile: &[[L; 9]], h: &mut [L; 45])
 
     // Compute next 15 elements
     {
-        let mut z17 = S::zero();
-        let mut z18 = S::zero();
+        let mut z17 = L::Reg::zero();
+        let mut z18 = L::Reg::zero();
 
         // Row 2
-        let mut z22 = S::zero();
-        let mut z23 = S::zero();
-        let mut z24 = S::zero();
-        let mut z25 = S::zero();
-        let mut z26 = S::zero();
-        let mut z27 = S::zero();
-        let mut z28 = S::zero();
+        let mut z22 = L::Reg::zero();
+        let mut z23 = L::Reg::zero();
+        let mut z24 = L::Reg::zero();
+        let mut z25 = L::Reg::zero();
+        let mut z26 = L::Reg::zero();
+        let mut z27 = L::Reg::zero();
+        let mut z28 = L::Reg::zero();
 
         // Row 3
-        let mut z33 = S::zero();
-        let mut z34 = S::zero();
-        let mut z35 = S::zero();
-        let mut z36 = S::zero();
-        let mut z37 = S::zero();
-        let mut z38 = S::zero();
+        let mut z33 = L::Reg::zero();
+        let mut z34 = L::Reg::zero();
+        let mut z35 = L::Reg::zero();
+        let mut z36 = L::Reg::zero();
+        let mut z37 = L::Reg::zero();
+        let mut z38 = L::Reg::zero();
 
         for block in tile.iter() {
             // 3 permanent + 1 temporary = 4
-            let c1 = S::load(&block[1]);
-            let c2 = S::load(&block[2]);
-            let c3 = S::load(&block[3]);
+            let c1 = L::Reg::load(&block[1]);
+            let c2 = L::Reg::load(&block[2]);
+            let c3 = L::Reg::load(&block[3]);
 
             z22 = c2.fma(c2, z22);
 
             z23 = c2.fma(c3, z23);
             z33 = c3.fma(c3, z33);
 
-            let c4 = S::load(&block[4]);
+            let c4 = L::Reg::load(&block[4]);
             z24 = c2.fma(c4, z24);
             z34 = c3.fma(c4, z34);
 
-            let c5 = S::load(&block[5]);
+            let c5 = L::Reg::load(&block[5]);
             z25 = c2.fma(c5, z25);
             z35 = c3.fma(c5, z35);
 
-            let c6 = S::load(&block[6]);
+            let c6 = L::Reg::load(&block[6]);
             z26 = c2.fma(c6, z26);
             z36 = c3.fma(c6, z36);
 
-            let c7 = S::load(&block[7]);
+            let c7 = L::Reg::load(&block[7]);
             z17 = c1.fma(c7, z17);
             z27 = c2.fma(c7, z27);
             z37 = c3.fma(c7, z37);
 
-            let c8 = S::load(&block[8]);
+            let c8 = L::Reg::load(&block[8]);
             z18 = c1.fma(c8, z18);
             z28 = c2.fma(c8, z28);
             z38 = c3.fma(c8, z38);
         }
 
-        z17 = S::load(&h[15]).add(z17);
-        z18 = S::load(&h[16]).add(z18);
+        z17 = L::Reg::load(&h[15]).add(z17);
+        z18 = L::Reg::load(&h[16]).add(z18);
 
-        z22 = S::load(&h[17]).add(z22);
-        z23 = S::load(&h[18]).add(z23);
-        z24 = S::load(&h[19]).add(z24);
-        z25 = S::load(&h[20]).add(z25);
-        z26 = S::load(&h[21]).add(z26);
-        z27 = S::load(&h[22]).add(z27);
-        z28 = S::load(&h[23]).add(z28);
+        z22 = L::Reg::load(&h[17]).add(z22);
+        z23 = L::Reg::load(&h[18]).add(z23);
+        z24 = L::Reg::load(&h[19]).add(z24);
+        z25 = L::Reg::load(&h[20]).add(z25);
+        z26 = L::Reg::load(&h[21]).add(z26);
+        z27 = L::Reg::load(&h[22]).add(z27);
+        z28 = L::Reg::load(&h[23]).add(z28);
 
-        z33 = S::load(&h[24]).add(z33);
-        z34 = S::load(&h[25]).add(z34);
-        z35 = S::load(&h[26]).add(z35);
-        z36 = S::load(&h[27]).add(z36);
-        z37 = S::load(&h[28]).add(z37);
-        z38 = S::load(&h[29]).add(z38);
+        z33 = L::Reg::load(&h[24]).add(z33);
+        z34 = L::Reg::load(&h[25]).add(z34);
+        z35 = L::Reg::load(&h[26]).add(z35);
+        z36 = L::Reg::load(&h[27]).add(z36);
+        z37 = L::Reg::load(&h[28]).add(z37);
+        z38 = L::Reg::load(&h[29]).add(z38);
 
         z17.store(&mut h[15]);
         z18.store(&mut h[16]);
@@ -298,37 +310,37 @@ fn tile_loop<L: Lane, S: Arith + LoadStore<L>>(tile: &[[L; 9]], h: &mut [L; 45])
     // Compute last 15 elements
     {
         // Row 4
-        let mut z44 = S::zero();
-        let mut z45 = S::zero();
-        let mut z46 = S::zero();
-        let mut z47 = S::zero();
-        let mut z48 = S::zero();
+        let mut z44 = L::Reg::zero();
+        let mut z45 = L::Reg::zero();
+        let mut z46 = L::Reg::zero();
+        let mut z47 = L::Reg::zero();
+        let mut z48 = L::Reg::zero();
 
         // Row 5
-        let mut z55 = S::zero();
-        let mut z56 = S::zero();
-        let mut z57 = S::zero();
-        let mut z58 = S::zero();
+        let mut z55 = L::Reg::zero();
+        let mut z56 = L::Reg::zero();
+        let mut z57 = L::Reg::zero();
+        let mut z58 = L::Reg::zero();
 
         // Row 6
-        let mut z66 = S::zero();
-        let mut z67 = S::zero();
-        let mut z68 = S::zero();
+        let mut z66 = L::Reg::zero();
+        let mut z67 = L::Reg::zero();
+        let mut z68 = L::Reg::zero();
 
         // Row 7
-        let mut z77 = S::zero();
-        let mut z78 = S::zero();
+        let mut z77 = L::Reg::zero();
+        let mut z78 = L::Reg::zero();
 
         // Row 8
-        let mut z88 = S::zero();
+        let mut z88 = L::Reg::zero();
 
         for block in tile.iter() {
             // 5 permanent registers
-            let c4 = S::load(&block[4]);
-            let c5 = S::load(&block[5]);
-            let c6 = S::load(&block[6]);
-            let c7 = S::load(&block[7]);
-            let c8 = S::load(&block[8]);
+            let c4 = L::Reg::load(&block[4]);
+            let c5 = L::Reg::load(&block[5]);
+            let c6 = L::Reg::load(&block[6]);
+            let c7 = L::Reg::load(&block[7]);
+            let c8 = L::Reg::load(&block[8]);
 
             z44 = c4.fma(c4, z44);
             z45 = c4.fma(c5, z45);
@@ -351,29 +363,29 @@ fn tile_loop<L: Lane, S: Arith + LoadStore<L>>(tile: &[[L; 9]], h: &mut [L; 45])
             z88 = c8.fma(c8, z88);
         }
 
-        z44 = S::load(&h[30]).add(z44);
-        z45 = S::load(&h[31]).add(z45);
-        z46 = S::load(&h[32]).add(z46);
-        z47 = S::load(&h[33]).add(z47);
-        z48 = S::load(&h[34]).add(z48);
+        z44 = L::Reg::load(&h[30]).add(z44);
+        z45 = L::Reg::load(&h[31]).add(z45);
+        z46 = L::Reg::load(&h[32]).add(z46);
+        z47 = L::Reg::load(&h[33]).add(z47);
+        z48 = L::Reg::load(&h[34]).add(z48);
 
         // Row 5
-        z55 = S::load(&h[35]).add(z55);
-        z56 = S::load(&h[36]).add(z56);
-        z57 = S::load(&h[37]).add(z57);
-        z58 = S::load(&h[38]).add(z58);
+        z55 = L::Reg::load(&h[35]).add(z55);
+        z56 = L::Reg::load(&h[36]).add(z56);
+        z57 = L::Reg::load(&h[37]).add(z57);
+        z58 = L::Reg::load(&h[38]).add(z58);
 
         // Row 6
-        z66 = S::load(&h[39]).add(z66);
-        z67 = S::load(&h[40]).add(z67);
-        z68 = S::load(&h[41]).add(z68);
+        z66 = L::Reg::load(&h[39]).add(z66);
+        z67 = L::Reg::load(&h[40]).add(z67);
+        z68 = L::Reg::load(&h[41]).add(z68);
 
         // Row 7
-        z77 = S::load(&h[42]).add(z77);
-        z78 = S::load(&h[43]).add(z78);
+        z77 = L::Reg::load(&h[42]).add(z77);
+        z78 = L::Reg::load(&h[43]).add(z78);
 
         // Row 8
-        z88 = S::load(&h[44]).add(z88);
+        z88 = L::Reg::load(&h[44]).add(z88);
 
         // Row 4
         z44.store(&mut h[30]);

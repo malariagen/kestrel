@@ -23,24 +23,33 @@ pub trait AlleleObjective<const A: usize, const G: usize>: Lane {
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective<2, 3> for Avx512Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m512d;
-        compute_obj_generic2::<Self, __m512d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 3>, x: &Vector<2>, eps: f64) -> f64 {
+            compute_obj_generic2(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective<3, 6> for Avx512Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m512d;
-        compute_obj_generic3::<Self, __m512d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 6>, x: &Vector<3>, eps: f64) -> f64 {
+            compute_obj_generic3(likelihood_mats, x, eps)
+        }
+        unsafe {inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective<4, 10> for Avx512Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m512d;
-        compute_obj_generic4::<Self, __m512d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 10>, x: &Vector<4>, eps: f64) -> f64 {
+            compute_obj_generic4(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
@@ -51,24 +60,33 @@ impl AlleleObjective<4, 10> for Avx512Lane {
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective<2, 3> for Avx2Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m256d;
-        compute_obj_generic2::<Self, __m256d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 3>, x: &Vector<2>, eps: f64) -> f64 {
+            compute_obj_generic2(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective<3, 6> for Avx2Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m256d;
-        compute_obj_generic3::<Self, __m256d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 6>, x: &Vector<3>, eps: f64) -> f64 {
+            compute_obj_generic3(likelihood_mats, x, eps)
+        }
+        unsafe {inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleObjective<4, 10> for Avx2Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m256d;
-        compute_obj_generic4::<Self, __m256d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 10>, x: &Vector<4>, eps: f64) -> f64 {
+            compute_obj_generic4(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
@@ -79,24 +97,33 @@ impl AlleleObjective<4, 10> for Avx2Lane {
 #[cfg(target_arch = "aarch64")]
 impl AlleleObjective<2, 3> for NeonLane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
-        use std::arch::aarch64::float64x2_t;
-        compute_obj_generic2::<Self, float64x2_t>(likelihood_mats, x, eps)
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 3>, x: &Vector<2>, eps: f64) -> f64 {
+            compute_obj_generic2(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleObjective<3, 6> for NeonLane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
-        use std::arch::aarch64::float64x2_t;
-        compute_obj_generic3::<Self, float64x2_t>(likelihood_mats, x, eps)
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 6>, x: &Vector<3>, eps: f64) -> f64 {
+            compute_obj_generic3(likelihood_mats, x, eps)
+        }
+        unsafe {inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleObjective<4, 10> for NeonLane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
-        use std::arch::aarch64::float64x2_t;
-        compute_obj_generic4::<Self, float64x2_t>(likelihood_mats, x, eps)
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 10>, x: &Vector<4>, eps: f64) -> f64 {
+            compute_obj_generic4(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
@@ -106,77 +133,81 @@ impl AlleleObjective<4, 10> for NeonLane {
 
 impl AlleleObjective<2, 3> for f64 {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
-        compute_obj_generic2::<Self, f64>(likelihood_mats, x, eps)
+        compute_obj_generic2(likelihood_mats, x, eps)
     }
 }
 
 impl AlleleObjective<3, 6> for f64 {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
-        compute_obj_generic3::<Self, f64>(likelihood_mats, x, eps)
+        compute_obj_generic3(likelihood_mats, x, eps)
     }
 }
 
 impl AlleleObjective<4, 10> for f64 {
     fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
-        compute_obj_generic4::<Self, f64>(likelihood_mats, x, eps)
+        compute_obj_generic4(likelihood_mats, x, eps)
     }
 }
 
-fn compute_obj_generic2<L: Lane, S: Arith + Log + LoadStore<L>>(
+#[inline(always)]
+fn compute_obj_generic2<L: Lane>(
     likelihood_mats: &LaneVector<L, 3>,
     x: &Vector<2>,
     eps: f64,
-) -> f64 {
+) -> f64 where L::Reg: Arith + Log {
     let blocks = likelihood_mats.lanes();
     let remainder = likelihood_mats.rem();
 
-    let b = compute_obj_lane2::<L, S>(blocks, x, eps);
-    let r = compute_obj_lane2::<f64, f64>(remainder, x, eps);
+    let b = compute_obj_lane2(blocks, x, eps);
+    let r = compute_obj_lane2(remainder, x, eps);
 
     let n = likelihood_mats.len() as f64;
 
     -(b + r) / n
 }
 
-fn compute_obj_generic3<L: Lane, S: Arith + Log + LoadStore<L>>(
+#[inline(always)]
+fn compute_obj_generic3<L: Lane>(
     likelihood_mats: &LaneVector<L, 6>,
     x: &Vector<3>,
     eps: f64,
-) -> f64 {
+) -> f64 where L::Reg: Arith + Log {
     let blocks = likelihood_mats.lanes();
     let remainder = likelihood_mats.rem();
 
-    let b = compute_obj_lane3::<L, S>(blocks, x, eps);
-    let r = compute_obj_lane3::<f64, f64>(remainder, x, eps);
+    let b = compute_obj_lane3(blocks, x, eps);
+    let r = compute_obj_lane3(remainder, x, eps);
 
     let n = likelihood_mats.len() as f64;
 
     -(b + r) / n
 }
 
-fn compute_obj_generic4<L: Lane, S: Arith + Log + LoadStore<L>>(
+#[inline(always)]
+fn compute_obj_generic4<L: Lane>(
     likelihood_mats: &LaneVector<L, 10>,
     x: &Vector<4>,
     eps: f64,
-) -> f64 {
+) -> f64 where L::Reg: Arith + Log {
     let blocks = likelihood_mats.lanes();
     let remainder = likelihood_mats.rem();
 
-    let b = compute_obj_lane4::<L, S>(blocks, x, eps);
-    let r = compute_obj_lane4::<f64, f64>(remainder, x, eps);
+    let b = compute_obj_lane4(blocks, x, eps);
+    let r = compute_obj_lane4(remainder, x, eps);
 
     let n = likelihood_mats.len() as f64;
 
     -(b + r) / n
 }
 
-fn compute_obj_lane2<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 3]], x: &Vector<2>, eps: f64) -> f64 {
+#[inline(always)]
+fn compute_obj_lane2<L: Lane>(blocks: &[[L; 3]], x: &Vector<2>, eps: f64) -> f64 where L::Reg: Arith + Log {
     // 4
-    let mut zs = S::zero();
-    let ze = S::set(eps);
+    let mut zs = L::Reg::zero();
+    let ze = L::Reg::set(eps);
 
-    let x0 = S::set(x[0]);
-    let x1 = S::set(x[1]);
+    let x0 = L::Reg::set(x[0]);
+    let x1 = L::Reg::set(x[1]);
 
     // 4
     let x00 = x0.mul(x0);
@@ -187,9 +218,9 @@ fn compute_obj_lane2<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 3]], 
     for block in blocks.iter() {
         let mut p = ze;
 
-        p = x00.fma(S::load(&block[0]), p);
-        p = tx01.fma(S::load(&block[1]), p);
-        p = x11.fma(S::load(&block[2]), p);
+        p = x00.fma(L::Reg::load(&block[0]), p);
+        p = tx01.fma(L::Reg::load(&block[1]), p);
+        p = x11.fma(L::Reg::load(&block[2]), p);
 
         let l = Log::log(p);
 
@@ -199,14 +230,15 @@ fn compute_obj_lane2<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 3]], 
     zs.radd()
 }
 
-fn compute_obj_lane3<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 6]], x: &Vector<3>, eps: f64) -> f64 {
+#[inline(always)]
+fn compute_obj_lane3<L: Lane>(blocks: &[[L; 6]], x: &Vector<3>, eps: f64) -> f64 where L::Reg: Arith + Log {
     // 2
-    let mut zs = S::zero();
-    let ze = S::set(eps);
+    let mut zs = L::Reg::zero();
+    let ze = L::Reg::set(eps);
 
-    let x0 = S::set(x[0]);
-    let x1 = S::set(x[1]);
-    let x2 = S::set(x[2]);
+    let x0 = L::Reg::set(x[0]);
+    let x1 = L::Reg::set(x[1]);
+    let x2 = L::Reg::set(x[2]);
 
     // 10
     let x00 = x0.mul(x0);
@@ -225,12 +257,12 @@ fn compute_obj_lane3<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 6]], 
     for block in blocks.iter() {
         let mut p = ze;
 
-        p = x00.fma(S::load(&block[0]), p);
-        p = tx01.fma(S::load(&block[1]), p);
-        p = x11.fma(S::load(&block[2]), p);
-        p = tx02.fma(S::load(&block[3]), p);
-        p = tx12.fma(S::load(&block[4]), p);
-        p = x22.fma(S::load(&block[5]), p);
+        p = x00.fma(L::Reg::load(&block[0]), p);
+        p = tx01.fma(L::Reg::load(&block[1]), p);
+        p = x11.fma(L::Reg::load(&block[2]), p);
+        p = tx02.fma(L::Reg::load(&block[3]), p);
+        p = tx12.fma(L::Reg::load(&block[4]), p);
+        p = x22.fma(L::Reg::load(&block[5]), p);
 
         let l = Log::log(p);
 
@@ -240,15 +272,17 @@ fn compute_obj_lane3<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 6]], 
     zs.radd()
 }
 
-fn compute_obj_lane4<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64 {
+#[inline(always)]
+fn compute_obj_lane4<L: Lane>(blocks: &[[L; 10]], x: &Vector<4>, eps: f64) -> f64
+where L::Reg: Arith + Log {
     // 2
-    let mut zs = S::zero();
-    let ze = S::set(eps);
+    let mut zs = L::Reg::zero();
+    let ze = L::Reg::set(eps);
 
-    let x0 = S::set(x[0]);
-    let x1 = S::set(x[1]);
-    let x2 = S::set(x[2]);
-    let x3 = S::set(x[3]);
+    let x0 = L::Reg::set(x[0]);
+    let x1 = L::Reg::set(x[1]);
+    let x2 = L::Reg::set(x[2]);
+    let x3 = L::Reg::set(x[3]);
 
     // 10
     let x00 = x0.mul(x0);
@@ -274,16 +308,16 @@ fn compute_obj_lane4<L: Lane, S: Arith + Log + LoadStore<L>>(blocks: &[[L; 10]],
     for block in blocks.iter() {
         let mut p = ze;
 
-        p = x00.fma(S::load(&block[0]), p);
-        p = tx01.fma(S::load(&block[1]), p);
-        p = x11.fma(S::load(&block[2]), p);
-        p = tx02.fma(S::load(&block[3]), p);
-        p = tx12.fma(S::load(&block[4]), p);
-        p = x22.fma(S::load(&block[5]), p);
-        p = tx03.fma(S::load(&block[6]), p);
-        p = tx13.fma(S::load(&block[7]), p);
-        p = tx23.fma(S::load(&block[8]), p);
-        p = x33.fma(S::load(&block[9]), p);
+        p = x00.fma(L::Reg::load(&block[0]), p);
+        p = tx01.fma(L::Reg::load(&block[1]), p);
+        p = x11.fma(L::Reg::load(&block[2]), p);
+        p = tx02.fma(L::Reg::load(&block[3]), p);
+        p = tx12.fma(L::Reg::load(&block[4]), p);
+        p = x22.fma(L::Reg::load(&block[5]), p);
+        p = tx03.fma(L::Reg::load(&block[6]), p);
+        p = tx13.fma(L::Reg::load(&block[7]), p);
+        p = tx23.fma(L::Reg::load(&block[8]), p);
+        p = x33.fma(L::Reg::load(&block[9]), p);
 
         let l = Log::log(p);
 

@@ -6,7 +6,7 @@ use super::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, LOG_2_HI, LOG_2_LO, Log};
 // and https://github.com/shibatch/sleef/blob/master/src/libm/sleefsimddp.c
 
 impl Log for __m512d {
-    #[inline]
+    #[inline(always)]
     fn log(self) -> Self {
         unsafe { log_avx512(self) }
     }

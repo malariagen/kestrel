@@ -22,24 +22,33 @@ pub trait AlleleGradHess<const A: usize, const G: usize>: Lane {
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<2, 3> for Avx512Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
-        use std::arch::x86_64::__m512d;
-        compute_grad_hess_generic2::<Self, __m512d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
+            compute_grad_hess_generic2(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<3, 6> for Avx512Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
-        use std::arch::x86_64::__m512d;
-        compute_grad_hess_generic3::<Self, __m512d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
+            compute_grad_hess_generic3(likelihood_mats, x, eps)
+        }
+        unsafe {inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<4, 10> for Avx512Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
-        use std::arch::x86_64::__m512d;
-        compute_grad_hess_generic4::<Self, __m512d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+            compute_grad_hess_generic4(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
@@ -50,24 +59,33 @@ impl AlleleGradHess<4, 10> for Avx512Lane {
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<2, 3> for Avx2Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
-        use std::arch::x86_64::__m256d;
-        compute_grad_hess_generic2::<Self, __m256d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
+            compute_grad_hess_generic2(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<3, 6> for Avx2Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
-        use std::arch::x86_64::__m256d;
-        compute_grad_hess_generic3::<Self, __m256d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
+            compute_grad_hess_generic3(likelihood_mats, x, eps)
+        }
+        unsafe {inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl AlleleGradHess<4, 10> for Avx2Lane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
-        use std::arch::x86_64::__m256d;
-        compute_grad_hess_generic4::<Self, __m256d>(likelihood_mats, x, eps)
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+            compute_grad_hess_generic4(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
@@ -78,24 +96,33 @@ impl AlleleGradHess<4, 10> for Avx2Lane {
 #[cfg(target_arch = "aarch64")]
 impl AlleleGradHess<2, 3> for NeonLane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
-        use std::arch::aarch64::float64x2_t;
-        compute_grad_hess_generic2::<Self, float64x2_t>(likelihood_mats, x, eps)
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
+            compute_grad_hess_generic2(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleGradHess<3, 6> for NeonLane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
-        use std::arch::aarch64::float64x2_t;
-        compute_grad_hess_generic3::<Self, float64x2_t>(likelihood_mats, x, eps)
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
+            compute_grad_hess_generic3(likelihood_mats, x, eps)
+        }
+        unsafe {inner(likelihood_mats, x, eps)}
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl AlleleGradHess<4, 10> for NeonLane {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
-        use std::arch::aarch64::float64x2_t;
-        compute_grad_hess_generic4::<Self, float64x2_t>(likelihood_mats, x, eps)
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
+            compute_grad_hess_generic4(likelihood_mats, x, eps)
+        }
+        unsafe { inner(likelihood_mats, x, eps)}
     }
 }
 
@@ -105,29 +132,30 @@ impl AlleleGradHess<4, 10> for NeonLane {
 
 impl AlleleGradHess<2, 3> for f64 {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> (Vector<2>, Matrix<2>) {
-        compute_grad_hess_generic2::<Self, f64>(likelihood_mats, x, eps)
+        compute_grad_hess_generic2(likelihood_mats, x, eps)
     }
 }
 
 impl AlleleGradHess<3, 6> for f64 {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> (Vector<3>, Matrix<3>) {
-        compute_grad_hess_generic3::<Self, f64>(likelihood_mats, x, eps)
+        compute_grad_hess_generic3(likelihood_mats, x, eps)
     }
 }
 
 impl AlleleGradHess<4, 10> for f64 {
     fn compute_grad_hess(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> (Vector<4>, Matrix<4>) {
-        compute_grad_hess_generic4::<Self, f64>(likelihood_mats, x, eps)
+        compute_grad_hess_generic4(likelihood_mats, x, eps)
     }
 }
 
-fn compute_grad_hess_generic2<L: Lane, S: Arith + LoadStore<L>>(
+#[inline(always)]
+fn compute_grad_hess_generic2<L: Lane>(
     likelihood_mats: &LaneVector<L, 3>,
     x: &Vector<2>,
     eps: f64,
-) -> (Vector<2>, Matrix<2>) {
-    let (bg, bh) = compute_grad_hess_lane2::<L, S>(likelihood_mats.lanes(), x, eps);
-    let (rg, rh) = compute_grad_hess_lane2::<f64, f64>(likelihood_mats.rem(), x, eps);
+) -> (Vector<2>, Matrix<2>) where L::Reg: Arith {
+    let (bg, bh) = compute_grad_hess_lane2(likelihood_mats.lanes(), x, eps);
+    let (rg, rh) = compute_grad_hess_lane2(likelihood_mats.rem(), x, eps);
 
     let n = likelihood_mats.len() as f64;
 
@@ -136,13 +164,14 @@ fn compute_grad_hess_generic2<L: Lane, S: Arith + LoadStore<L>>(
     (g, h)
 }
 
-fn compute_grad_hess_generic3<L: Lane, S: Arith + LoadStore<L>>(
+#[inline(always)]
+fn compute_grad_hess_generic3<L: Lane>(
     likelihood_mats: &LaneVector<L, 6>,
     x: &Vector<3>,
     eps: f64,
-) -> (Vector<3>, Matrix<3>) {
-    let (bg, bh) = compute_grad_hess_lane3::<L, S>(likelihood_mats.lanes(), x, eps);
-    let (rg, rh) = compute_grad_hess_lane3::<f64, f64>(likelihood_mats.rem(), x, eps);
+) -> (Vector<3>, Matrix<3>) where L::Reg: Arith {
+    let (bg, bh) = compute_grad_hess_lane3(likelihood_mats.lanes(), x, eps);
+    let (rg, rh) = compute_grad_hess_lane3(likelihood_mats.rem(), x, eps);
 
     let n = likelihood_mats.len() as f64;
 
@@ -151,13 +180,14 @@ fn compute_grad_hess_generic3<L: Lane, S: Arith + LoadStore<L>>(
     (g, h)
 }
 
-fn compute_grad_hess_generic4<L: Lane, S: Arith + LoadStore<L>>(
+#[inline(always)]
+fn compute_grad_hess_generic4<L: Lane>(
     likelihood_mats: &LaneVector<L, 10>,
     x: &Vector<4>,
     eps: f64,
-) -> (Vector<4>, Matrix<4>) {
-    let (bg, bh) = compute_grad_hess_lane4::<L, S>(likelihood_mats.lanes(), x, eps);
-    let (rg, rh) = compute_grad_hess_lane4::<f64, f64>(likelihood_mats.rem(), x, eps);
+) -> (Vector<4>, Matrix<4>) where L::Reg: Arith {
+    let (bg, bh) = compute_grad_hess_lane4(likelihood_mats.lanes(), x, eps);
+    let (rg, rh) = compute_grad_hess_lane4(likelihood_mats.rem(), x, eps);
 
     let n = likelihood_mats.len() as f64;
 
@@ -166,6 +196,7 @@ fn compute_grad_hess_generic4<L: Lane, S: Arith + LoadStore<L>>(
     (g, h)
 }
 
+#[inline(always)]
 fn build_grad_hess<const A: usize, const G: usize>(
     bg: [f64; A],
     bh: [f64; G],
@@ -192,33 +223,34 @@ fn build_grad_hess<const A: usize, const G: usize>(
     (g, h)
 }
 
-fn compute_grad_hess_lane2<L: Lane, S: Arith + LoadStore<L>>(
+#[inline(always)]
+fn compute_grad_hess_lane2<L: Lane>(
     blocks: &[[L; 3]],
     x: &Vector<2>,
     eps: f64,
-) -> ([f64; 2], [f64; 3]) {
+) -> ([f64; 2], [f64; 3]) where L::Reg: Arith {
     // 4
-    let mut zg0 = S::zero();
-    let mut zg1 = S::zero();
+    let mut zg0 = L::Reg::zero();
+    let mut zg1 = L::Reg::zero();
 
     // 10
-    let mut zh0 = S::zero();
-    let mut zh1 = S::zero();
-    let mut zh2 = S::zero();
+    let mut zh0 = L::Reg::zero();
+    let mut zh1 = L::Reg::zero();
+    let mut zh2 = L::Reg::zero();
 
     // 3
-    let one = S::set(1.0);
-    let two = S::set(2.0);
-    let ze = S::set(eps);
+    let one = L::Reg::set(1.0);
+    let two = L::Reg::set(2.0);
+    let ze = L::Reg::set(eps);
 
     // 4
-    let x0 = S::set(x[0]);
-    let x1 = S::set(x[1]);
+    let x0 = L::Reg::set(x[0]);
+    let x1 = L::Reg::set(x[1]);
 
     for block in blocks.iter() {
-        let l00 = S::load(&block[0]);
-        let l01 = S::load(&block[1]);
-        let l11 = S::load(&block[2]);
+        let l00 = L::Reg::load(&block[0]);
+        let l01 = L::Reg::load(&block[1]);
+        let l11 = L::Reg::load(&block[2]);
 
         let mut lx0 = x0.mul(l00);
         lx0 = x1.fma(l01, lx0);
@@ -256,41 +288,42 @@ fn compute_grad_hess_lane2<L: Lane, S: Arith + LoadStore<L>>(
     (g, h)
 }
 
-fn compute_grad_hess_lane3<L: Lane, S: Arith + LoadStore<L>>(
+#[inline(always)]
+fn compute_grad_hess_lane3<L: Lane>(
     blocks: &[[L; 6]],
     x: &Vector<3>,
     eps: f64,
-) -> ([f64; 3], [f64; 6]) {
+) -> ([f64; 3], [f64; 6]) where L::Reg: Arith {
     // 4
-    let mut zg0 = S::zero();
-    let mut zg1 = S::zero();
-    let mut zg2 = S::zero();
+    let mut zg0 = L::Reg::zero();
+    let mut zg1 = L::Reg::zero();
+    let mut zg2 = L::Reg::zero();
 
     // 10
-    let mut zh0 = S::zero();
-    let mut zh1 = S::zero();
-    let mut zh2 = S::zero();
-    let mut zh3 = S::zero();
-    let mut zh4 = S::zero();
-    let mut zh5 = S::zero();
+    let mut zh0 = L::Reg::zero();
+    let mut zh1 = L::Reg::zero();
+    let mut zh2 = L::Reg::zero();
+    let mut zh3 = L::Reg::zero();
+    let mut zh4 = L::Reg::zero();
+    let mut zh5 = L::Reg::zero();
 
     // 3
-    let one = S::set(1.0);
-    let two = S::set(2.0);
-    let ze = S::set(eps);
+    let one = L::Reg::set(1.0);
+    let two = L::Reg::set(2.0);
+    let ze = L::Reg::set(eps);
 
     // 4
-    let x0 = S::set(x[0]);
-    let x1 = S::set(x[1]);
-    let x2 = S::set(x[2]);
+    let x0 = L::Reg::set(x[0]);
+    let x1 = L::Reg::set(x[1]);
+    let x2 = L::Reg::set(x[2]);
 
     for block in blocks.iter() {
-        let l00 = S::load(&block[0]);
-        let l01 = S::load(&block[1]);
-        let l11 = S::load(&block[2]);
-        let l02 = S::load(&block[3]);
-        let l12 = S::load(&block[4]);
-        let l22 = S::load(&block[5]);
+        let l00 = L::Reg::load(&block[0]);
+        let l01 = L::Reg::load(&block[1]);
+        let l11 = L::Reg::load(&block[2]);
+        let l02 = L::Reg::load(&block[3]);
+        let l12 = L::Reg::load(&block[4]);
+        let l22 = L::Reg::load(&block[5]);
 
         let mut lx0 = x0.mul(l00);
         lx0 = x1.fma(l01, lx0);
@@ -346,51 +379,52 @@ fn compute_grad_hess_lane3<L: Lane, S: Arith + LoadStore<L>>(
     (g, h)
 }
 
-fn compute_grad_hess_lane4<L: Lane, S: Arith + LoadStore<L>>(
+#[inline(always)]
+fn compute_grad_hess_lane4<L: Lane>(
     blocks: &[[L; 10]],
     x: &Vector<4>,
     eps: f64,
-) -> ([f64; 4], [f64; 10]) {
+) -> ([f64; 4], [f64; 10]) where L::Reg: Arith {
     // 4
-    let mut zg0 = S::zero();
-    let mut zg1 = S::zero();
-    let mut zg2 = S::zero();
-    let mut zg3 = S::zero();
+    let mut zg0 = L::Reg::zero();
+    let mut zg1 = L::Reg::zero();
+    let mut zg2 = L::Reg::zero();
+    let mut zg3 = L::Reg::zero();
 
     // 10
-    let mut zh0 = S::zero();
-    let mut zh1 = S::zero();
-    let mut zh2 = S::zero();
-    let mut zh3 = S::zero();
-    let mut zh4 = S::zero();
-    let mut zh5 = S::zero();
-    let mut zh6 = S::zero();
-    let mut zh7 = S::zero();
-    let mut zh8 = S::zero();
-    let mut zh9 = S::zero();
+    let mut zh0 = L::Reg::zero();
+    let mut zh1 = L::Reg::zero();
+    let mut zh2 = L::Reg::zero();
+    let mut zh3 = L::Reg::zero();
+    let mut zh4 = L::Reg::zero();
+    let mut zh5 = L::Reg::zero();
+    let mut zh6 = L::Reg::zero();
+    let mut zh7 = L::Reg::zero();
+    let mut zh8 = L::Reg::zero();
+    let mut zh9 = L::Reg::zero();
 
     // 3
-    let one = S::set(1.0);
-    let two = S::set(2.0);
-    let ze = S::set(eps);
+    let one = L::Reg::set(1.0);
+    let two = L::Reg::set(2.0);
+    let ze = L::Reg::set(eps);
 
     // 4
-    let x0 = S::set(x[0]);
-    let x1 = S::set(x[1]);
-    let x2 = S::set(x[2]);
-    let x3 = S::set(x[3]);
+    let x0 = L::Reg::set(x[0]);
+    let x1 = L::Reg::set(x[1]);
+    let x2 = L::Reg::set(x[2]);
+    let x3 = L::Reg::set(x[3]);
 
     for block in blocks.iter() {
-        let l00 = S::load(&block[0]);
-        let l01 = S::load(&block[1]);
-        let l11 = S::load(&block[2]);
-        let l02 = S::load(&block[3]);
-        let l12 = S::load(&block[4]);
-        let l22 = S::load(&block[5]);
-        let l03 = S::load(&block[6]);
-        let l13 = S::load(&block[7]);
-        let l23 = S::load(&block[8]);
-        let l33 = S::load(&block[9]);
+        let l00 = L::Reg::load(&block[0]);
+        let l01 = L::Reg::load(&block[1]);
+        let l11 = L::Reg::load(&block[2]);
+        let l02 = L::Reg::load(&block[3]);
+        let l12 = L::Reg::load(&block[4]);
+        let l22 = L::Reg::load(&block[5]);
+        let l03 = L::Reg::load(&block[6]);
+        let l13 = L::Reg::load(&block[7]);
+        let l23 = L::Reg::load(&block[8]);
+        let l33 = L::Reg::load(&block[9]);
 
         let mut lx0 = x0.mul(l00);
         lx0 = x1.fma(l01, lx0);

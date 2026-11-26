@@ -8,7 +8,7 @@ use super::{C_0, C_1, C_2, C_3, C_4, C_5, C_6, D1_32, LOG_2_HI, LOG_2_LO, Log};
 // Adapted from https://github.com/burrbull/sleef-rs/blob/master/src/f64/u10.rs
 
 impl Log for f64 {
-    #[inline]
+    #[inline(always)]
     fn log(self) -> Self {
         log_scalar(self)
     }
@@ -58,12 +58,12 @@ fn log_scalar(mut d: f64) -> f64 {
 }
 
 // Both of these assume the input is not subnormal
-#[inline]
+#[inline(always)]
 fn ilogb2k(d: f64) -> i32 {
     (((d.to_bits() >> 52) & 0x7ff) as i32) - 0x3ff
 }
 
-#[inline]
+#[inline(always)]
 fn ldexp3k(d: f64, e: i32) -> f64 {
     // For two's complement arithmetic, -e << 52  = (-e) * 2^52 = -(e * 2^52) = -(e << 52)
     f64::from_bits(((d.to_bits() as i64) - ((e as i64) << 52)) as u64)

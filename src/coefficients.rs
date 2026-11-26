@@ -12,7 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::{self, ClsQuadratic}, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
+    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::{ClsQuadratic}, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
 };
 
 // We consume the input array so it gets dropped

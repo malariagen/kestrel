@@ -27,9 +27,10 @@ pub trait Arith: Copy {
     fn radd(self) -> f64;
 }
 
-#[allow(unused)]
 pub trait Lane: Copy + Default + Sync {
     const N: usize;
+
+    type Reg : LoadStore<Self>;
 
     // TODO use Index
     fn get(&self, i: usize) -> f64;

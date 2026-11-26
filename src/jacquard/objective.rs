@@ -19,53 +19,65 @@ pub trait JacquardObjective: Lane {
 #[cfg(target_arch = "x86_64")]
 impl JacquardObjective for Avx512Lane {
     fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m512d;
-        return compute_obj_generic::<Self, __m512d>(p_mat, x, eps);
+        #[target_feature(enable = "avx512f")]
+        unsafe fn inner(p_mat: &LaneVector<Avx512Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
+            compute_obj_generic(p_mat, x, eps)
+        }
+        unsafe { inner(p_mat, x, eps) }
     }
 }
 
 #[cfg(target_arch = "x86_64")]
 impl JacquardObjective for Avx2Lane {
     fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        use std::arch::x86_64::__m256d;
-        return compute_obj_generic::<Self, __m256d>(p_mat, x, eps);
+        #[target_feature(enable = "avx2,fma")]
+        unsafe fn inner(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
+            compute_obj_generic(p_mat, x, eps)
+        }
+        unsafe { inner(p_mat, x, eps) }
     }
 }
 
 #[cfg(target_arch = "aarch64")]
 impl JacquardObjective for NeonLane {
     fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        use std::arch::aarch64::float64x2_t;
-        return compute_obj_generic::<Self, float64x2_t>(p_mat, x, eps);
+        #[target_feature(enable = "neon")]
+        unsafe fn inner(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
+            compute_obj_generic(p_mat, x, eps)
+        }
+        unsafe { inner(p_mat, x, eps) }
     }
 }
 
 impl JacquardObjective for f64 {
     fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        return compute_obj_generic::<Self, f64>(p_mat, x, eps);
+        compute_obj_generic(p_mat, x, eps)
     }
 }
 
-fn compute_obj_generic<L: Lane, S: Arith + LoadStore<L> + Log>(
+#[inline(always)]
+fn compute_obj_generic<L: Lane>(
     p_mat: &LaneVector<L, 9>,
     x: &Vector<9>,
     eps: f64,
-) -> f64 {
-    let b = compute_obj_lane::<L, S>(p_mat.lanes(), x, eps);
-    let r = compute_obj_lane::<f64, f64>(p_mat.rem(), x, eps);
+) -> f64 where L::Reg: Arith + Log {
+    let b = compute_obj_lane(p_mat.lanes(), x, eps);
+    let r = compute_obj_lane(p_mat.rem(), x, eps);
 
     let n = p_mat.len() as f64;
 
     return -(b + r) / n;
 }
 
-fn compute_obj_lane<L: Lane, S: Arith + LoadStore<L> + Log>(blocks: &[[L; 9]], x: &[f64; 9], eps: f64) -> f64 {
+#[inline(always)]
+fn compute_obj_lane<L: Lane>(blocks: &[[L; 9]], x: &[f64; 9], eps: f64) -> f64
+where L::Reg: Arith + Log  {
     // 9
-    let zx: [S; 9] = std::array::from_fn(|i| S::set(x[i]));
+    let zx: [L::Reg; 9] = std::array::from_fn(|i| L::Reg::set(x[i]));
 
     // 12
-    let mut zs = S::zero();
-    let ze = S::set(eps);
+    let mut zs = L::Reg::zero();
+    let ze = L::Reg::set(eps);
 
     for block in blocks.iter() {
         // This computes a dot product between x and a row of p
@@ -75,7 +87,7 @@ fn compute_obj_lane<L: Lane, S: Arith + LoadStore<L> + Log>(blocks: &[[L; 9]], x
         // 13
         let mut d = ze;
         for col in 0..9 {
-            let c = S::load(&block[col]);
+            let c = L::Reg::load(&block[col]);
             // This memory access gets put directly in the fmadd instruction
             d = zx[col].fma(c, d);
         }
