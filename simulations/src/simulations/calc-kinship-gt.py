@@ -8,33 +8,31 @@ import numpy as np
 
 from util import ResourceTracker
 
-def calculate(rep_dir, seed_seq, threads, samples_keep, samples_total):
+def calculate(rep_dir, seed_seq, threads):
 
     rng = np.random.default_rng(seed_seq)
 
     print(f"Calculating {rep_dir}...")
 
     seed = rng.integers(low=1, high=2**31)
-    ngsrelate = ["ngsRelate", "-h", f"{rep_dir}/GT.vcf.gz", "-O", f"{rep_dir}/ngsrelate.tsv", "-a", "0", "-b", str(samples_keep), "-T", "GT", "-l", "0.0", "-r", str(seed), "-p", f"{threads}"]
+    ngsrelate = ["ngsRelate", "-h", f"{rep_dir}/GT.vcf.gz", "-O", f"{rep_dir}/ngsrelate.tsv", "-T", "GT", "-l", "0.0", "-r", str(seed), "-p", f"{threads}"]
     print(" ".join(ngsrelate))
     with open(f"{rep_dir}/ngsrelate.out", "w") as f:
         subprocess.run(ngsrelate, check=True, text=True, stdout=f, stderr=f)
 
-    kestrel = ["kestrel", "-s", f"{samples_keep}", "-p", f"{threads}", "-t", "GT", f"{rep_dir}/GT.vcf.gz", f"{rep_dir}/kestrel.tsv"]
+    kestrel = ["kestrel", "-p", f"{threads}", "-t", "GT", f"{rep_dir}/GT.vcf.gz", f"{rep_dir}/kestrel.tsv"]
     print(" ".join(kestrel))
-    #with open(f"{rep_dir}/kestrel.out", "w") as f:
-        #subprocess.run(kestrel, check=True, text=True, stdout=f, stderr=f)
+    with open(f"{rep_dir}/kestrel.out", "w") as f:
+        subprocess.run(kestrel, check=True, text=True, stdout=f, stderr=f)
 
 if __name__ == '__main__':
 
-    random_seed = 0x136f8bf6e0d7d68f03bf7b8c855c7ec4
+    random_seed = 0x7b6487444a601ababb499d55df9816cd
 
     p = argparse.ArgumentParser()
     p.add_argument("dir", type=str, help="VCF file directory")
     p.add_argument("-s", "--seed", type=int, default=random_seed, help="random seed")
     p.add_argument("-p", "--threads", type=int, default=-1, help="number of threads to use for simulations")
-    p.add_argument("-k", "--samples-keep", type=int, default=16, help="number of samples to keep for analysis")
-    p.add_argument("-t", "--samples-total", type=int, help="total number of samples")
 
     args = p.parse_args()
 
@@ -49,5 +47,5 @@ if __name__ == '__main__':
 
     with ResourceTracker():
         for (rep_dir, seq) in zip(rep_dirs, seed_seq.spawn(len(rep_dirs))):
-            calculate(rep_dir, seq, threads, args.samples_keep, args.samples_total)
+            calculate(rep_dir, seq, threads)
 

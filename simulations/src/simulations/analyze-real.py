@@ -1,4 +1,5 @@
 import argparse
+from itertools import combinations
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -39,7 +40,18 @@ def parse_ngsrelate_runtime(path):
                 t2 = float(words[9])
                 return t1 - t2
 
-def process_reps(base_dir):
+def load_same_group_pairs(tsv_path):
+    group_col = "sib.group.id"
+    meta = pd.read_csv(tsv_path, sep="\t")
+    pairs = []
+    for gid, grp in meta.groupby(group_col):
+        samples = grp["sample.name"].dropna().unique()
+        for s1, s2 in combinations(samples, 2):
+            pairs.append((s1, s2, gid))
+            pairs.append((s2, s1, gid))
+    return pd.DataFrame(pairs, columns=["sample1", "sample2", group_col])
+
+def process_reps(base_dir, same_group_pairs):
     records = []
     base_path = Path(base_dir)
     rep_dirs = [path for path in base_path.iterdir() if path.is_dir()]
@@ -97,7 +109,10 @@ def process_reps(base_dir):
                 "time": ngs_time
             })
 
-    return pd.concat(gt_dfs, ignore_index=True), pd.concat(gl_dfs, ignore_index=True), pd.DataFrame(records)
+    gt_df = pd.concat(gt_dfs, ignore_index=True).merge(same_group_pairs, on=["sample1", "sample2"], how="inner")
+    gl_df = pd.concat(gl_dfs, ignore_index=True).merge(same_group_pairs, on=["sample1", "sample2"], how="inner")
+
+    return gt_df, gl_df, pd.DataFrame(records)
 
 def plot_kinship_graph(gt_df, min_kin):
 
@@ -151,6 +166,33 @@ def plot_kinship_graph(gt_df, min_kin):
     plt.tight_layout()
     plt.savefig(f"kinship_network_{min_kin}.png", dpi=300, bbox_inches="tight")
 
+def plot_pairwise_concordance(gl_df):
+    piv = gl_df.pivot(
+        index=["repetition", "depth", "depth_str", "sample1", "sample2"],
+        columns="tool",
+        values="kinship",
+    ).reset_index()
+
+    depths = sorted(gl_df["depth"].unique())
+    fig, axes = plt.subplots(1, len(depths), figsize=(3.5 * len(depths), 3.5), sharex=True, sharey=True)
+
+    for ax, d in zip(axes, depths):
+        sub = piv[piv["depth"] == d]
+        ax.plot([0, 0.55], [0, 0.55], ls="--", color="gray", lw=1, zorder=1)
+        for thresh in [0.125, 0.25]:
+            ax.axhline(thresh, ls=":", color="#BBBBBB", lw=0.8, zorder=0)
+            ax.axvline(thresh, ls=":", color="#BBBBBB", lw=0.8, zorder=0)
+        ax.scatter(sub["ngsrelate"], sub["kestrel"], alpha=0.45, s=16, color="#0072B2", edgecolors="none")
+        ax.set_title(f"{d}x")
+        ax.set_xlabel("NgsRelate kinship")
+        ax.set_xlim(-0.02, 0.55)
+        ax.set_ylim(-0.02, 0.55)
+
+    axes[0].set_ylabel("Kestrel kinship")
+    fig.suptitle("Pairwise Kinship Concordance Across Coverage Depths", y=1.02)
+    plt.tight_layout()
+    plt.savefig("concordance_by_depth.png", dpi=300, bbox_inches="tight")
+
 def print_kinship_err(gt_df, gl_df, min_kin):
 # 1. Filter GT pairs with kinship >= 0.2
     gt_rel = (
@@ -193,7 +235,9 @@ if __name__ == '__main__':
     p.add_argument("dir", type=str, help="VCF file directory")
     args = p.parse_args()
 
-    gt_df, df, df_time = process_reps(args.dir)
+    pairs = load_same_group_pairs("./sib_group_table.tsv")
+
+    gt_df, df, df_time = process_reps(args.dir, pairs)
 
     df = df.sort_values(by="depth")
     df["depth_str"] = df["depth"].astype(str) + "x"
@@ -207,8 +251,9 @@ if __name__ == '__main__':
 
     print(time_summary)
 
-    plot_kinship_graph(gt_df, 0.2)
-    print_kinship_err(gt_df, df, 0.2)
+    #plot_kinship_graph(gt_df, 0.2)
+    #print_kinship_err(gt_df, df, 0.2)
+    plot_pairwise_concordance(df)
 
     sns.set_theme(style="whitegrid")
 
@@ -223,7 +268,7 @@ if __name__ == '__main__':
     sns.boxplot(
         data=df,
         x="depth_str",
-        y="jacquard7",
+        y="kinship",
         hue="tool",
         #split=True,
         #inner="quart",          # draws median and IQR lines inside each half
@@ -235,12 +280,12 @@ if __name__ == '__main__':
     )
 
     ax.set_xlabel("Sequencing Depth")
-    ax.set_ylabel("Estimated J8")
+    ax.set_ylabel("Estimated Kinship")
     ax.set_title("Kinship Estimates by Depth: ngsRelate vs. Kestrel")
     ax.legend(title="Tool", frameon=True)
 
     plt.tight_layout()
-    plt.savefig("j7_distribution_real.png", dpi=300, bbox_inches="tight")
+    plt.savefig("kinship_distribution_real.png", dpi=300, bbox_inches="tight")
 
     summary_by_tool = (
         #df.groupby(["depth", "tool"], observed=True)["iterations"]
@@ -269,8 +314,17 @@ if __name__ == '__main__':
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: f"{int(y):,}"))
     ax.set_ylim(1, 22000)
 
-# Mark the ngsRelate 10,000-iteration ceiling
-    ax.axhline(10000, color="#B22222", linestyle="--", linewidth=1.2, zorder=1)
+    ax.axhline(100, color="#B22222", linestyle="--", linewidth=1.2, zorder=1)
+    ax.text(
+        x=df["depth_str"].nunique() - 0.52,
+        y=120,
+        s="Kestrel cap (10,000)",
+        color="#B22222",
+        fontsize=9,
+        ha="right",
+    )
+
+    ax.axhline(10003, color="#B22222", linestyle="--", linewidth=1.2, zorder=1)
     ax.text(
         x=df["depth_str"].nunique() - 0.52,
         y=11500,
@@ -335,99 +389,6 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig("iterations-violin.png", dpi=300)
 
-    #stuffff
-
-    ref_30x = (
-        df[df["depth"] == 30][["repetition", "tool", "sample1", "sample2", "kinship"]]
-        .rename(columns={"kinship": "kinship_30x"})
-    )
-
-    gt_rel_pairs = gt_df[gt_df["kinship"] >= 0.2][["repetition", "sample1", "sample2"]].assign(is_related=True)
-
-    self_eval = (
-        df[df["depth"] < 30]
-        .merge(ref_30x, on=["repetition", "tool", "sample1", "sample2"])
-        .merge(gt_rel_pairs, on=["repetition", "sample1", "sample2"], how="left")
-    )
-    self_eval["is_related"] = self_eval["is_related"].fillna(False)
-    self_eval["error"] = self_eval["kinship"] - self_eval["kinship_30x"]
-    self_eval["abs_error"] = self_eval["error"].abs()
-
-    for label, subset in [("All pairs", self_eval), ("Related pairs (GT >= 0.2)", self_eval[self_eval["is_related"]])]:
-        tbl = (
-            subset.groupby(["depth", "tool"], observed=True)
-            .agg(
-                Bias=("error", "mean"),
-                MAE=("abs_error", "mean"),
-                RMSE=("error", lambda s: np.sqrt(np.mean(s**2))),
-            )
-            .unstack("tool")
-            .swaplevel(0, 1, axis=1)
-            .sort_index(axis=1)
-        )
-        tbl.index = [f"{d}x" for d in tbl.index]
-        print(f"\n--- {label} (vs. 30x) ---")
-        print(tbl.round(4))
-
-    k20 = df[(df["tool"] == "ngsrelate") & (df["depth"] == 20)]
-    k30 = df[(df["tool"] == "ngsrelate") & (df["depth"] == 30)]
-    gt_sub = gt_df[gt_df["kinship"] >= 0.2][["repetition", "sample1", "sample2", "kinship"]].rename(columns={"kinship": "gt"})
-
-    check = (
-        k20.merge(k30, on=["repetition", "sample1", "sample2"], suffixes=("_20x", "_30x"))
-        .merge(gt_sub, on=["repetition", "sample1", "sample2"])
-    )
-    check["diff_30_20"] = check["kinship_30x"] - check["kinship_20x"]
-
-    print("20x vs 30x related RMSE:", np.sqrt(np.mean(check["diff_30_20"] ** 2)).round(4))
-    print(
-        check.reindex(check["diff_30_20"].abs().sort_values(ascending=False).index)
-        [["repetition", "sample1", "sample2", "gt", "kinship_20x", "kinship_30x", "diff_30_20", "iterations_20x", "iterations_30x"]]
-        .head(10)
-    )
-
-    target_samples = {"VBS19141-5563STDY7800225", "VBS19133-5563STDY7800217"}
-    j_cols = ["kinship"] + [f"jacquard{i}" for i in range(1, 10)]
-
-    sub = df[
-        (df["repetition"] == "0")
-        & (df["depth"].isin([20, 30]))
-        & (df["sample1"].isin(target_samples))
-        & (df["sample2"].isin({
-            "VBS19143-5563STDY7800227",
-            "VBS19155-5563STDY7800241",
-            "VBS19145-5563STDY7800229",
-        }))
-    ]
-
-    print(sub.set_index(["sample1", "sample2", "tool", "depth"])[j_cols].round(3))
-
-    # pairwise concordance
-    piv = df.pivot(
-        index=["repetition", "depth", "depth_str", "sample1", "sample2"],
-        columns="tool",
-        values="kinship",
-    ).reset_index()
-
-    depths = sorted(df["depth"].unique())
-    fig, axes = plt.subplots(1, len(depths), figsize=(3.5 * len(depths), 3.5), sharex=True, sharey=True)
-
-    for ax, d in zip(axes, depths):
-        sub = piv[piv["depth"] == d]
-        ax.plot([0, 0.55], [0, 0.55], ls="--", color="gray", lw=1, zorder=1)
-        for thresh in [0.125, 0.25]:
-            ax.axhline(thresh, ls=":", color="#BBBBBB", lw=0.8, zorder=0)
-            ax.axvline(thresh, ls=":", color="#BBBBBB", lw=0.8, zorder=0)
-        ax.scatter(sub["ngsrelate"], sub["kestrel"], alpha=0.45, s=16, color="#0072B2", edgecolors="none")
-        ax.set_title(f"{d}x")
-        ax.set_xlabel("ngsRelate kinship")
-        ax.set_xlim(-0.02, 0.55)
-        ax.set_ylim(-0.02, 0.55)
-
-    axes[0].set_ylabel("Kestrel kinship")
-    fig.suptitle("Pairwise Kinship Concordance Across Sequencing Depths", y=1.02)
-    plt.tight_layout()
-    plt.savefig("concordance_by_depth.png", dpi=300, bbox_inches="tight")
 
     # split
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))

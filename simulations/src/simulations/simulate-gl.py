@@ -20,7 +20,6 @@ def simulate(rep_dir, seed_seq, depths, error_rate):
 
         seed = rng.integers(low=1, high=2**31)
 
-        # vcfgl can't handle multiple chroms in one file
         # angsd also segfaults if the file contains sites with empty ALT, so remove them
         vcfgl = ["vcfgl", "-i", f"{rep_dir}/GT.vcf.gz", "--source", "1", "-o", f"{dir_name}/GL", "-O", "z", "-d", str(depth), "--seed", str(seed), "-e", str(error_rate), "-doUnobserved", "0", "--rm-invar-sites", "4", "--rm-empty-sites", "1"]
         print(" ".join(vcfgl))

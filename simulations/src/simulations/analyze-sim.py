@@ -1,12 +1,10 @@
 import argparse
 from pathlib import Path
-import numpy as np
 
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from scipy.stats import entropy
-from scipy.spatial.distance import jensenshannon
 
 irels = ["ifs", "ihs", "ifc", "iur"]
 orels = ["ofs", "ohs", "ofc", "our"]
@@ -56,16 +54,6 @@ def parse_kestrel(infile):
         iters[rel] = float(df.loc[match, "iterations"].item())
 
     return jac, iters
-
-def frm(p, q):
-    return 2*np.arccos(np.sum(np.sqrt(p*q)))
-
-def tvd(p, q):
-    return np.sum(np.abs(p - q)) / 2.0
-
-def kinship(x):
-    vec = np.array([1.0, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.25, 0.0])
-    return np.dot(vec, x)
 
 def process_reps(base_dir):
     records = []
@@ -166,13 +154,6 @@ def print_tables(df, tool):
     print("Average iterations")
     print(iter_table.round(4))
 
-# KL divergence
-# Jensen shannon distance - sqrt(JSD), metric
-# TVD - metric. Simple to understand.
-# Hellinger distance - chord length between points on sphere, squared HD is lower bound of KL
-# Bhattacharyaa Coefficient = dot product between two vectors
-# Fisher Rao Metric - path length between points on the sphere
-
 if __name__ == '__main__':
 
     p = argparse.ArgumentParser()
@@ -190,9 +171,9 @@ if __name__ == '__main__':
 
     # Color palette including true, kestrel, and ngsrelate
     cb_palette = {
-        "true": "#E69F00",       # Black for ground truth
-        "kestrel": "#56B4E9",    # High-contrast Blue
-        "ngsrelate": "#009E73"   # High-contrast Vermilion
+        "true": "#E69F00",
+        "kestrel": "#56B4E9",
+        "ngsrelate": "#009E73"
     }
 
     rel_order = ["ifs", "ihs", "ifc", "iur", "ofs", "ohs", "ofc", "our"]
@@ -200,7 +181,7 @@ if __name__ == '__main__':
     g = sns.catplot(
         data=df,
         x="depth_str",
-        y="jac8",
+        y="kinship",
         hue="tool",
         hue_order=["true", "kestrel", "ngsrelate"],
         palette=cb_palette,
@@ -216,24 +197,15 @@ if __name__ == '__main__':
 
     g.set_axis_labels("Coverage", "Kinship")
     g.set_titles(col_template="Relationship: {col_name}")
-    g.fig.suptitle("Jac2 Coefficient Distributions Across Depths", y=1.03, fontsize=16, fontweight="bold")
+    g.fig.suptitle("Kinship Coefficient Distributions Across Coverage Depths", y=1.03, fontsize=16, fontweight="bold")
 
-    plt.savefig("kinship_distribution_violin.pdf", bbox_inches="tight")
+    plt.savefig(f"kinship_distribution_{args.dir}.png", bbox_inches="tight")
 
     sns.set_theme(style="whitegrid", font_scale=1.1)
-
-    # Okabe-Ito Color-Blind Friendly Palette
-    cb_palette = {
-        "kestrel": "#0072B2",    # High-contrast Blue
-        "ngsrelate": "#D55E00"   # High-contrast Vermilion (Red-Orange)
-    }
-
-    rel_order = ["ifs", "ihs", "ifc", "iur", "ofs", "ohs", "ofc", "our"]
 
     g = sns.relplot(
         data=df,
         x="depth",
-        #y="kin_abs_err",
         y="kin_abs_err",
         hue="tool",
         style="tool",            # Adds distinct line styles and markers per tool
@@ -252,9 +224,9 @@ if __name__ == '__main__':
         aspect=1.2
     )
 
-    g.set_axis_labels("Read Depth", "Kinship Absolute Error")
+    g.set_axis_labels("Coverage Depth", "Kinship Absolute Error")
     g.set_titles(col_template="Relationship: {col_name}")
     g.fig.suptitle("Kinship Coefficient Error Comparison (Mean ± SD)", y=1.03, fontsize=16, fontweight="bold")
 
-    plt.savefig("kinship_error_colorblind.pdf", bbox_inches="tight")
+    plt.savefig(f"kinship_error_{args.dir}.png", bbox_inches="tight")
 

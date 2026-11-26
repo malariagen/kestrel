@@ -6,7 +6,7 @@ source .venv/bin/active
 cd src/simulations
 ```
 
-To simulate AnoGam 3L:
+## Simulate AnoGam 3L
 
 ```
 python simulate-gt.py 41963435 1.3e-8 3.5e-9 3L-100k --ne 100000 -r 5
@@ -24,14 +24,16 @@ python calc-kinship.py HomSap22 -p 20 -k 16 -t 516
 python analyze-results HomSap22
 ```
 
-For real AnoGam 3L
+## Real AnoGam
+
+Run `download-vcf.ipynb`. Then
 
 ```
-python subsample-vcf.py gaard-3L.vcf.gz 100000 3L-GAARD-100k -r 5
-python simulate-gl.py 3L-GAARD-100k --depths=1,5,10,20,30
-#python calc-kinship-gl.py 3L-GAARD-100k -p 20 -k 666 -t 666
-python calc-kinship-gt.py 3L-GAARD-100k -p 20 -k 100 -t 666
-python calc-kinship-gl.py 3L-GAARD-100k -p 20 -k 100 -t 666
+bcftools concat -Oz -o GAARD.vcf.gz GAARD-2L.vcf.gz GAARD-2R.vcf.gz GAARD-3L.vcf.gz GAARD-3R.vcf.gz
+python subsample-vcf.py GAARD.vcf.gz 100000 GAARD-100k -r 1 -d 1000
+python simulate-gl.py GAARD-100k --depths=1,5,10,20,30
+python calc-kinship-gt.py GAARD-100k -p 20 -k 238 -t 238
+python calc-kinship-gl.py GAARD-100k -p 20 -k 238 -t 238
 python analyze-results 3L-GAARD-100k
 ```
 
