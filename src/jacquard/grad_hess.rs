@@ -4,63 +4,13 @@ use crate::{
     simd::{Arith, Lane, LoadStore},
 };
 
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx2::Avx2Lane;
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx512::Avx512Lane;
-#[cfg(target_arch = "aarch64")]
-use crate::simd::neon::NeonLane;
-
 // h - 8*8*45 = 2880 bytes
 // column buffer - 8 * 8 * 9 * 32 = 18432 bytes (TODO avoid memset)
 
 const BLOCKS: usize = 32;
 
-pub trait JacquardGradHess: Lane {
-    fn compute_grad_hess(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>);
-}
-
-#[cfg(target_arch = "x86_64")]
-impl JacquardGradHess for Avx512Lane {
-    fn compute_grad_hess(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-        #[target_feature(enable = "avx512f")]
-        unsafe fn inner(p_mat: &LaneVector<Avx512Lane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-            compute_grad_hess_generic(p_mat, x, eps)
-        }
-        unsafe { inner(p_mat, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl JacquardGradHess for Avx2Lane {
-    fn compute_grad_hess(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-        #[target_feature(enable = "avx2,fma")]
-        unsafe fn inner(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-            compute_grad_hess_generic(p_mat, x, eps)
-        }
-        unsafe { inner(p_mat, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-impl JacquardGradHess for NeonLane {
-    fn compute_grad_hess(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-        #[target_feature(enable = "neon")]
-        unsafe fn inner(p_mat: &LaneVector<NeonLane, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-            compute_grad_hess_generic(p_mat, x, eps)
-        }
-        unsafe { inner(p_mat, x, eps)}
-    }
-}
-
-impl JacquardGradHess for f64 {
-    fn compute_grad_hess(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> (Vector<9>, Matrix<9>) {
-        compute_grad_hess_generic(p_mat, x, eps)
-    }
-}
-
 #[inline(always)]
-fn compute_grad_hess_generic<L: Lane>(
+pub fn compute_jacquard_grad_hess<L: Lane>(
     p_mat: &LaneVector<L, 9>,
     x: &Vector<9>,
     eps: f64,

@@ -12,7 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::JacquardGradHess, objective::JacquardObjective}, lanevector::{LaneVector, LaneVectorBuilder}, mixture::MixtureMatrix, quadratic::{ClsQuadratic}, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
+    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::{ compute_jacquard_grad_hess}, objective::{compute_jacquard_obj}}, lanevector::{LaneVector, LaneVectorBuilder}, log::Log, mixture::{calculate_mixture_component_matrix, calculate_mixture_component_matrix2}, quadratic::ClsQuadratic, simd::{Arith, Lane}, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
 };
 
 // We consume the input array so it gets dropped
@@ -37,12 +37,12 @@ fn genotype_indices(genotypes: Array2<[u8; 2]>) -> Array2<u8> {
     Array2::from_shape_vec((num_s, num_v), indices).unwrap()
 }
 
-pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjective + MixtureMatrix>(
+pub fn calculate_relatedness_coefficients_gl<L: Lane>(
     glaf: &GlAf<L>,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
     num_samples: Option<usize>,
-) -> Vec<Vec<Output>> {
+) -> Vec<Vec<Output>> where L::Reg: Arith + Log {
     let n2 = glaf.af2.len();
     let n3 = glaf.af3.len();
     let n4 = glaf.af4.len();
@@ -78,7 +78,7 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
         .zip_eq()
         .with_thread_pool(thread_pool)
         .for_each_init(
-            || LaneVector::new(num_v),
+            || LaneVector::<L, 9>::new(num_v),
             |buffer, (x, out)| {
                 let like2_x = glaf.gl2.sample(x);
                 let like3_x = glaf.gl3.sample(x);
@@ -97,18 +97,18 @@ pub fn calculate_relatedness_coefficients_gl<L: JacquardGradHess + JacquardObjec
 
                     let mut builder = LaneVectorBuilder::new(buffer);
 
-                    L::mixture_component_matrix2(glaf.af2.lanes(), like2_x.0, like2_y.0, &mut builder);
-                    L::mixture_component_matrix(&IIS_3, glaf.af3.lanes(), like3_x.0, like3_y.0, &mut builder);
-                    L::mixture_component_matrix(&IIS_4, glaf.af4.lanes(), like4_x.0, like4_y.0, &mut builder);
+                    calculate_mixture_component_matrix2(glaf.af2.lanes(), like2_x.0, like2_y.0, &mut builder);
+                    calculate_mixture_component_matrix(&IIS_3, glaf.af3.lanes(), like3_x.0, like3_y.0, &mut builder);
+                    calculate_mixture_component_matrix(&IIS_4, glaf.af4.lanes(), like4_x.0, like4_y.0, &mut builder);
 
-                    f64::mixture_component_matrix2(glaf.af2.rem(), like2_x.1, like2_y.1, &mut builder);
-                    f64::mixture_component_matrix(&IIS_3, glaf.af3.rem(), like3_x.1, like3_y.1, &mut builder);
-                    f64::mixture_component_matrix(&IIS_4, glaf.af4.rem(), like4_x.1, like4_y.1, &mut builder);
+                    calculate_mixture_component_matrix2(glaf.af2.rem(), like2_x.1, like2_y.1, &mut builder);
+                    calculate_mixture_component_matrix(&IIS_3, glaf.af3.rem(), like3_x.1, like3_y.1, &mut builder);
+                    calculate_mixture_component_matrix(&IIS_4, glaf.af4.rem(), like4_x.1, like4_y.1, &mut builder);
 
                     builder.finish(true);
 
-                    let obj = |x: &Vector<9>, eps| L::compute_obj(&buffer, x, eps);
-                    let grad_hess = |x: &Vector<9>, eps| L::compute_grad_hess(&buffer, x, eps);
+                    let obj = |x: &Vector<9>, eps| compute_jacquard_obj(&buffer, x, eps);
+                    let grad_hess = |x: &Vector<9>, eps| compute_jacquard_grad_hess(&buffer, x, eps);
                     let (f, delta, iters, cond) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
 
                     if iters >= tune.sqp_max_iter.get() {
@@ -249,6 +249,7 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
                     );
                 }
 
+                // TODO think about this
                 let brier = dot(&delta, &mul(&quadratic_q, &delta)) + 2.0 * dot(&c, &delta) + 1.0;
 
                 // Gradient of the QP

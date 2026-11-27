@@ -5,58 +5,8 @@ use crate::{
     simd::{Arith, Lane, LoadStore},
 };
 
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx2::Avx2Lane;
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx512::Avx512Lane;
-#[cfg(target_arch = "aarch64")]
-use crate::simd::neon::NeonLane;
-
-pub trait JacquardObjective: Lane {
-    fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64;
-}
-
-#[cfg(target_arch = "x86_64")]
-impl JacquardObjective for Avx512Lane {
-    fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx512f")]
-        unsafe fn inner(p_mat: &LaneVector<Avx512Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
-            compute_obj_generic(p_mat, x, eps)
-        }
-        unsafe { inner(p_mat, x, eps) }
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl JacquardObjective for Avx2Lane {
-    fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx2,fma")]
-        unsafe fn inner(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
-            compute_obj_generic(p_mat, x, eps)
-        }
-        unsafe { inner(p_mat, x, eps) }
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-impl JacquardObjective for NeonLane {
-    fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        #[target_feature(enable = "neon")]
-        unsafe fn inner(p_mat: &LaneVector<Avx2Lane, 9>, x: &Vector<9>, eps: f64) -> f64 {
-            compute_obj_generic(p_mat, x, eps)
-        }
-        unsafe { inner(p_mat, x, eps) }
-    }
-}
-
-impl JacquardObjective for f64 {
-    fn compute_obj(p_mat: &LaneVector<Self, 9>, x: &Vector<9>, eps: f64) -> f64 {
-        compute_obj_generic(p_mat, x, eps)
-    }
-}
-
 #[inline(always)]
-fn compute_obj_generic<L: Lane>(
+pub fn compute_jacquard_obj<L: Lane>(
     p_mat: &LaneVector<L, 9>,
     x: &Vector<9>,
     eps: f64,

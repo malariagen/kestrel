@@ -5,146 +5,27 @@ use crate::{
     simd::{Arith, Lane, LoadStore},
 };
 
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx2::Avx2Lane;
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx512::Avx512Lane;
-#[cfg(target_arch = "aarch64")]
-use crate::simd::neon::NeonLane;
-
 pub trait AlleleObjective<const A: usize, const G: usize>: Lane {
     fn compute_objective(likelihood_mats: &LaneVector<Self, G>, x: &Vector<A>, eps: f64) -> f64;
 }
 
-// ==========================================
-// AVX-512
-// ==========================================
-
-#[cfg(target_arch = "x86_64")]
-impl AlleleObjective<2, 3> for Avx512Lane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx512f")]
-        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 3>, x: &Vector<2>, eps: f64) -> f64 {
-            compute_obj_generic2(likelihood_mats, x, eps)
-        }
-        unsafe { inner(likelihood_mats, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl AlleleObjective<3, 6> for Avx512Lane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx512f")]
-        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 6>, x: &Vector<3>, eps: f64) -> f64 {
-            compute_obj_generic3(likelihood_mats, x, eps)
-        }
-        unsafe {inner(likelihood_mats, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl AlleleObjective<4, 10> for Avx512Lane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx512f")]
-        unsafe fn inner(likelihood_mats: &LaneVector<Avx512Lane, 10>, x: &Vector<4>, eps: f64) -> f64 {
-            compute_obj_generic4(likelihood_mats, x, eps)
-        }
-        unsafe { inner(likelihood_mats, x, eps)}
-    }
-}
-
-// ==========================================
-// AVX2
-// ==========================================
-
-#[cfg(target_arch = "x86_64")]
-impl AlleleObjective<2, 3> for Avx2Lane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx2,fma")]
-        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 3>, x: &Vector<2>, eps: f64) -> f64 {
-            compute_obj_generic2(likelihood_mats, x, eps)
-        }
-        unsafe { inner(likelihood_mats, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl AlleleObjective<3, 6> for Avx2Lane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx2,fma")]
-        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 6>, x: &Vector<3>, eps: f64) -> f64 {
-            compute_obj_generic3(likelihood_mats, x, eps)
-        }
-        unsafe {inner(likelihood_mats, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl AlleleObjective<4, 10> for Avx2Lane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
-        #[target_feature(enable = "avx2,fma")]
-        unsafe fn inner(likelihood_mats: &LaneVector<Avx2Lane, 10>, x: &Vector<4>, eps: f64) -> f64 {
-            compute_obj_generic4(likelihood_mats, x, eps)
-        }
-        unsafe { inner(likelihood_mats, x, eps)}
-    }
-}
-
-// ==========================================
-// Neon
-// ==========================================
-
-#[cfg(target_arch = "aarch64")]
-impl AlleleObjective<2, 3> for NeonLane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
-        #[target_feature(enable = "neon")]
-        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 3>, x: &Vector<2>, eps: f64) -> f64 {
-            compute_obj_generic2(likelihood_mats, x, eps)
-        }
-        unsafe { inner(likelihood_mats, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-impl AlleleObjective<3, 6> for NeonLane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
-        #[target_feature(enable = "neon")]
-        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 6>, x: &Vector<3>, eps: f64) -> f64 {
-            compute_obj_generic3(likelihood_mats, x, eps)
-        }
-        unsafe {inner(likelihood_mats, x, eps)}
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-impl AlleleObjective<4, 10> for NeonLane {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
-        #[target_feature(enable = "neon")]
-        unsafe fn inner(likelihood_mats: &LaneVector<NeonLane, 10>, x: &Vector<4>, eps: f64) -> f64 {
-            compute_obj_generic4(likelihood_mats, x, eps)
-        }
-        unsafe { inner(likelihood_mats, x, eps)}
-    }
-}
-
-// ==========================================
-// Scalar
-// ==========================================
-
-impl AlleleObjective<2, 3> for f64 {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 3>, x: &Vector<2>, eps: f64) -> f64 {
+impl<T: Lane> AlleleObjective<2, 3> for T where T::Reg: Arith + Log {
+    #[inline(always)]
+    fn compute_objective(likelihood_mats: &LaneVector<T, 3>, x: &Vector<2>, eps: f64) -> f64 {
         compute_obj_generic2(likelihood_mats, x, eps)
     }
 }
 
-impl AlleleObjective<3, 6> for f64 {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 6>, x: &Vector<3>, eps: f64) -> f64 {
+impl<T: Lane> AlleleObjective<3, 6> for T where T::Reg: Arith + Log {
+    #[inline(always)]
+    fn compute_objective(likelihood_mats: &LaneVector<T, 6>, x: &Vector<3>, eps: f64) -> f64 {
         compute_obj_generic3(likelihood_mats, x, eps)
     }
 }
 
-impl AlleleObjective<4, 10> for f64 {
-    fn compute_objective(likelihood_mats: &LaneVector<Self, 10>, x: &Vector<4>, eps: f64) -> f64 {
+impl<T: Lane> AlleleObjective<4, 10> for T where T::Reg: Arith + Log {
+    #[inline(always)]
+    fn compute_objective(likelihood_mats: &LaneVector<T, 10>, x: &Vector<4>, eps: f64) -> f64 {
         compute_obj_generic4(likelihood_mats, x, eps)
     }
 }
