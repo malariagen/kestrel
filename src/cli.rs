@@ -12,22 +12,22 @@ use crate::coefficients::Output;
 #[derive(Parser)]
 #[command(name = "kestrel", version, about)]
 struct Args {
-    /// VCF file with genotype likelihoods (GL, PL) or genotypes (GT)
+    /// VCF file with genotypes (GT) or genotype likelihoods (GL, PL)
     input: PathBuf,
 
     /// Tab-separated file to write the coefficients to
     output: PathBuf,
 
     /// Where the allele frequencies come from
-    #[arg(short = 'f', long, value_enum, default_value_t = AlleleFreqs::Estimate)]
+    #[arg(short = 'a', long, value_enum, default_value_t = AlleleFreqs::Estimate)]
     allele_freqs: AlleleFreqs,
 
-    /// Which FORMAT tag to compute kinship from
-    #[arg(short = 't', long, value_enum, default_value_t = Tag::GL)]
-    tag: Tag,
+    /// Which FORMAT field to compute kinship from
+    #[arg(short = 'f', long, value_enum, default_value_t = Field::GT)]
+    field: Field,
 
     /// Number of threads used for parallelism, defaults to all available threads
-    #[arg(short = 'p', long)]
+    #[arg(short = 't', long)]
     threads: Option<NonZeroUsize>,
 
     /// Maximum number of iterations for minimization algorithm
@@ -38,7 +38,7 @@ struct Args {
     #[arg(short = 'm', long)]
     minimum_allele_frequency: Option<f64>,
 
-    /// Only calculate the Jacquard coefficients for the first n samples in the VCF file
+    /// Only calculate the Jacquard coefficients for the first n samples in the VCF file.
     /// This is useful if you have extra samples to be included when calculating allele
     /// frequencies, but not their IBD relationships.
     #[arg(short = 's', long)]
@@ -47,18 +47,18 @@ struct Args {
 
 #[derive(Clone, Copy, ValueEnum)]
 #[value(rename_all = "UPPERCASE")]
-enum Tag {
+enum Field {
+    /// Hard-called genotypes
+    GT,
     /// Log-scaled genotype likelihoods
     GL,
     /// Phred-scaled genotype likelihoods
     PL,
-    /// Hard-called genotypes
-    GT,
 }
 
 #[derive(Clone, Copy, ValueEnum, PartialEq, Eq)]
 enum AlleleFreqs {
-    /// Estimate the frequencies on the fly from the samples in the VCF
+    /// Estimate the frequencies from the samples in the VCF
     Estimate,
     /// Read pre-computed frequencies from the AF INFO field
     Info,
@@ -74,6 +74,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 
     let vcf_file = &args.input;
 
+    log::info!("Kestrel {}", env!("CARGO_PKG_VERSION"));
     log::info!("Parsing VCF {:?}", vcf_file);
 
     let parse_af = args.allele_freqs == AlleleFreqs::Info;
@@ -82,8 +83,8 @@ pub fn run_cli(args: &[String]) -> Result<()> {
     let maf = args.minimum_allele_frequency;
     let num_samples = args.samples;
 
-    let (samples, outputs) = match args.tag {
-        Tag::GL => {
+    let (samples, outputs) = match args.field {
+        Field::GL => {
             let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, true)?;
             let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(
                 result.gl,
@@ -95,7 +96,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
             );
             (result.samples, outputs)
         }
-        Tag::PL => {
+        Field::PL => {
             let result = crate::vcf::parse_vcf_gl(vcf_file, parse_af, false)?;
             let outputs = crate::wrapper::calculate_relatedness_coefficients_gl(
                 result.gl,
@@ -107,7 +108,7 @@ pub fn run_cli(args: &[String]) -> Result<()> {
             );
             (result.samples, outputs)
         }
-        Tag::GT => {
+        Field::GT => {
             let result = crate::vcf::parse_vcf_gt(vcf_file, parse_af)?;
             let outputs = crate::wrapper::calculate_relatedness_coefficients_gt(
                 result.gt,
