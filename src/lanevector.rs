@@ -95,6 +95,7 @@ impl<'a, L: Lane, const R: usize> LaneVectorBuilder<'a, L, R> {
         }
     }
 
+    #[inline(always)]
     pub fn push(&mut self, row: &[f64; R]) {
         // Sometimes an individual hasn't been sequenced at a site, which
         // we represent as NaNs. This filters them out when it happens.
@@ -114,6 +115,7 @@ impl<'a, L: Lane, const R: usize> LaneVectorBuilder<'a, L, R> {
         }
     }
 
+    #[inline(always)]
     pub fn push_block<M: Lane>(&mut self, block: &[M; R]) {
         for i in 0..M::N {
             let row: [f64; R] = std::array::from_fn(|r| block[r].get(i));

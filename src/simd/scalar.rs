@@ -14,6 +14,11 @@ impl Lane for f64 {
     fn set(&mut self, _i: usize, val: f64) {
         *self = val;
     }
+
+    #[inline(always)]
+    fn vectorize<F: FnOnce() -> R, R>(f: F) -> R {
+        f()
+    }
 }
 
 impl LoadStore<f64> for f64 {

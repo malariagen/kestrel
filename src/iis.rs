@@ -103,8 +103,8 @@ pub const fn calc_iis_mode(i: usize, j: usize, k: usize, l: usize) -> Iis {
     IIS_TABLE[c1][c2][c3][c4][c5][c6].unwrap()
 }
 
-#[inline]
-pub fn accumulate_iis1<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, _pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis1<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, _pk: S, _pl: S) {
     let pi2 = pi.mul(pi);
     let pi3 = pi2.mul(pi);
 
@@ -119,8 +119,8 @@ pub fn accumulate_iis1<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, _pk: S, _p
     a[8] = g.fma(pi2.mul(pi2), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis2<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis2<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, _pl: S) {
     let pipk = pi.mul(pk);
 
     a[1] = g.fma(pipk, a[1]);
@@ -129,8 +129,8 @@ pub fn accumulate_iis2<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, _pl
     a[8] = g.fma(pipk.mul(pipk), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis3<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, _pk: S, pl: S) {
+#[inline(always)]
+fn accumulate_iis3<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, _pk: S, pl: S) {
     let pipl = pi.mul(pl);
     let pi2pl = pi.mul(pipl);
     let twopi2pl = pi2pl.add(pi2pl);
@@ -142,8 +142,8 @@ pub fn accumulate_iis3<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, _pk: S, pl
     a[8] = g.fma(twopi3pl, a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis4<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis4<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, _pl: S) {
     let pipk = pi.mul(pk);
     let pi2pk = pi.mul(pipk);
     let twopi2pk = pi2pk.add(pi2pk);
@@ -155,8 +155,8 @@ pub fn accumulate_iis4<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, _pl
     a[8] = g.fma(twopi3pk, a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis5<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, pl: S) {
+#[inline(always)]
+fn accumulate_iis5<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, pl: S) {
     let pipkpl = pi.mul(pk).mul(pl);
     let twopipkpl = pipkpl.add(pipkpl);
 
@@ -164,8 +164,8 @@ pub fn accumulate_iis5<S: Arith>(a: &mut [S; 9], g: S, pi: S, _pj: S, pk: S, pl:
     a[8] = g.fma(twopipkpl.mul(pi), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis6<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis6<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl: S) {
     let pipj = pi.mul(pj);
     let pi2pj = pi.mul(pipj);
     let twopi2pj = pi2pj.add(pi2pj);
@@ -176,8 +176,8 @@ pub fn accumulate_iis6<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl
     a[8] = g.fma(twopi2pj.mul(pi), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis7<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis7<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl: S) {
     let pipj = pi.mul(pj);
     let pj2pi = pj.mul(pipj);
     let twopj2pi = pj2pi.add(pj2pi);
@@ -188,8 +188,8 @@ pub fn accumulate_iis7<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl
     a[8] = g.fma(twopj2pi.mul(pj), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis8<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis8<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, _pl: S) {
     let pipjpk = pi.mul(pj).mul(pk);
     let twopipjpk = pipjpk.add(pipjpk);
 
@@ -197,8 +197,8 @@ pub fn accumulate_iis8<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, _pl:
     a[8] = g.fma(twopipjpk.mul(pk), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis9<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis9<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl: S) {
     let pipj = pi.mul(pj);
     let twopipj = pipj.add(pipj);
     let fourpi2pj2 = twopipj.mul(twopipj);
@@ -208,46 +208,46 @@ pub fn accumulate_iis9<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, _pl
     a[8] = g.fma(fourpi2pj2, a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis10<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, pl: S) {
+#[inline(always)]
+fn accumulate_iis10<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, pl: S) {
     // Mode 10 (ij-ji) is mathematically identical to Mode 9 (ij-ij)
     accumulate_iis9(a, g, pi, pj, pk, pl);
 }
 
-#[inline]
-pub fn accumulate_iis11<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, pl: S) {
+#[inline(always)]
+fn accumulate_iis11<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, pl: S) {
     let pipjpl = pi.mul(pj).mul(pl);
 
     a[7] = g.fma(pipjpl, a[7]);
     a[8] = g.fma(S::set(4.0).mul(pipjpl).mul(pi), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis12<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis12<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, _pl: S) {
     let pipjpk = pi.mul(pj).mul(pk);
 
     a[7] = g.fma(pipjpk, a[7]);
     a[8] = g.fma(S::set(4.0).mul(pipjpk).mul(pi), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis13<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, pl: S) {
+#[inline(always)]
+fn accumulate_iis13<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, _pk: S, pl: S) {
     let pipjpl = pi.mul(pj).mul(pl);
 
     a[7] = g.fma(pipjpl, a[7]);
     a[8] = g.fma(S::set(4.0).mul(pipjpl).mul(pj), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis14<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, _pl: S) {
+#[inline(always)]
+fn accumulate_iis14<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, _pl: S) {
     let pipjpk = pi.mul(pj).mul(pk);
 
     a[7] = g.fma(pipjpk, a[7]);
     a[8] = g.fma(S::set(4.0).mul(pipjpk).mul(pj), a[8]);
 }
 
-#[inline]
-pub fn accumulate_iis15<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, pl: S) {
+#[inline(always)]
+fn accumulate_iis15<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, pl: S) {
     let pipj = pi.mul(pj);
     let pkpl = pk.mul(pl);
     let pipjpkpl = pipj.mul(pkpl);
@@ -255,6 +255,7 @@ pub fn accumulate_iis15<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, pl:
     a[8] = g.fma(S::set(4.0).mul(pipjpkpl), a[8]);
 }
 
+#[inline(always)]
 pub fn accumulate_iis<S: Arith>(a: &mut [S; 9], g: S, pi: S, pj: S, pk: S, pl: S, iis: Iis) {
     match iis {
         Iis::M1 => accumulate_iis1(a, g, pi, pj, pk, pl),

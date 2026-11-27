@@ -38,11 +38,8 @@ impl Simd {
         // We do not support SSE, since that has no FMA instructions
         // (which we need for logs, etc.)
 
-        // These are the useful parts of ARMv8.3-A
         #[cfg(target_arch = "aarch64")]
-        if is_aarch64_feature_detected!("neon") &&
-            is_aarch64_feature_detected!("lse") &&
-            is_aarch64_feature_detected!("rcpc") {
+        if is_aarch64_feature_detected!("neon") {
             log::info!("NEON detected, using SIMD intrinsics");
             return Simd::Neon;
         }

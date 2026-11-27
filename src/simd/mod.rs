@@ -35,4 +35,8 @@ pub trait Lane: Copy + Default + Sync {
     // TODO use Index
     fn get(&self, i: usize) -> f64;
     fn set(&mut self, i: usize, val: f64);
+
+    // Inspired by
+    // https://docs.rs/fearless_simd/latest/fearless_simd/trait.Simd.html#tymethod.vectorize
+    fn vectorize<F: FnOnce() -> R, R>(f: F) -> R;
 }

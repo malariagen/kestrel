@@ -15,12 +15,24 @@ use paralight::{
 };
 
 use crate::{
-    algebra::{Vector, sum_to_one},
-    allele::{grad_hess::AlleleGradHess, objective::AlleleObjective},
-    lanevector::LaneVector,
-    sqp::{self, Tuneables},
-    vcf::{AlleleFrequencies, GenotypeLikelihoods},
+    algebra::{Matrix, Vector, sum_to_one}, allele::{grad_hess::AlleleGradHess, objective::AlleleObjective}, lanevector::LaneVector, simd::Lane, sqp::{self, GradHess, Objective, Tuneables}, vcf::{AlleleFrequencies, GenotypeLikelihoods},
 };
+
+struct AlleleFrequencyData<'a, L: Lane, const G: usize> {
+    lv: &'a LaneVector<L, G>
+}
+
+impl<L: AlleleObjective<A, G>, const A: usize, const G: usize> Objective<A> for AlleleFrequencyData<'_, L, G> {
+    fn objective(&self, x: &Vector<A>, eps: f64) -> f64 {
+        L::vectorize(#[inline(always)] || L::compute_objective(self.lv, &x, eps))
+    }
+}
+
+impl<L: AlleleGradHess<A, G>, const A: usize, const G: usize> GradHess<A> for AlleleFrequencyData<'_, L, G> {
+    fn grad_hess(&self, x: &Vector<A>, eps: f64) -> (Vector<A>, Matrix<A>) {
+        L::vectorize(#[inline(always)] || L::compute_grad_hess(self.lv, &x, eps))
+    }
+}
 
 pub fn calculate_allele_frequencies<L>(
     genotype_likelihoods: &GenotypeLikelihoods,
@@ -93,10 +105,9 @@ where
 
                 let x0 = [1.0f64 / A as f64; A];
 
-                let obj = |x: &Vector<A>, eps| L::compute_objective(buffer, &x, eps);
-                let grad_hess = |x: &Vector<A>, eps| L::compute_grad_hess(buffer, &x, eps);
+                let data = AlleleFrequencyData { lv: buffer };
 
-                let (_, mut x, iter, _) = sqp::solve_sqp(obj, grad_hess, &x0, &tune);
+                let (_, mut x, iter, _) = sqp::solve_sqp(&data, &x0, &tune);
 
                 if iter >= tune.sqp_max_iter.get() {
                     log::warn!(

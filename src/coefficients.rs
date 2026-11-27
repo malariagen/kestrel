@@ -12,7 +12,7 @@ use paralight::{
 use lockfree_progress_bar::ProgressBar;
 
 use crate::{
-    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::{grad_hess::{ compute_jacquard_grad_hess}, objective::{compute_jacquard_obj}}, lanevector::{LaneVector, LaneVectorBuilder}, log::Log, mixture::{calculate_mixture_component_matrix, calculate_mixture_component_matrix2}, quadratic::ClsQuadratic, simd::{Arith, Lane}, sqp::{self, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
+    algebra::{Matrix, Vector, add, dot, mul, scale_div}, cls::{self}, conditional::{IIS_2, IIS_3, IIS_4}, jacquard::JacquardCoefficientData, lanevector::{LaneVector, LaneVectorBuilder}, log::Log, mixture::{calculate_mixture_component_matrix, calculate_mixture_component_matrix2}, quadratic::compute_gram_matrix, simd::{Arith, Lane}, sqp::{self, GradHess, Objective, Tuneables, estimate_condition_number}, vcf::{AlleleFrequencies, Genotypes}, wrapper::GlAf,
 };
 
 // We consume the input array so it gets dropped
@@ -94,12 +94,13 @@ pub fn calculate_relatedness_coefficients_gl<L: Lane>(
                     let like2_y = glaf.gl2.sample(y);
                     let like3_y = glaf.gl3.sample(y);
                     let like4_y = glaf.gl4.sample(y);
-
                     let mut builder = LaneVectorBuilder::new(buffer);
 
-                    calculate_mixture_component_matrix2(glaf.af2.lanes(), like2_x.0, like2_y.0, &mut builder);
-                    calculate_mixture_component_matrix(&IIS_3, glaf.af3.lanes(), like3_x.0, like3_y.0, &mut builder);
-                    calculate_mixture_component_matrix(&IIS_4, glaf.af4.lanes(), like4_x.0, like4_y.0, &mut builder);
+                    L::vectorize(#[inline(always)] || {
+                        calculate_mixture_component_matrix2(glaf.af2.lanes(), like2_x.0, like2_y.0, &mut builder);
+                        calculate_mixture_component_matrix(&IIS_3, glaf.af3.lanes(), like3_x.0, like3_y.0, &mut builder);
+                        calculate_mixture_component_matrix(&IIS_4, glaf.af4.lanes(), like4_x.0, like4_y.0, &mut builder);
+                    });
 
                     calculate_mixture_component_matrix2(glaf.af2.rem(), like2_x.1, like2_y.1, &mut builder);
                     calculate_mixture_component_matrix(&IIS_3, glaf.af3.rem(), like3_x.1, like3_y.1, &mut builder);
@@ -107,9 +108,9 @@ pub fn calculate_relatedness_coefficients_gl<L: Lane>(
 
                     builder.finish(true);
 
-                    let obj = |x: &Vector<9>, eps| compute_jacquard_obj(&buffer, x, eps);
-                    let grad_hess = |x: &Vector<9>, eps| compute_jacquard_grad_hess(&buffer, x, eps);
-                    let (f, delta, iters, cond) = sqp::solve_sqp(obj, grad_hess, &delta, &tune);
+                    let data = JacquardCoefficientData { lv: buffer };
+
+                    let (f, delta, iters, cond) = sqp::solve_sqp(&data, &delta, &tune);
 
                     if iters >= tune.sqp_max_iter.get() {
                         log::warn!(
@@ -162,13 +163,13 @@ impl Default for Output {
     }
 }
 
-pub fn calculate_coefficients_gt<L: ClsQuadratic>(
+pub fn calculate_coefficients_gt<L: Lane>(
     genotypes: Genotypes,
     allele_frequencies: AlleleFrequencies,
     thread_pool: &mut ThreadPool,
     iterations: NonZeroU64,
     num_samples: Option<usize>,
-) -> Vec<Vec<Output>> {
+) -> Vec<Vec<Output>> where L::Reg: Arith {
     let num_samples = num_samples.unwrap_or(genotypes.samples);
     if num_samples > genotypes.samples {
         panic!("Requested samples {} exceeds total samples {}", num_samples, genotypes.samples);
@@ -276,13 +277,13 @@ pub fn calculate_coefficients_gt<L: ClsQuadratic>(
     nested_outputs
 }
 
-fn compute_quadratic_matrix<L: ClsQuadratic>(
+fn compute_quadratic_matrix<L: Lane>(
     num_variants: usize,
     m2: &Vec<[[[f64; 9]; 3]; 3]>,
     m3: &Vec<[[[f64; 9]; 6]; 6]>,
     m4: &Vec<[[[f64; 9]; 10]; 10]>,
-) -> Matrix<9> {
-    let mut lv = LaneVector::new(num_variants);
+) -> Matrix<9> where L::Reg: Arith {
+    let mut lv = LaneVector::<L, 9>::new(num_variants);
     let mut builder = LaneVectorBuilder::new(&mut lv);
 
     // Append all rows from all M matrices into the lane vector
@@ -315,5 +316,5 @@ fn compute_quadratic_matrix<L: ClsQuadratic>(
 
     builder.finish(true);
 
-    L::compute_quadratic(&lv, num_variants)
+    L::vectorize(#[inline(always)] || compute_gram_matrix(&lv, num_variants))
 }

@@ -9,58 +9,8 @@ use crate::{
 
 const BLOCKS: usize = 32;
 
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx2::Avx2Lane;
-#[cfg(target_arch = "x86_64")]
-use crate::simd::avx512::Avx512Lane;
-#[cfg(target_arch = "aarch64")]
-use crate::simd::neon::NeonLane;
-
-pub trait ClsQuadratic: Lane {
-    fn compute_quadratic(a_mat: &LaneVector<Self, 9>, n: usize) -> Matrix<9>;
-}
-
-#[cfg(target_arch = "x86_64")]
-impl ClsQuadratic for Avx512Lane {
-    fn compute_quadratic(a_mat: &LaneVector<Avx512Lane, 9>, n: usize) -> Matrix<9> {
-        #[target_feature(enable = "avx512f")]
-        unsafe fn inner(a_mat: &LaneVector<Avx512Lane, 9>, n: usize) -> Matrix<9> {
-            compute_quadratic_generic(a_mat, n)
-        }
-        unsafe { inner(a_mat, n)}
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-impl ClsQuadratic for Avx2Lane {
-    fn compute_quadratic(a_mat: &LaneVector<Avx2Lane, 9>, n: usize) -> Matrix<9> {
-        #[target_feature(enable = "avx2,fma")]
-        unsafe fn inner(a_mat: &LaneVector<Avx2Lane, 9>, n: usize) -> Matrix<9> {
-            compute_quadratic_generic(a_mat, n)
-        }
-        unsafe { inner(a_mat, n)}
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-impl ClsQuadratic for NeonLane {
-    fn compute_quadratic(a_mat: &LaneVector<NeonLane, 9>, n: usize) -> Matrix<9> {
-        #[target_feature(enable = "neon")]
-        unsafe fn inner(a_mat: &LaneVector<NeonLane, 9>, n: usize) -> Matrix<9> {
-            compute_quadratic_generic(a_mat, n)
-        }
-        unsafe { inner(a_mat, n)}
-    }
-}
-
-impl ClsQuadratic for f64 {
-    fn compute_quadratic(a_mat: &LaneVector<f64, 9>, n: usize) -> Matrix<9> {
-        return compute_quadratic_generic(a_mat, n);
-    }
-}
-
 #[inline(always)]
-fn compute_quadratic_generic<L: Lane>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> where L::Reg: Arith {
+pub fn compute_gram_matrix<L: Lane>(a_mat: &LaneVector<L, 9>, n: usize) -> Matrix<9> where L::Reg: Arith {
     let blocks = a_mat.lanes();
     let remainder = a_mat.rem();
 

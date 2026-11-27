@@ -20,6 +20,14 @@ impl Lane for NeonLane {
     fn set(&mut self, i: usize, val: f64) {
         self.0[i] = val;
     }
+
+    fn vectorize<F: FnOnce() -> R, R>(f: F) -> R {
+        #[target_feature(enable = "neon")]
+        fn inner<F: FnOnce() ->R, R>(f: F) -> R {
+            f()
+        }
+        unsafe { inner(f)}
+    }
 }
 
 impl Default for NeonLane {

@@ -20,6 +20,14 @@ impl Lane for Avx512Lane {
     fn set(&mut self, i: usize, val: f64) {
         self.0[i] = val;
     }
+
+    fn vectorize<F: FnOnce() -> R, R>(f: F) -> R {
+        #[target_feature(enable = "avx512f,avx512bw,avx512cd,avx512dq,avx512vl")]
+        fn inner<F: FnOnce() ->R, R>(f: F) -> R {
+            f()
+        }
+        unsafe { inner(f)}
+    }
 }
 
 impl Default for Avx512Lane {
