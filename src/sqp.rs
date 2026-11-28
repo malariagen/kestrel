@@ -51,16 +51,13 @@ pub fn solve_sqp<const N: usize, D: Objective<N> + GradHess<N>>(
     x0: &Vector<N>,
     tune: &Tuneables,
 ) -> (f64, Vector<N>, u64, f64) {
-    let mut x = *x0;
+    let mut x = sum_to_one(x0);
+    let mut f = data.objective(&x, tune.epsilon);
 
     // let mut qp = 0;
     // let mut bl = 0;
 
-    let mut f = 0.0;
-
     for iter in 0..tune.sqp_max_iter.into() {
-        x = sum_to_one(&x);
-
         let (g, h) = data.grad_hess(&x, tune.epsilon);
 
         // let eigs = eigenvals_jacobi(&h, 50).unwrap();
@@ -83,7 +80,7 @@ pub fn solve_sqp<const N: usize, D: Objective<N> + GradHess<N>>(
 
         let (y, _qp_iter) = solve_qp_active_set(&h, &c, &x, true, tune);
 
-        let (fnew, xnew, _bls_iter) = backtracking_line_search(data, &x, &y, &g, tune);
+        let (fnew, xnew, _bls_iter) = backtracking_line_search(data, &x, &y, &g, f, tune);
 
         // qp = _qp_iter;
         // bl = _bls_iter;
@@ -119,7 +116,7 @@ pub fn solve_qp_active_set<const N: usize>(
     modify: bool,
     tune: &Tuneables,
 ) -> (Vector<N>, u64) {
-    let mut y = y0.clone();
+    let mut y = *y0;
 
     let mut working_set = [false; N];
 
@@ -275,10 +272,9 @@ fn backtracking_line_search<const N: usize, D: Objective<N>>(
     x: &Vector<N>,
     y: &Vector<N>,
     g: &Vector<N>,
+    f: f64,
     tune: &Tuneables,
 ) -> (f64, Vector<N>, u64) {
-    let f = data.objective(&x, tune.epsilon);
-
     let p = sub(y, x);
     let t = tune.bls_sufficient_decrease * dot(g, &p);
 
@@ -290,6 +286,8 @@ fn backtracking_line_search<const N: usize, D: Objective<N>>(
     loop {
         // Numerically this is always feasible (>= 0) for floats
         let xnew = add(x, &scale_mul(alpha, &p));
+        // For numerical stability
+        let xnew = sum_to_one(&xnew);
         // In theory we could store an intermediate array that makes
         // this more efficient, a la N&W
         let fnew = data.objective(&xnew, tune.epsilon);
